@@ -15,11 +15,13 @@ Distributed as a **self-contained standalone executable** for Windows, Linux, an
 ## Key Features
 
 - **Schema-Driven Protocols (JSON/YAML)**: Define message envelopes, sync preambles, dynamic length fields, opcodes, typed payloads (integers, floats, enums, strings, bitfields), and footers.
-- **Zero-Dependency Integrity Engine**: Pure-Python CRC and checksum calculation supporting CRC8, CRC16-Modbus, CRC16-CCITT, CRC32, 8/16-bit additive sums, and XOR checks.
+- **Custom Parametric CRC & Presets**: Pure-Python, zero-dependency integrity engine supporting standard presets (CRC8, CRC16-Modbus, CRC16-CCITT, CRC32, Sum, XOR) and **fully custom parametric CRCs** via the Rocksoft Model (`width`, `poly`, `init`, `refin`, `refout`, `xorout`, `endian`).
+- **Dual-View Raw & Decoded Stream Inspector**: Real-time side-by-side visualization with color-coded semantic byte slicing (Header, Length, Command, Payload, CRC, Footer) and interactive cross-highlighting.
+- **Session Recording & Export**: Record full serial transactions with microsecond timestamps and export to JSON Lines (`.jsonl`), CSV, or raw binary (`.bin`) for post-session analysis or automated playback.
 - **Three Operational Modes**:
   1. **Interactive CLI**: Send commands, format parameters, and decode responses on the command line.
   2. **Batch Script Runner**: Execute automated test sequences with timeouts, delays, and assertions, producing JSON and JUnit XML reports.
-  3. **Auto-Generated Web UI**: Zero-dependency local web interface (FastAPI + WebSockets) that dynamically builds forms for any loaded protocol and streams decoded frames.
+  3. **Auto-Generated Web UI**: Zero-dependency local web interface (FastAPI + WebSockets) that dynamically builds forms for any loaded protocol, streams decoded frames, and provides session controls.
 - **Virtual MCU Simulation**: Test protocols and execute regression suites completely offline without physical hardware attached.
 - **Docs-as-Code & Zero-Defect Architecture**: Formal specifications, schemas, and comprehensive test suites for every subsystem.
 - **Standalone Distribution**: Multi-platform single-file executables bundled via PyInstaller and published via GitHub Actions releases.

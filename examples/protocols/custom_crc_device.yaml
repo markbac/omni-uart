@@ -1,0 +1,61 @@
+schema_version: "1.0.0"
+metadata:
+  name: "CustomCrcDevice"
+  version: "1.0.0"
+  description: "Proprietary embedded device demonstrating fully custom Rocksoft-modeled CRC-16"
+  author: "Firmware R&D"
+
+serial_config:
+  baudrate: 230400
+  bytesize: 8
+  parity: "none"
+  stopbits: 1
+  flow_control: "none"
+  timeout_ms: 500
+
+framing:
+  type: "binary"
+  header: [0x5A, 0xA5]
+  length:
+    type: "uint16"
+    endian: "little"
+    includes: "payload_only"
+  command_id:
+    type: "uint8"
+  integrity:
+    algorithm: "custom"
+    width: 16
+    poly: 0x1021
+    init: 0xFFFF
+    refin: false
+    refout: false
+    xorout: 0x0000
+    endian: "big"
+    check: 0x29B1
+  footer: [0x0D, 0x0A]
+
+commands:
+  - name: "get_device_status"
+    id: 0x10
+    description: "Queries proprietary device operational status"
+    parameters: []
+    response:
+      id: 0x90
+      timeout_ms: 300
+      fields:
+        - name: "system_state"
+          type: "enum"
+          options:
+            0: "INIT"
+            1: "STANDBY"
+            2: "RUNNING"
+            3: "FAULT"
+        - name: "cpu_load_pct"
+          type: "uint8"
+          unit: "%"
+        - name: "supply_voltage_mv"
+          type: "uint16"
+          endian: "little"
+          unit: "mV"
+
+telemetry: []

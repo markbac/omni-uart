@@ -51,14 +51,23 @@ omni-uart send ping --protocol protocols/sensor_node.yaml --virtual
 
 # Sniff and decode incoming frames live
 omni-uart monitor --protocol protocols/sensor_node.yaml --port COM3
+
+# Sniff with byte-level color dissection and CRC debugging
+omni-uart monitor --protocol protocols/sensor_node.yaml --port COM3 --debug-dissect
+
+# Record live traffic to a JSON Lines or CSV session file
+omni-uart monitor --protocol protocols/sensor_node.yaml --port COM3 --record session_capture.jsonl
+
+# Export recorded session data to CSV or raw binary
+omni-uart session export session_capture.jsonl --format csv -o session_capture.csv
 ```
 
 ### Mode 2: Automated Script Runner
 Run automated validation and regression test suites with assertions:
 
 ```bash
-# Run a test script against physical device
-omni-uart run scripts/sensor_test_suite.yaml --protocol protocols/sensor_node.yaml --port COM3
+# Run a test script against physical device and record full session
+omni-uart run scripts/sensor_test_suite.yaml --protocol protocols/sensor_node.yaml --port COM3 --record test_session.jsonl
 
 # Run a test script in CI using Virtual MCU loopback (no hardware needed)
 omni-uart run scripts/sensor_test_suite.yaml --protocol protocols/sensor_node.yaml --virtual --report-json report.json
@@ -115,6 +124,24 @@ commands:
           type: "float32"
           endian: "little"
           unit: "°C"
+```
+
+### Defining a Custom CRC (Rocksoft Model)
+If your hardware uses a custom or proprietary polynomial, configure the `integrity` block directly:
+
+```yaml
+framing:
+  type: "binary"
+  header: [0xAA, 0x55]
+  integrity:
+    algorithm: "custom"
+    width: 16             # Bit width (8, 16, 24, 32)
+    poly: 0x1021          # Polynomial
+    init: 0xFFFF          # Initial value
+    refin: false          # Reflect input bytes
+    refout: false         # Reflect output register
+    xorout: 0x0000        # Final XOR value
+    endian: "big"         # Output endianness in frame
 ```
 
 Validate your protocol definition against the formal schema before use:
