@@ -1,7 +1,7 @@
 schema_version: "1.0.0"
 metadata:
   name: "CustomCrcDevice"
-  version: "1.0.0"
+  version: "1.0.0+hw.v2.sha29b1"
   description: "Proprietary embedded device demonstrating fully custom Rocksoft-modeled CRC-16"
   author: "Firmware R&D"
 
