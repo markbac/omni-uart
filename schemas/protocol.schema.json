@@ -60,11 +60,20 @@
         },
         "integrity": {
           "type": "object",
+          "required": ["algorithm"],
           "properties": {
             "algorithm": {
               "type": "string",
-              "enum": ["none", "sum8", "sum16", "xor", "crc8", "crc16_modbus", "crc16_ccitt", "crc32"]
-            }
+              "enum": ["none", "sum8", "sum16", "xor", "crc8", "crc16_modbus", "crc16_ccitt", "crc32", "custom"]
+            },
+            "width": { "type": "integer", "enum": [8, 16, 24, 32] },
+            "poly": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
+            "init": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
+            "refin": { "type": "boolean", "default": false },
+            "refout": { "type": "boolean", "default": false },
+            "xorout": { "oneOf": [{ "type": "integer" }, { "type": "string" }], "default": 0 },
+            "endian": { "type": "string", "enum": ["little", "big"], "default": "little" },
+            "check": { "oneOf": [{ "type": "integer" }, { "type": "string" }] }
           }
         },
         "footer": {

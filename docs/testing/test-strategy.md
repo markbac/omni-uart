@@ -39,23 +39,33 @@ Standard test vectors must match established IEEE and industrial specifications:
 | `CRC-32 (IEEE 802.3)` | `"123456789"` (ASCII bytes) | `0xCBF43926` | IEEE 802.3 Ethernet |
 | `Sum8` | `[0x01, 0x02, 0x03, 0x04]` | `0x0A` | Modulo 256 sum |
 | `XOR (LRC)` | `[0xAA, 0x55, 0x01]` | `0xFE` | Longitudinal Redundancy Check |
+| `Custom Rocksoft CRC` | Arbitrary `poly`, `init`, `refin`, `refout`, `xorout` | Matching `check` field | Rocksoft Model Parameter Spec |
 
-[[CAPTION:Table]] Standard test vectors for the integrity engine.
+[[CAPTION:Table]] Standard and custom test vectors for the integrity engine.
 
-### 3.2 Codec & Stream Resilience Testing (`test_codec_stream.py`)
+### 3.2 Codec & Stream Resilience Testing (`test_codec_stream.py` & `test_dissector.py`)
 - **Noise Resilience**: The stream decoder is fed 2048 bytes of pseudorandom noise followed by a valid protocol frame. The decoder must successfully locate the sync header and decode the message without dropping or corrupting the payload.
 - **Partial Frame Splitting**: Frames are delivered to the decoder in 1-byte increments over multiple read cycles. The parser must buffer the fragments and yield the frame once the footer is received.
-- **Corrupted CRC Rejection**: Frames with corrupted checksum bytes must be flagged with `crc_valid=False` and routed to the invalid packet inspector.
+- **Corrupted CRC Rejection & Diagnostics**: Frames with corrupted checksum bytes must be flagged with `crc_valid=False`, with diagnostic payload highlighting the mismatched byte offset and expected vs received CRC.
+- **Byte Dissection Slices**: Verifies that every byte slice in a frame (Header, Length, Command ID, Payload, CRC, Footer) is accurately delineated with zero off-by-one errors.
 
-### 3.3 Virtual Transport & Script Runner Tests (`test_script_runner.py`)
+### 3.3 Session Recorder & Data Persistence (`test_recorder.py`)
+- Verifies real-time event buffering of bidirectional traffic (`tx` / `rx`) with microsecond timestamp fidelity.
+- Verifies round-trip serialization and export:
+  - **JSON Lines (`.jsonl`)**: Validates line-by-line JSON parsing with all metadata intact.
+  - **CSV (`.csv`)**: Validates tabular headers, timestamp formatting, and escaped field payloads.
+  - **Raw Binary (`.bin`)**: Validates bit-for-bit reconstruction of physical UART traffic.
+
+### 3.4 Virtual Transport & Script Runner Tests (`test_script_runner.py`)
 - Executes complete test sequences against the virtual MCU loopback.
 - Tests assertion logic across all operators (`==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `tolerance`).
 - Verifies that `abort_on_error: true` halts the sequence immediately on failure, while `abort_on_error: false` logs failures and proceeds to completion.
 
-### 3.4 Standalone Executable Verification (`test_standalone_smoke.py`)
+### 3.5 Standalone Executable Verification (`test_standalone_smoke.py`)
 On each GitHub Actions runner OS:
 - Executes `omni-uart --version` and asserts exit code `0`.
 - Executes `omni-uart validate examples/protocols/binary_sensor_node.yaml` and asserts schema validity.
+- Executes `omni-uart validate examples/protocols/custom_crc_device.yaml` and asserts custom CRC schema validity.
 - Executes `omni-uart run examples/scripts/sensor_test_suite.yaml --virtual` and asserts all tests pass.
 
 ---

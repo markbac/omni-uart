@@ -99,7 +99,7 @@ The specification layer defines the data contracts using Pydantic v2. The schema
 - **Dynamic Field Serialization**:
   Converts user-supplied parameters into binary data using standard `struct` pack/unpack logic according to field specifications (`uint8`, `uint16`, `uint32`, `int8`, `int16`, `int32`, `float32`, `float64`, `bool`, `enum`, `string`, `bytes`, and bitfields).
 - **CRC & Integrity Engine**:
-  A zero-dependency pure-Python implementation implementing standard polynomial algorithms with precomputed lookup tables for maximum throughput.
+  A zero-dependency pure-Python implementation implementing standard polynomial presets (CRC8, CRC16 Modbus/CCITT, CRC32, Sum, XOR) as well as **fully custom parametric CRCs** based on the Rocksoft Parameter Model (`width`, `poly`, `init`, `refin`, `refout`, `xorout`, `endian`).
 
 ### 3.3 Transport Abstraction Layer (`omniuart.core.transport`)
 All communication occurs through a common asynchronous transport interface:
@@ -117,7 +117,21 @@ Orchestrates automated test scripts defined in YAML or JSON:
 - Implements retry policies and execution control (`abort_on_error`, `continue`).
 - Generates test execution summaries in human-readable console tables and machine-readable JSON/JUnit XML formats.
 
-### 3.5 Presentation Layer
+### 3.5 Session Recording & Data Persistence (`omniuart.core.recorder`)
+Captures all live serial transactions during ad-hoc sessions, CLI monitoring, or automated script execution:
+- **Streaming Session Buffer**: Records chronological event records including microsecond timestamps, direction (`tx` / `rx`), raw byte payloads, decoded command identifiers, unpacked field dictionaries, and CRC validation status.
+- **Export Formats**:
+  - **JSON Lines (`.jsonl`)**: Structured, line-delimited records suitable for automated parsing, log ingestion, and replay.
+  - **Comma-Separated Values (`.csv`)**: Tabular export of timestamps, opcodes, and decoded parameter values for Excel / pandas analysis.
+  - **Raw Binary Stream (`.bin`)**: Unmodified raw byte sequence for low-level protocol playback.
+
+### 3.6 Deep Dissection & Diagnostic Debugger (`omniuart.core.dissector`)
+Provides comprehensive debugging information on raw and decoded streams:
+- **Byte-by-Byte Visual Dissection**: Color-coded categorization separating Header preambles, Length fields, Command IDs, Payload byte slices, CRC checksums, and Footers.
+- **CRC Diagnostics**: Explicit debug logs detailing calculated vs received checksums, the exact byte range hashed, and bit-level diffs on mismatch.
+- **Sync Hunt Diagnostics**: Logs synchronization acquisitions, byte slip occurrences, discarded noise counts, and incomplete frame buffer states.
+
+### 3.7 Presentation Layer
 - **CLI (`omniuart.cli.main`)**: Built with Typer and Rich to provide formatted terminal tables, color-coded logging, and progress bars.
 - **Web UI & Server (`omniuart.ui.server`)**: Built with FastAPI and Starlette WebSockets. Emits bidirectional JSON messages containing:
   - Real-time TX and RX packet records with millisecond timestamps and raw hex dumps.

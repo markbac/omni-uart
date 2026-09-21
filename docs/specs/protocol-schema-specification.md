@@ -133,20 +133,69 @@ Individual command parameters and response fields support the following primitiv
 
 ## 4. Integrity & CRC Algorithms
 
-OmniUART provides a zero-dependency, pure-Python integrity engine implementing standard industrial algorithms:
+OmniUART provides a versatile, zero-dependency integrity engine supporting both standard industry presets and **fully custom parametric CRCs**.
 
-| Algorithm Identifier | Description | Polynomial | Initial Value | XOR Out |
-| :--- | :--- | :--- | :--- | :--- |
-| `none` | No integrity validation | N/A | N/A | N/A |
-| `sum8` | Simple 8-bit additive modulo 256 | N/A | `0x00` | `0x00` |
-| `sum16` | 16-bit additive modulo 65536 | N/A | `0x0000` | `0x0000` |
-| `xor` | 8-bit longitudinal redundancy check (LRC) | N/A | `0x00` | `0x00` |
-| `crc8` | Standard CRC-8 (SMBus) | `0x07` | `0x00` | `0x00` |
-| `crc16_modbus` | Modbus RTU CRC-16 (Reflected) | `0x8005` | `0xFFFF` | `0x0000` |
-| `crc16_ccitt` | X.25 / CCITT-False | `0x1021` | `0xFFFF` | `0x0000` |
-| `crc32` | Standard IEEE 802.3 CRC-32 | `0x04C11DB7` | `0xFFFFFFFF` | `0xFFFFFFFF` |
+### 4.1 Standard Preset Algorithms
+The following named presets can be declared directly:
 
-[[CAPTION:Table]] Supported CRC and checksum algorithms.
+| Algorithm Identifier | Description | Polynomial | Initial Value | RefIn | RefOut | XOR Out | Endian |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `none` | No integrity validation | N/A | N/A | N/A | N/A | N/A | N/A |
+| `sum8` | Simple 8-bit additive modulo 256 | N/A | `0x00` | No | No | `0x00` | N/A |
+| `sum16` | 16-bit additive modulo 65536 | N/A | `0x0000` | No | No | `0x0000` | `little` / `big` |
+| `xor` | 8-bit longitudinal redundancy check | N/A | `0x00` | No | No | `0x00` | N/A |
+| `crc8` | Standard CRC-8 (SMBus) | `0x07` | `0x00` | False | False | `0x00` | N/A |
+| `crc16_modbus` | Modbus RTU CRC-16 (Reflected) | `0x8005` | `0xFFFF` | True | True | `0x0000` | `little` |
+| `crc16_ccitt` | X.25 / CCITT-False | `0x1021` | `0xFFFF` | False | False | `0x0000` | `big` |
+| `crc32` | Standard IEEE 802.3 CRC-32 | `0x04C11DB7` | `0xFFFFFFFF` | True | True | `0xFFFFFFFF` | `little` |
+
+[[CAPTION:Table]] Supported preset CRC and checksum algorithms.
+
+### 4.2 Custom Parametric CRC (Rocksoft Parameter Model)
+Protocols requiring custom or proprietary polynomial algorithms can define the CRC parameters explicitly using the **Rocksoft Model**:
+
+```yaml
+framing:
+  type: "binary"
+  header: [0xAA, 0x55]
+  integrity:
+    algorithm: "custom"
+    width: 16              # Bit width: 8, 16, 24, 32
+    poly: 0x1021           # Generator polynomial (hex or integer)
+    init: 0xFFFF           # Initial register value
+    refin: false           # Reflect input bytes (true = LSB first)
+    refout: false          # Reflect output register before final XOR
+    xorout: 0x0000         # Final XOR mask applied to output
+    endian: "big"          # Frame byte order: "little" or "big"
+    check: 0x29B1          # Optional expected result for ASCII "123456789"
+```
+[[CAPTION:Figure]] Custom Rocksoft CRC definition in protocol specification.
+
+#### 4.2.1 Parameter Breakdown
+- **`width`**: The bit width of the CRC register (`8`, `16`, `24`, or `32`).
+- **`poly`**: The unreflected polynomial coefficients without the implicit leading high bit (e.g. `0x1021` for \(x^{16} + x^{12} + x^5 + 1\)).
+- **`init`**: Initial internal register value prior to processing the first byte.
+- **`refin`**: Boolean flag. When `true`, each byte is reflected bit-order (LSB first) prior to feeding into the calculation.
+- **`refout`**: Boolean flag. When `true`, the final register state is reflected before the `xorout` stage.
+- **`xorout`**: Hexadecimal or integer mask XORed with the final value before transmission.
+- **`endian`**: Byte order when serializing the CRC into the frame (`little` or `big`).
+- **`check`**: Optional test vector value computed over ASCII `"123456789"` used by OmniUART to automatically validate the formula on startup.
+
+---
+
+## 5. Diagnostic & Stream Dissection Metadata
+OmniUART exposes byte-level dissection metadata for visual debugging and stream verification:
+- **Frame Slicing**: Every byte in a frame is tagged with its semantic role:
+  - `Header` (`0xAA 0x55`)
+  - `Length` (`0x06 0x00`)
+  - `Command ID` (`0x02`)
+  - `Payload` (`0x00 0x1A 0x2B 0x3C`)
+  - `Checksum / CRC` (`0x4B 0x8A`)
+  - `Footer` (`0x55 0xAA`)
+- **CRC Diagnostics**: When a CRC mismatch occurs, OmniUART logs:
+  - Computed CRC value vs Received CRC value.
+  - The exact byte slice index range evaluated (e.g. `bytes[2:8]`).
+  - Bit-by-bit mismatch diff.
 
 ---
 
