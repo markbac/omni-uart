@@ -1,4 +1,4 @@
-version: "1.0.0"
+version: "1.0.0+suite.regression.hwB"
 meta:
   name: "Sensor Node Automated Test Suite"
   protocol: "examples/protocols/binary_sensor_node.yaml"
