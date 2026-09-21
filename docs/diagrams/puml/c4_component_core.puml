@@ -1,0 +1,37 @@
+@startuml c4_component_core
+!include <C4/C4_Component>
+
+LAYOUT_WITH_LEGEND()
+
+title Component Diagram: Core Engine & Codec (C4 Level 3)
+
+Container_Boundary(core, "Core Protocol Engine & Codec") {
+    Component(models, "Protocol Models & Validator", "Pydantic v2", "Validates protocol syntax, types, constraints, and defaults")
+    Component(builder, "Frame Builder", "struct / bitpack", "Packs command parameters into binary or delimited frame envelopes")
+    Component(decoder, "Stream Decoder", "Sliding FIFO Buffer", "Hunts sync preambles, extracts length, handles fragmentation, recovers from noise")
+    Component(crc_engine, "CRC & Integrity Engine", "Lookup Table / Rocksoft", "Computes preset (CRC8/16/32, Sum, XOR) and custom parametric CRCs")
+    Component(dissector, "Packet Dissector", "Byte Slicer", "Categorizes bytes into semantic roles (Header, Len, Cmd, Payload, CRC, Footer) with diagnostic diffs")
+    Component(recorder, "Session Recorder", "Ring Buffer", "Thread-safe event logger exporting to JSONL, CSV, and raw binary")
+}
+
+Container_Ext(transport, "Transport Layer", "Serial & Virtual MCU")
+Container_Ext(ui_api, "Web API & CLI", "FastAPI / Typer")
+
+Rel(ui_api, models, "Loads protocol specifications")
+Rel(ui_api, builder, "Requests command serialization")
+Rel(transport, decoder, "Feeds raw incoming byte chunks")
+
+Rel(models, builder, "Provides field layout & endianness rules")
+Rel(models, decoder, "Provides framing sync patterns & length offsets")
+
+Rel(builder, crc_engine, "Calculates checksums for outbound frames")
+Rel(decoder, crc_engine, "Validates integrity of received frames")
+
+Rel(decoder, dissector, "Supplies raw byte buffer & field boundaries")
+Rel(dissector, recorder, "Sends enriched packet events with byte slices & diffs")
+Rel(builder, recorder, "Sends outbound TX event records")
+
+Rel(builder, transport, "Transmits completed raw byte frames")
+Rel(recorder, ui_api, "Streams live events & exports session files")
+
+@enduml

@@ -60,7 +60,10 @@ For RS-485 transceivers requiring Direction Control (DE/RE pins):
 
 ## 4. Virtual MCU Loopback Engine (`VirtualTransport`)
 
-The Virtual MCU simulator makes OmniUART completely self-contained for tests and offline development.
+The Virtual MCU simulator makes OmniUART completely self-contained for tests and offline development:
+
+![Transport & Virtual MCU C4 Component Model](../diagrams/images/c4_component_transport.svg)
+[[CAPTION:Figure]] C4 Level 3: Transport & Virtual MCU Component Diagram.
 
 ```mermaid
 flowchart LR
@@ -84,7 +87,7 @@ flowchart LR
     FaultInjector --> OutQueue
     OutQueue --> RX
 ```
-[[CAPTION:Figure]] Virtual MCU loopback architecture.
+[[CAPTION:Figure]] Virtual MCU loopback internal pipeline.
 
 ### 4.1 Response Rule Engine
 The virtual engine matches incoming command opcodes and returns predetermined responses defined in the protocol:
@@ -98,3 +101,28 @@ For automated reliability testing, the virtual device can inject realistic bus d
 - **Byte Dropping**: Truncates frames mid-payload to verify stream synchronization recovery.
 - **Intermittent Timeouts**: Simulates firmware lockups by withholding responses.
 - **Preamble Noise**: Injects random garbage bytes between frames to verify sync hunt resilience.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as OmniUART Client / Script
+    participant Virtual as Virtual MCU Engine
+    participant Fault as Fault & Jitter Injector
+
+    Client->>Virtual: write(raw_request_bytes)
+    Virtual->>Virtual: Decode opcode & update state
+    Virtual->>Fault: synthesize_reply(expected_response)
+    alt Normal Transmission
+        Fault-->>Client: Deliver pristine response (CRC Valid)
+    else Fault Injection: Bit-Flipped CRC
+        Fault-->>Client: Deliver response with corrupted CRC byte
+        Client->>Client: StreamDecoder flags CRC_MISMATCH & logs diff
+    else Fault Injection: Byte Drop
+        Fault-->>Client: Deliver truncated payload (missing 2 bytes)
+        Client->>Client: StreamDecoder buffers fragment until timeout
+    else Fault Injection: Preamble Noise
+        Fault-->>Client: Deliver 128 bytes garbage + valid frame
+        Client->>Client: StreamDecoder sync-hunts and recovers frame
+    end
+```
+[[CAPTION:Figure]] Sequence diagram for Virtual MCU fault and jitter injection.

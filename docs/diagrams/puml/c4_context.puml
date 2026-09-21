@@ -1,0 +1,24 @@
+@startuml c4_context
+!include <C4/C4_Context>
+
+LAYOUT_WITH_LEGEND()
+
+title System Context Diagram for OmniUART (C4 Level 1)
+
+Person(firmware_eng, "Firmware Engineer", "Develops MCU firmware and validates protocol communications")
+Person(qa_eng, "QA Automation Engineer", "Runs automated regression test suites and hardware-in-the-loop tests")
+
+System(omniuart, "OmniUART", "Universal schema-driven UART protocol tool for ad-hoc inspection, automated testing, and web monitoring")
+
+System_Ext(target_device, "Target Embedded Device", "MCU, sensor node, or actuator running proprietary or industrial UART protocol")
+System_Ext(ci_pipeline, "CI/CD Pipeline", "Automated GitHub Actions / Jenkins continuous integration runner")
+System_Ext(filesystem, "Host Filesystem", "Stores YAML/JSON protocol definitions, test scripts, and recorded session logs")
+
+Rel(firmware_eng, omniuart, "Sends ad-hoc commands, monitors raw/decoded streams, and inspects packets via CLI or Web UI")
+Rel(qa_eng, omniuart, "Executes automated test suites with assertions and evaluates pass/fail status")
+Rel(ci_pipeline, omniuart, "Executes headless tests with Virtual MCU loopback for continuous validation")
+
+Rel(omniuart, target_device, "Transmits requests and receives responses/telemetry", "Physical UART / RS-485 / USB-Serial")
+Rel(omniuart, filesystem, "Reads schema specs and writes session exports (JSONL, CSV, BIN)", "File I/O")
+
+@enduml

@@ -1,0 +1,44 @@
+@startuml c4_container
+!include <C4/C4_Container>
+
+LAYOUT_WITH_LEGEND()
+
+title Container Diagram for OmniUART (C4 Level 2)
+
+Person(user, "Engineer / Developer", "Embedded systems or test automation engineer")
+
+System_Boundary(c1, "OmniUART Standalone System") {
+    Container(cli, "CLI Application", "Python / Typer / Rich", "Provides interactive commands: send, monitor, run, ports, validate, session")
+    Container(web_ui, "Web UI Dashboard", "HTML5 / ES Modules / CSS", "Dynamic forms, real-time dual-view raw/decoded stream inspector, session controls")
+    Container(web_server, "Embedded Web Server", "FastAPI / Starlette / Uvicorn", "Serves REST API, handles WebSocket duplex streaming bridge")
+    Container(core_engine, "Core Codec & Framing Engine", "Python 3.12+", "Stream sync hunt, dynamic struct field packing/unpacking, Rocksoft CRC engine, dissector")
+    Container(script_runner, "Script Execution Engine", "Python 3.12+", "Step sequencer, assertion evaluator, retry handling, JUnit XML / JSON reporting")
+    Container(session_recorder, "Session Recorder", "Python 3.12+", "Thread-safe event ring buffer, microsecond timestamps, JSONL/CSV/BIN exporters")
+    Container(transport_layer, "Transport Subsystem", "Python / pyserial", "Asynchronous UART hardware driver and offline Virtual MCU simulator with fault injection")
+}
+
+System_Ext(hardware, "Physical Target Device", "Hardware MCU / Sensor Node / Actuator")
+System_Ext(filesystem, "Local Filesystem", "Protocol specs (*.yaml, *.json), test scripts, session recordings")
+
+Rel(user, cli, "Runs CLI commands", "Terminal")
+Rel(user, web_ui, "Interacts with dynamic forms and packet inspector", "Browser (HTTP/WebSocket)")
+
+Rel(web_ui, web_server, "Fetches schemas, streams serial packets", "JSON / WebSocket")
+Rel(cli, core_engine, "Encodes commands & decodes frames")
+Rel(cli, script_runner, "Dispatches batch test sequences")
+Rel(cli, transport_layer, "Connects to physical or virtual ports")
+
+Rel(web_server, core_engine, "Encodes user inputs & decodes streams")
+Rel(web_server, transport_layer, "Manages serial lifecycle")
+Rel(web_server, session_recorder, "Controls recording & triggers exports")
+
+Rel(script_runner, core_engine, "Builds frames & asserts fields")
+Rel(script_runner, transport_layer, "Sends packets & awaits responses")
+Rel(script_runner, session_recorder, "Records test traffic")
+
+Rel(core_engine, session_recorder, "Emits timestamped packet events with byte slices")
+Rel(transport_layer, hardware, "Sends/receives raw bytes", "RS-232 / RS-485 / USB-UART")
+Rel(core_engine, filesystem, "Loads protocol schemas & scripts", "YAML/JSON")
+Rel(session_recorder, filesystem, "Exports session logs", "JSONL / CSV / BIN")
+
+@enduml
