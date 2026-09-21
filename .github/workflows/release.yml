@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-binaries:
+    name: Build Standalone Binary (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: omni-uart-windows-amd64.exe
+            binary_path: dist/omni-uart.exe
+            archive_name: omni-uart-windows-amd64.zip
+          - os: ubuntu-latest
+            artifact_name: omni-uart-linux-amd64
+            binary_path: dist/omni-uart
+            archive_name: omni-uart-linux-amd64.tar.gz
+          - os: macos-latest
+            artifact_name: omni-uart-macos-universal
+            binary_path: dist/omni-uart
+            archive_name: omni-uart-macos-universal.tar.gz
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev] pyinstaller
+
+      - name: Compile Standalone Executable via PyInstaller
+        run: |
+          pyinstaller omniuart.spec
+
+      - name: Package Binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item "${{ matrix.binary_path }}" "${{ matrix.artifact_name }}"
+          Compress-Archive -Path "${{ matrix.artifact_name }}", "docs/release/guidance.md", "README.md", "LICENSE" -DestinationPath "${{ matrix.archive_name }}"
+
+      - name: Package Binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cp ${{ matrix.binary_path }} ${{ matrix.artifact_name }}
+          chmod +x ${{ matrix.artifact_name }}
+          tar -czvf ${{ matrix.archive_name }} ${{ matrix.artifact_name }} docs/release/guidance.md README.md LICENSE
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive_name }}
+          path: ${{ matrix.archive_name }}
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Generate SHA-256 Checksums
+        run: |
+          cd release-artifacts
+          sha256sum * > checksums.sha256
+          cat checksums.sha256
+
+      - name: Copy Guidance Documentation
+        run: |
+          cp docs/release/guidance.md release-artifacts/RELEASE_GUIDANCE.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## OmniUART Standalone Release
+            
+            This release contains standalone single-file executables for Windows, Linux, and macOS.
+            **No Python installation is required to run this tool.**
+            
+            ### Quickstart
+            - **Windows**: Download `omni-uart-windows-amd64.zip`, extract, and execute `.\omni-uart-windows-amd64.exe --help`.
+            - **Linux**: Download `omni-uart-linux-amd64.tar.gz`, extract, and execute `./omni-uart-linux-amd64 --help`.
+            - **macOS**: Download `omni-uart-macos-universal.tar.gz`, extract, and execute `./omni-uart-macos-universal --help`.
+            
+            Refer to the included `RELEASE_GUIDANCE.md` for complete user instructions and protocol schema documentation.

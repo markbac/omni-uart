@@ -1,0 +1,50 @@
+schema_version: "1.0.0"
+metadata:
+  name: "AsciiDevice"
+  version: "1.0.0"
+  description: "Delimited ASCII command protocol (AT-command style)"
+  author: "Modem Firmware Team"
+
+serial_config:
+  baudrate: 115200
+  bytesize: 8
+  parity: "none"
+  stopbits: 1
+  flow_control: "none"
+  timeout_ms: 1000
+
+framing:
+  type: "delimited"
+  prefix: "AT+"
+  delimiter: ","
+  suffix: "\r\n"
+  integrity:
+    algorithm: "none"
+
+commands:
+  - name: "TEST"
+    id: "TEST"
+    description: "Check modem connectivity"
+    parameters: []
+    response:
+      id: "OK"
+      timeout_ms: 500
+      fields:
+        - name: "result"
+          type: "string"
+
+  - name: "SET_POWER"
+    id: "POWER"
+    description: "Set output transmission power level"
+    parameters:
+      - name: "dbm"
+        type: "int8"
+        min: -10
+        max: 20
+        default: 14
+    response:
+      id: "OK"
+      timeout_ms: 500
+      fields:
+        - name: "result"
+          type: "string"

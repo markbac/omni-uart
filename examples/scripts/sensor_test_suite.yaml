@@ -1,0 +1,58 @@
+version: "1.0.0"
+meta:
+  name: "Sensor Node Automated Test Suite"
+  protocol: "examples/protocols/binary_sensor_node.yaml"
+  description: "Automated regression verification for BinarySensorNode"
+  author: "QA Hardware Automation"
+
+config:
+  abort_on_error: true
+  default_timeout_ms: 1000
+
+steps:
+  - name: "Check Device Alive"
+    command: "ping"
+    params: {}
+    expect_response: "ping_reply"
+    assertions:
+      - field: "uptime_seconds"
+        op: ">="
+        value: 0
+
+  - name: "Query Channel 0 Environmental Data"
+    command: "get_readings"
+    params:
+      channel: 0
+    expect_response: "get_readings_reply"
+    assertions:
+      - field: "channel"
+        op: "=="
+        value: 0
+      - field: "temperature"
+        op: ">="
+        value: -40.0
+      - field: "temperature"
+        op: "<="
+        value: 85.0
+      - field: "humidity"
+        op: ">="
+        value: 0.0
+      - field: "humidity"
+        op: "<="
+        value: 100.0
+
+  - name: "Set Sensor Sampling Rate to 10 Hz"
+    command: "set_sampling_rate"
+    params:
+      rate_hz: 10
+    expect_response: "set_sampling_rate_reply"
+    assertions:
+      - field: "status"
+        op: "=="
+        value: 0
+
+  - name: "Settle Time"
+    delay_ms: 100
+
+  - name: "Suite Complete"
+    log: "All sensor validation checks passed successfully."
