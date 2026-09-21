@@ -32,7 +32,9 @@ flowchart TD
         SchemaValidator["Schema Validator\n(Pydantic v2 Models)"]
         StreamDecoder["Streaming Frame Decoder\n(Sync Hunt & Slip Recovery)"]
         PacketBuilder["Frame Builder\n(Dynamic Field Packer)"]
-        CRCEngine["CRC & Checksum Engine\n(CRC8/16/32, Sum, XOR)"]
+        CRCEngine["CRC & Checksum Engine\n(CRC8/16/32, Sum, XOR, Custom)"]
+        Dissector["Packet Dissector\n(Byte Slicing & Diagnostics)"]
+        Recorder["Session Recorder\n(Ring Buffer & Exporters)"]
     end
 
     subgraph TransportLayer["3. Transport Layer"]
@@ -47,9 +49,9 @@ flowchart TD
     end
 
     subgraph PresentationLayer["5. Presentation Layer"]
-        CLI["Rich CLI\n- send / monitor\n- run / validate\n- ports / version"]
+        CLI["Rich CLI\n- send / monitor\n- run / validate\n- ports / session"]
         WebServer["Embedded Web Server\n(FastAPI + WebSockets)"]
-        WebUI["Dynamic Web UI\n- Schema-Driven Forms\n- Real-Time Hex & Field Inspector\n- Virtual Device Toggle"]
+        WebUI["Dynamic Web UI\n- Dynamic Forms\n- Dual Comms Panel (Raw/Decoded)\n- Session Recorder Controls"]
     end
 
     P_YAML --> SchemaValidator
@@ -66,18 +68,73 @@ flowchart TD
     TransportInterface --- SerialTransport
     TransportInterface --- VirtualTransport
 
+    StreamDecoder --> Dissector
+    PacketBuilder --> Dissector
+    Dissector --> Recorder
+
     ScriptEngine --> PacketBuilder
     StreamDecoder --> ScriptEngine
     ScriptEngine --> ReportGen
 
     PresentationLayer --> PacketBuilder
     StreamDecoder --> PresentationLayer
+    Recorder --> PresentationLayer
 ```
 [[CAPTION:Figure]] High-level modular architecture of OmniUART.
 
 ---
 
-## 3. Subsystem Breakdown
+## 3. C4 Architecture Models (PlantUML Generated)
+
+OmniUART employs the **C4 Model** to document architecture across progressive levels of abstraction.
+
+### 3.1 C4 Level 1: System Context
+The System Context diagram positions OmniUART within its operational environment, showing interactions between embedded firmware developers, QA test runners, physical hardware devices, and host filesystems:
+
+![OmniUART C4 System Context Diagram](../diagrams/images/c4_context.svg)
+[[CAPTION:Figure]] C4 Level 1: System Context diagram for OmniUART.
+
+### 3.2 C4 Level 2: Container Model
+The Container diagram illustrates the high-level executable and data boundary containers:
+
+![OmniUART C4 Container Diagram](../diagrams/images/c4_container.svg)
+[[CAPTION:Figure]] C4 Level 2: Container diagram for OmniUART.
+
+### 3.3 C4 Level 3: Component Models
+Detailed component interactions for the Core Codec and Transport subsystems:
+
+#### Core Engine & Codec Components
+![OmniUART C4 Core Component Diagram](../diagrams/images/c4_component_core.svg)
+[[CAPTION:Figure]] C4 Level 3: Core Codec, Dissector, CRC, and Recorder component model.
+
+#### Transport & Virtual MCU Components
+![OmniUART C4 Transport Component Diagram](../diagrams/images/c4_component_transport.svg)
+[[CAPTION:Figure]] C4 Level 3: Hardware Serial and Virtual MCU Loopback component model.
+
+---
+
+## 4. Streaming Sync Hunt & Recovery State Machine
+
+The stream parser operates as a deterministic finite-state automaton designed to withstand noisy physical serial lines, partial fragment arrivals, and corrupt frames:
+
+```mermaid
+stateDiagram-v2
+    [*] --> HUNTING_PREAMBLE: Initialize buffer
+    HUNTING_PREAMBLE --> HUNTING_PREAMBLE: Discard noise byte & advance 1 byte
+    HUNTING_PREAMBLE --> READING_LENGTH: Header preamble matched (e.g. 0xAA 0x55)
+    READING_LENGTH --> BUFFERING_PAYLOAD: Length extracted & satisfies bounds (<= max_frame)
+    READING_LENGTH --> HUNTING_PREAMBLE: Illegal length (> max_frame) -> Sync Slip discard
+    BUFFERING_PAYLOAD --> BUFFERING_PAYLOAD: Accumulate chunk fragments (partial read)
+    BUFFERING_PAYLOAD --> VERIFYING_INTEGRITY: Complete payload + footer bytes arrived
+    VERIFYING_INTEGRITY --> DISPATCHING: CRC / Checksum matches computed value
+    VERIFYING_INTEGRITY --> HUNTING_PREAMBLE: CRC mismatch -> Emit diagnostic event & hunt next byte
+    DISPATCHING --> HUNTING_PREAMBLE: Reset state & search next frame
+```
+[[CAPTION:Figure]] Finite state machine for streaming UART preamble detection and recovery.
+
+---
+
+## 5. Subsystem Breakdown
 
 ### 3.1 Specification Layer (`omniuart.core.models`)
 The specification layer defines the data contracts using Pydantic v2. The schema validates protocol definitions containing:

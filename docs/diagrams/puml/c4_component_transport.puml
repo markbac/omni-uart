@@ -1,0 +1,36 @@
+@startuml c4_component_transport
+!include <C4/C4_Component>
+
+LAYOUT_WITH_LEGEND()
+
+title Component Diagram: Transport & Virtual MCU Subsystem (C4 Level 3)
+
+Container_Boundary(transport, "Transport Subsystem") {
+    Component(itransport, "AsyncTransport Interface", "Python ABC", "Common async contract: open(), close(), write(), read(), is_open")
+    Component(serial_trans, "SerialTransport", "pyserial worker", "Manages OS COM / TTY ports, non-blocking background queue, RTS/CTS & RS-485 flow control")
+    Component(port_enum, "Port Enumerator", "list_ports", "Discovers connected USB-UART devices, VID/PID, serial numbers")
+    
+    Container_Boundary(vmcu, "Virtual MCU Simulator") {
+        Component(virtual_trans, "VirtualTransport", "Async Queues", "In-memory full-duplex UART simulation with zero hardware requirements")
+        Component(rule_engine, "Response Rule Engine", "Pattern Matcher", "Matches incoming command opcodes and synthesizes protocol responses")
+        Component(reg_bank, "Stateful Register Bank", "Memory Map", "Simulates persistent MCU registers (temperature, status, DAC/PWM)")
+        Component(fault_injector, "Fault & Jitter Injector", "Noise Generator", "Simulates latency, CRC bit-flips, byte drops, and UART preamble noise")
+    }
+}
+
+System_Ext(hardware, "Physical Serial Device", "USB-UART / RS-232 / RS-485")
+Container_Ext(core_engine, "Core Engine / Codec", "StreamDecoder & FrameBuilder")
+
+Rel(itransport, serial_trans, "Implemented by")
+Rel(itransport, virtual_trans, "Implemented by")
+
+Rel(core_engine, itransport, "Invokes write() and read()")
+Rel(serial_trans, hardware, "Transfers bytes over serial driver")
+Rel(port_enum, hardware, "Scans physical USB / UART ports")
+
+Rel(virtual_trans, rule_engine, "Routes incoming request frames")
+Rel(rule_engine, reg_bank, "Reads/updates simulated device state")
+Rel(rule_engine, fault_injector, "Passes synthetic response for jitter/corruption")
+Rel(fault_injector, virtual_trans, "Emits conditioned byte streams to RX queue")
+
+@enduml
