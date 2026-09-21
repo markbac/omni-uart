@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/markbac/omni-uart/schemas/script.schema.json",
+  "title": "OmniUART Automation Script Schema",
+  "description": "Schema definition for automated UART command sequences and regression test suites.",
+  "type": "object",
+  "required": ["version", "meta", "steps"],
+  "properties": {
+    "version": { "type": "string", "enum": ["1.0.0"] },
+    "meta": {
+      "type": "object",
+      "required": ["name", "protocol"],
+      "properties": {
+        "name": { "type": "string" },
+        "protocol": { "type": "string" },
+        "description": { "type": "string" },
+        "author": { "type": "string" }
+      }
+    },
+    "config": {
+      "type": "object",
+      "properties": {
+        "abort_on_error": { "type": "boolean", "default": true },
+        "default_timeout_ms": { "type": "integer", "default": 1000 },
+        "inter_step_delay_ms": { "type": "integer", "default": 0 }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "command": { "type": "string" },
+          "params": { "type": "object" },
+          "expect_response": { "type": "string" },
+          "timeout_ms": { "type": "integer" },
+          "delay_ms": { "type": "integer" },
+          "log": { "type": "string" },
+          "assertions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["field", "op", "value"],
+              "properties": {
+                "field": { "type": "string" },
+                "op": { "type": "string", "enum": ["==", "!=", "<", "<=", ">", ">=", "in", "tolerance"] },
+                "value": {},
+                "tolerance": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

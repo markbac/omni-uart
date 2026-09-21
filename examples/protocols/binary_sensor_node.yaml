@@ -1,0 +1,100 @@
+schema_version: "1.0.0"
+metadata:
+  name: "BinarySensorNode"
+  version: "1.1.0"
+  description: "Binary UART protocol for multi-channel environmental sensor node with CRC16-Modbus"
+  author: "IoT Engineering Team"
+
+serial_config:
+  baudrate: 115200
+  bytesize: 8
+  parity: "none"
+  stopbits: 1
+  flow_control: "none"
+  timeout_ms: 1000
+
+framing:
+  type: "binary"
+  header: [0xAA, 0x55]
+  length:
+    type: "uint16"
+    endian: "little"
+    includes: "payload_only"
+  command_id:
+    type: "uint8"
+  integrity:
+    algorithm: "crc16_modbus"
+  footer: [0x55, 0xAA]
+
+commands:
+  - name: "ping"
+    id: 0x01
+    description: "Echo / ping command to check device presence"
+    parameters: []
+    response:
+      id: 0x81
+      timeout_ms: 500
+      fields:
+        - name: "uptime_seconds"
+          type: "uint32"
+          endian: "little"
+          unit: "s"
+
+  - name: "get_readings"
+    id: 0x02
+    description: "Query latest sensor measurements"
+    parameters:
+      - name: "channel"
+        type: "uint8"
+        min: 0
+        max: 3
+        default: 0
+    response:
+      id: 0x82
+      timeout_ms: 1000
+      fields:
+        - name: "channel"
+          type: "uint8"
+        - name: "temperature"
+          type: "float32"
+          endian: "little"
+          unit: "°C"
+        - name: "humidity"
+          type: "float32"
+          endian: "little"
+          unit: "%"
+        - name: "pressure_hpa"
+          type: "float32"
+          endian: "little"
+          unit: "hPa"
+
+  - name: "set_sampling_rate"
+    id: 0x03
+    description: "Configure sensor update frequency"
+    parameters:
+      - name: "rate_hz"
+        type: "enum"
+        options:
+          1: "1 Hz"
+          5: "5 Hz"
+          10: "10 Hz"
+          50: "50 Hz"
+        default: 1
+    response:
+      id: 0x83
+      timeout_ms: 500
+      fields:
+        - name: "status"
+          type: "uint8"
+
+telemetry:
+  - name: "periodic_status"
+    id: 0x30
+    description: "Spontaneous periodic heartbeat broadcast"
+    fields:
+      - name: "battery_millivolts"
+        type: "uint16"
+        endian: "little"
+        unit: "mV"
+      - name: "error_flags"
+        type: "uint8"

@@ -1,0 +1,60 @@
+{
+  "version": "1.0.0",
+  "meta": {
+    "name": "Actuator Sweep and Calibration",
+    "protocol": "examples/protocols/smart_actuator.json",
+    "description": "JSON-format calibration script verifying actuator positioning",
+    "author": "Motion Control Systems"
+  },
+  "config": {
+    "abort_on_error": true,
+    "default_timeout_ms": 500
+  },
+  "steps": [
+    {
+      "name": "Zero Position Calibration",
+      "command": "set_position",
+      "params": {
+        "channel": 0,
+        "angle_degrees": 0.0,
+        "velocity_limit": 500
+      },
+      "expect_response": "set_position_reply",
+      "assertions": [
+        {
+          "field": "channel",
+          "op": "==",
+          "value": 0
+        },
+        {
+          "field": "current_position",
+          "op": "tolerance",
+          "value": 0.0,
+          "tolerance": 0.5
+        }
+      ]
+    },
+    {
+      "name": "Midpoint Target Sweep",
+      "command": "set_position",
+      "params": {
+        "channel": 0,
+        "angle_degrees": 180.0,
+        "velocity_limit": 1200
+      },
+      "expect_response": "set_position_reply",
+      "assertions": [
+        {
+          "field": "current_position",
+          "op": "tolerance",
+          "value": 180.0,
+          "tolerance": 1.0
+        }
+      ]
+    },
+    {
+      "name": "Log Completion",
+      "log": "Actuator calibration routine completed."
+    }
+  ]
+}

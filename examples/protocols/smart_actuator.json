@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "name": "SmartActuator",
+    "version": "2.0.0",
+    "description": "Servo actuator protocol with CRC32 integrity checking and status reporting",
+    "author": "Motion Control Systems"
+  },
+  "serial_config": {
+    "baudrate": 921600,
+    "bytesize": 8,
+    "parity": "none",
+    "stopbits": 1,
+    "flow_control": "hardware",
+    "timeout_ms": 250
+  },
+  "framing": {
+    "type": "binary",
+    "header": [186, 190],
+    "length": {
+      "type": "uint16",
+      "endian": "little",
+      "includes": "payload_only"
+    },
+    "command_id": {
+      "type": "uint16",
+      "endian": "little"
+    },
+    "integrity": {
+      "algorithm": "crc32"
+    },
+    "footer": [237, 254]
+  },
+  "commands": [
+    {
+      "name": "set_position",
+      "id": 4097,
+      "description": "Sets servo angular position and maximum velocity",
+      "parameters": [
+        {
+          "name": "channel",
+          "type": "uint8",
+          "default": 0,
+          "min": 0,
+          "max": 7
+        },
+        {
+          "name": "angle_degrees",
+          "type": "float32",
+          "endian": "little",
+          "min": 0.0,
+          "max": 360.0,
+          "default": 90.0,
+          "unit": "deg"
+        },
+        {
+          "name": "velocity_limit",
+          "type": "uint16",
+          "endian": "little",
+          "default": 1000,
+          "unit": "rpm"
+        }
+      ],
+      "response": {
+        "id": 36865,
+        "timeout_ms": 200,
+        "fields": [
+          {
+            "name": "channel",
+            "type": "uint8"
+          },
+          {
+            "name": "current_position",
+            "type": "float32",
+            "endian": "little",
+            "unit": "deg"
+          },
+          {
+            "name": "status_flags",
+            "type": "uint8"
+          }
+        ]
+      }
+    }
+  ],
+  "telemetry": []
+}

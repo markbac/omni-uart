@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-validate:
+    name: Lint & Schema Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy jsonschema pyyaml
+
+      - name: Run Ruff Linter
+        run: |
+          ruff check .
+
+      - name: Validate Example Protocols against JSON Schema
+        run: |
+          python -c "
+          import json, yaml, glob
+          from jsonschema import validate
+
+          with open('schemas/protocol.schema.json') as f:
+              schema = json.load(f)
+
+          for proto_file in glob.glob('examples/protocols/*.*'):
+              with open(proto_file) as f:
+                  data = yaml.safe_load(f) if proto_file.endswith(('.yaml', '.yml')) else json.load(f)
+              validate(instance=data, schema=schema)
+              print(f'Validated protocol: {proto_file}')
+          "
+
+      - name: Validate Example Scripts against JSON Schema
+        run: |
+          python -c "
+          import json, yaml, glob
+          from jsonschema import validate
+
+          with open('schemas/script.schema.json') as f:
+              schema = json.load(f)
+
+          for script_file in glob.glob('examples/scripts/*.*'):
+              with open(script_file) as f:
+                  data = yaml.safe_load(f) if script_file.endswith(('.yaml', '.yml')) else json.load(f)
+              validate(instance=data, schema=schema)
+              print(f'Validated script: {script_file}')
+          "
+
+  test:
+    name: Test Suite Matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.12"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run pytest (if tests directory contains tests)
+        run: |
+          python -c "
+          import os, sys, pytest
+          if os.path.exists('tests') and any(os.scandir('tests')):
+              sys.exit(pytest.main(['-v', '--tb=short']))
+          else:
+              print('No unit tests implemented yet (Phase 1). Skipping pytest.')
+          "

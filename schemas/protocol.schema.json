@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/markbac/omni-uart/schemas/protocol.schema.json",
+  "title": "OmniUART Protocol Specification Schema",
+  "description": "Schema definition for universal UART protocol specification files (YAML or JSON).",
+  "type": "object",
+  "required": ["schema_version", "metadata", "serial_config", "framing", "commands"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "description": { "type": "string" },
+        "author": { "type": "string" }
+      }
+    },
+    "serial_config": {
+      "type": "object",
+      "required": ["baudrate"],
+      "properties": {
+        "baudrate": { "type": "integer", "enum": [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600] },
+        "bytesize": { "type": "integer", "enum": [5, 6, 7, 8], "default": 8 },
+        "parity": { "type": "string", "enum": ["none", "even", "odd", "mark", "space"], "default": "none" },
+        "stopbits": { "type": "number", "enum": [1, 1.5, 2], "default": 1 },
+        "flow_control": { "type": "string", "enum": ["none", "hardware", "software"], "default": "none" },
+        "timeout_ms": { "type": "integer", "default": 1000 }
+      }
+    },
+    "framing": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["binary", "delimited"] },
+        "header": {
+          "oneOf": [
+            { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
+            { "type": "string" }
+          ]
+        },
+        "length": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["uint8", "uint16", "uint32"] },
+            "endian": { "type": "string", "enum": ["little", "big"], "default": "little" },
+            "includes": { "type": "string", "enum": ["payload_only", "payload_and_cmd", "full_frame"], "default": "payload_only" }
+          }
+        },
+        "command_id": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["uint8", "uint16", "uint32"] },
+            "endian": { "type": "string", "enum": ["little", "big"], "default": "little" }
+          }
+        },
+        "integrity": {
+          "type": "object",
+          "properties": {
+            "algorithm": {
+              "type": "string",
+              "enum": ["none", "sum8", "sum16", "xor", "crc8", "crc16_modbus", "crc16_ccitt", "crc32"]
+            }
+          }
+        },
+        "footer": {
+          "oneOf": [
+            { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
+            { "type": "string" }
+          ]
+        },
+        "prefix": { "type": "string" },
+        "delimiter": { "type": "string" },
+        "suffix": { "type": "string" }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/command" }
+    },
+    "telemetry": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/telemetry" }
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64", "float32", "float64", "bool", "enum", "string", "bytes"]
+        },
+        "endian": { "type": "string", "enum": ["little", "big"], "default": "little" },
+        "default": {},
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "unit": { "type": "string" },
+        "scale": { "type": "number" },
+        "options": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "length": { "type": "integer" }
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": ["name", "id"],
+      "properties": {
+        "name": { "type": "string" },
+        "id": {
+          "oneOf": [
+            { "type": "integer" },
+            { "type": "string" }
+          ]
+        },
+        "description": { "type": "string" },
+        "parameters": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/field" }
+        },
+        "response": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "oneOf": [
+                { "type": "integer" },
+                { "type": "string" }
+              ]
+            },
+            "timeout_ms": { "type": "integer" },
+            "fields": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/field" }
+            }
+          }
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "required": ["name", "id"],
+      "properties": {
+        "name": { "type": "string" },
+        "id": {
+          "oneOf": [
+            { "type": "integer" },
+            { "type": "string" }
+          ]
+        },
+        "description": { "type": "string" },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/field" }
+        }
+      }
+    }
+  }
+}
