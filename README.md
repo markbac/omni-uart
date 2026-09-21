@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/markbac/omni-uart/actions/workflows/ci.yml/badge.svg)](https://github.com/markbac/omni-uart/actions/workflows/ci.yml)
 [![Release](https://github.com/markbac/omni-uart/actions/workflows/release.yml/badge.svg)](https://github.com/markbac/omni-uart/actions/workflows/release.yml)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
+[![SemVer](https://img.shields.io/badge/SemVer-2.0.0-green.svg)](https://semver.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 > **Universal, schema-driven UART protocol tool for embedded systems, IoT devices, and hardware test engineering.**
@@ -112,6 +114,14 @@ omni-uart/
 ├── pyproject.toml                 # Modern PEP 621 Python package configuration
 └── README.md
 ```
+
+---
+
+## Contributing & Standards
+
+OmniUART strictly enforces **Semantic Versioning 2.0.0** and **Conventional Commits 1.0.0**. All changes are delivered via scoped feature branches and Pull Requests merged into `main`.
+
+For commit conventions, scopes, branch naming, and release procedures, please refer to [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
