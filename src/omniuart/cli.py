@@ -28,6 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
         prog="omniuart",
         description="OmniUART: Universal Schema-Driven UART Protocol Tool",
     )
+    parser.add_argument("--log-file", help="Custom log file path (default: ~/.omniuart/logs/omniuart.log)")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Log verbosity level")
     subparsers = parser.add_subparsers(dest="subcommand", help="Available commands")
 
     # 1. list
@@ -122,8 +124,12 @@ def format_protocol_help(spec: ProtocolSpec) -> str:
 
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint."""
+    from omniuart.core.logger import setup_logging
+
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    setup_logging(log_file=getattr(args, "log_file", None), log_level=getattr(args, "log_level", "INFO"))
 
     catalog = CatalogManager()
 
