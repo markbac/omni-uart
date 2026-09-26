@@ -1,12 +1,13 @@
 """Session Recording & Data Persistence Subsystem for OmniUART.
 
-Captures live UART transactions and exports to JSON Lines (.jsonl), CSV, and raw binary (.bin) formats.
+Captures live UART transactions and exports to JSON Lines (.jsonl), CSV, raw binary (.bin), and Wireshark PCAPNG (.pcapng) formats.
 """
 
 from __future__ import annotations
 
 import csv
 import json
+import struct
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -136,4 +137,60 @@ class SessionRecorder:
                 hex_clean = event.raw_hex.replace(" ", "")
                 if hex_clean:
                     f.write(bytes.fromhex(hex_clean))
+        return path
+
+    def export_pcapng(self, target_path: Union[str, Path]) -> Path:
+        """Export session events as Wireshark PCAPNG capture file."""
+        path = Path(target_path)
+        with path.open("wb") as f:
+            # Section Header Block (SHB)
+            shb = struct.pack(
+                "<IIIHHqI",
+                0x0A0D0D0A,  # Block Type
+                28,          # Block Total Length
+                0x1A2B3C4D,  # Byte-Order Magic
+                1, 0,        # Version 1.0
+                -1,          # Section Length unspecified
+                28,          # Block Total Length
+            )
+            f.write(shb)
+
+            # Interface Description Block (IDB) - LinkType USER0 (147)
+            idb = struct.pack(
+                "<IIHHII",
+                0x00000001,  # Block Type
+                20,          # Block Total Length
+                147,         # LinkType: USER0
+                0,           # Reserved
+                65535,       # SnapLen
+                20,          # Block Total Length
+            )
+            f.write(idb)
+
+            # Enhanced Packet Blocks (EPB)
+            for event in self.events:
+                hex_clean = event.raw_hex.replace(" ", "")
+                data = bytes.fromhex(hex_clean) if hex_clean else b""
+                pkt_len = len(data)
+                
+                # Align packet data to 32-bit boundary
+                pad_len = (4 - (pkt_len % 4)) % 4
+                padded_data = data + b"\x00" * pad_len
+                block_len = 32 + len(padded_data)
+
+                ts_us = int(event.timestamp * 1_000_000)
+                ts_high = (ts_us >> 32) & 0xFFFFFFFF
+                ts_low = ts_us & 0xFFFFFFFF
+
+                epb_hdr = struct.pack(
+                    "<IIIIII",
+                    0x00000006,  # EPB Block Type
+                    block_len,   # Block Total Length
+                    0,           # Interface ID
+                    ts_high,     # Timestamp High
+                    ts_low,      # Timestamp Low
+                    pkt_len,     # Captured Len
+                )
+                epb_tail = struct.pack("<II", pkt_len, block_len)
+                f.write(epb_hdr + epb_tail[:4] + padded_data + epb_tail[4:])
         return path
