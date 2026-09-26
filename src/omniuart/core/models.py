@@ -84,6 +84,7 @@ class CommandSpec(BaseModel):
     name: str
     id: Union[int, str]
     description: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
     parameters: List[FieldSpec] = Field(default_factory=list)
     response: Optional[ResponseSpec] = None
 
@@ -96,6 +97,7 @@ class TelemetrySpec(BaseModel):
     name: str
     id: Union[int, str]
     description: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
     fields: List[FieldSpec] = Field(default_factory=list)
 
 
@@ -305,11 +307,14 @@ class ScriptSpec(BaseModel):
 
 def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
     """Load and validate a ProtocolSpec from a file path or raw text string."""
+    source_name = None
     if isinstance(source, Path):
+        source_name = source.name
         raw = source.read_text(encoding="utf-8")
         data = yaml.safe_load(raw) if source.suffix.lower() in (".yaml", ".yml") else json.loads(raw)
     elif isinstance(source, str) and "\n" not in source and Path(source).exists():
         path = Path(source)
+        source_name = path.name
         raw = path.read_text(encoding="utf-8")
         data = yaml.safe_load(raw) if path.suffix.lower() in (".yaml", ".yml") else json.loads(raw)
     else:
@@ -318,17 +323,24 @@ def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
             data = yaml.safe_load(raw_text)
         except Exception:
             data = json.loads(raw_text)
+
+    if isinstance(data, dict) and ("physicalLayer" in data or "commandResponseModel" in data or "integrityCheck" in data):
+        from omniuart.core.kit_adapter import parse_kit_protocol
+        return parse_kit_protocol(data, source_name=source_name)
 
     return ProtocolSpec.model_validate(data)
 
 
 def load_script(source: Union[str, Path]) -> ScriptSpec:
     """Load and validate a ScriptSpec from a file path or raw text string."""
+    source_name = None
     if isinstance(source, Path):
+        source_name = source.name
         raw = source.read_text(encoding="utf-8")
         data = yaml.safe_load(raw) if source.suffix.lower() in (".yaml", ".yml") else json.loads(raw)
     elif isinstance(source, str) and "\n" not in source and Path(source).exists():
         path = Path(source)
+        source_name = path.name
         raw = path.read_text(encoding="utf-8")
         data = yaml.safe_load(raw) if path.suffix.lower() in (".yaml", ".yml") else json.loads(raw)
     else:
@@ -337,6 +349,10 @@ def load_script(source: Union[str, Path]) -> ScriptSpec:
             data = yaml.safe_load(raw_text)
         except Exception:
             data = json.loads(raw_text)
+
+    if isinstance(data, dict) and ("interfaceRef" in data or "onSequenceFailure" in data):
+        from omniuart.core.sequence_adapter import parse_kit_sequence
+        return parse_kit_sequence(data, source_name=source_name)
 
     return ScriptSpec.model_validate(data)
 
