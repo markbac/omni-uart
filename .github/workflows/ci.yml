@@ -82,20 +82,17 @@ jobs:
                   print(f'Validated protocol: {p.name}')
           "
 
-      - name: Validate Example Scripts against JSON Schema
+      - name: Validate Example Scripts
         run: |
           python -c "
-          import json, yaml, glob
-          from jsonschema import validate
+          from pathlib import Path
+          from omniuart.core.models import load_script
 
-          with open('schemas/script.schema.json') as f:
-              schema = json.load(f)
-
-          for script_file in glob.glob('examples/scripts/*.*'):
-              with open(script_file) as f:
-                  data = yaml.safe_load(f) if script_file.endswith(('.yaml', '.yml')) else json.load(f)
-              validate(instance=data, schema=schema)
-              print(f'Validated script: {script_file}')
+          for s in Path('examples/scripts').glob('*.*'):
+              if s.suffix in ['.json', '.yaml', '.yml']:
+                  script = load_script(s)
+                  assert script is not None and script.steps
+                  print(f'Validated script: {s.name}')
           "
 
   test:
