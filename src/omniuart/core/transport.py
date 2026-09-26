@@ -205,12 +205,12 @@ class HardwareSerialTransport(AsyncTransport):
     async def write(self, data: bytes) -> int:
         if not self.is_open or not self._serial:
             raise RuntimeError("HardwareSerialTransport is not open.")
-        return self._serial.write(data)
+        return await asyncio.to_thread(self._serial.write, data)
 
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
         if not self.is_open or not self._serial:
             raise RuntimeError("HardwareSerialTransport is not open.")
-        return self._serial.read(size)
+        return await asyncio.to_thread(self._serial.read, size)
 
     async def set_pin_state(self, pin: str, state: bool) -> None:
         if not self.is_open or not self._serial:
