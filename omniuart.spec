@@ -32,7 +32,7 @@ hiddenimports = [
 ]
 
 a = Analysis(
-    ['src/omniuart/cli/main.py'],
+    ['src/omniuart/cli.py'],
     pathex=['src'],
     binaries=[],
     datas=datas,
