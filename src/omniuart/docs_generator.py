@@ -1,19 +1,22 @@
-"""Automated Protocol Specification Documentation & Site Generator for OmniUART."""
+"""Automated Protocol Specification Documentation & MkDocs Site Generator for OmniUART."""
 
 from __future__ import annotations
 
 import html
 import json
+import os
 import shutil
+import subprocess
 from pathlib import Path
 from typing import List, Optional, Union
 
+from omniuart.core.asyncapi_exporter import export_asyncapi_yaml
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.models import ProtocolSpec, load_protocol
 
 
 def generate_markdown_docs(spec: ProtocolSpec) -> str:
-    """Generate Markdown specification document for a protocol."""
+    """Generate Markdown specification document for a protocol including AsyncAPI 2.6.0 spec."""
     meta = spec.metadata
     lines: List[str] = []
     lines.append(f"# Hardware Protocol Specification: {meta.name}")
@@ -60,6 +63,12 @@ def generate_markdown_docs(spec: ProtocolSpec) -> str:
                     rf_unit = rf.unit or "-"
                     lines.append(f"| `{rf.name}` | `{rf.type.value}` | {rf_unit} |")
                 lines.append("")
+
+    lines.append("## Formal AsyncAPI 2.6.0 Specification\n")
+    lines.append("```yaml")
+    lines.append(export_asyncapi_yaml(spec))
+    lines.append("```\n")
+
     return "\n".join(lines)
 
 
@@ -92,28 +101,60 @@ def generate_html_docs(spec: ProtocolSpec) -> str:
 
 def build_site_documentation(output_dir: Union[str, Path]) -> Path:
     """Build static documentation site for all discovered protocols, AsyncAPI specs, schemas, and manuals."""
-    out = Path(output_dir)
+    out = Path(output_dir).resolve()
     out.mkdir(parents=True, exist_ok=True)
+
+    root_dir = Path(__file__).resolve().parent.parent.parent
+    docs_dir = root_dir / "docs"
+    protocols_docs_dir = docs_dir / "protocols"
+    protocols_docs_dir.mkdir(parents=True, exist_ok=True)
 
     catalog = CatalogManager()
     summary = catalog.catalog_summary()
 
-    # Copy docs, schemas, and examples to site output folder if they exist
-    root_dir = Path(__file__).resolve().parent.parent.parent
-    for folder_name in ["docs", "schemas", "examples"]:
-        src_folder = root_dir / folder_name
-        if src_folder.exists():
-            dest_folder = out / folder_name
-            if dest_folder.exists():
-                shutil.rmtree(dest_folder)
-            shutil.copytree(src_folder, dest_folder, ignore=shutil.ignore_patterns("*.pyc", "__pycache__"))
+    protocol_nav_index = [
+        "# Discovered Hardware Protocols & AsyncAPI Specifications\n",
+        "Below is the complete catalog of auto-discovered hardware UART protocols with detailed parameters, command signatures, and formal AsyncAPI 2.6.0 specifications.\n",
+    ]
 
+    for p in summary["protocols"]:
+        spec = catalog.get_protocol(p["filename"])
+        if not spec:
+            continue
+        safe_stem = Path(p["filename"]).stem
+        md_path = protocols_docs_dir / f"{safe_stem}.md"
+        md_path.write_text(generate_markdown_docs(spec), encoding="utf-8")
+
+        protocol_nav_index.append(
+            f"### [{spec.metadata.name}]({safe_stem}.md) (v{spec.metadata.version})\n"
+            f"- **Description**: {spec.metadata.description or 'N/A'}\n"
+            f"- **Framing**: `{spec.framing.type.value.upper()}` | **Baudrate**: `{spec.serial_config.baudrate} bps` | **Commands**: `{len(spec.commands)}`\n"
+        )
+
+    (protocols_docs_dir / "index.md").write_text("\n".join(protocol_nav_index), encoding="utf-8")
+
+    # Try building with MkDocs if mkdocs is available
+    mkdocs_yml = root_dir / "mkdocs.yml"
+    if mkdocs_yml.exists():
+        try:
+            res = subprocess.run(
+                ["mkdocs", "build", "-d", str(out)],
+                cwd=str(root_dir),
+                capture_output=True,
+                text=True,
+            )
+            if res.returncode == 0:
+                return out
+        except Exception:
+            pass
+
+    # Fallback HTML index generator
     index_lines = [
         "<!DOCTYPE html>",
         "<html lang='en'>",
         "<head>",
         "  <meta charset='UTF-8'>",
-        "  <title>OmniUART Universal Protocol Specification & Documentation Hub</title>",
+        "  <title>OmniUART Hardware Protocol Specification Hub</title>",
         "  <style>",
         "    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; background: #0f172a; color: #fff; padding: 0 1rem; line-height: 1.5; }",
         "    h1, h2 { color: #38bdf8; }",

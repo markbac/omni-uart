@@ -4,58 +4,65 @@
 **OmniUART** is an extensible, schema-driven UART protocol engineering tool designed for embedded systems engineers, firmware developers, and hardware quality assurance teams. It decouples protocol definitions from tool implementation by using declarative JSON or YAML specifications.
 
 The tool provides three primary execution modes:
-1. **Interactive CLI**: Ad-hoc command dispatch, register interrogation, and live decoded protocol sniffing.
-2. **Scripted Test Runner**: Deterministic automated batch execution with timeouts, delays, assertions, and structured reporting.
-3. **Auto-Generated Web Dashboard**: A zero-install local web interface dynamically generated from the protocol schema, featuring real-time WebSocket packet streaming, interactive parameter controls, and virtual device loopback simulation.
+1. **Interactive CLI**: Ad-hoc command dispatch, register interrogation, protocol linting, mutation fuzzing, session replay, and live decoded protocol sniffing.
+2. **Scripted Test Runner**: Deterministic automated batch sequence execution with timeouts, delays, assertions, and structured reporting.
+3. **Auto-Generated Web Dashboard**: A zero-install local web interface dynamically generated from the protocol schema, featuring real-time 60 FPS WebSocket packet streaming, interactive parameter controls, dark/light themes, compact density mode, and virtual device loopback simulation.
 
-In addition, OmniUART is engineered for **standalone distribution** via PyInstaller single-file executables, requiring no pre-installed Python runtime on client machines.
+In addition, OmniUART is engineered for **standalone distribution** via PyInstaller single-file executables for Windows and Linux, requiring no pre-installed Python runtime on client machines.
 
 ---
 
 ## 2. High-Level Architecture
 
 OmniUART is structured into five decoupled layers:
-- **Specification Layer**: Protocol schemas and automation test sequences in JSON or YAML.
+- **Specification Layer**: Protocol schemas, AsyncAPI 2.6.0 exports, and automation test sequences in JSON or YAML.
 - **Core Codec & Framing Layer**: Streaming packet unpacker, dynamic field serializer, byte-alignment and endianness handling, and zero-dependency checksum/CRC engine.
-- **Transport Abstraction Layer**: Unifies hardware serial ports (`pyserial`) and in-memory virtual loopback transceivers with programmable MCU responses and error injection.
-- **Automation & Execution Layer**: Sequence runner orchestrating commands, evaluating response assertions, and producing structured reports.
-- **Presentation Layer**: Typer-based command-line interface and FastAPI/WebSocket dynamic web interface.
+- **Transport Abstraction Layer**: Unifies hardware serial ports (`pyserial`), async non-blocking execution, and in-memory virtual loopback transceivers with programmable MCU responses, DTR/RTS pin pulsing, and error injection.
+- **Automation & Telemetry Layer**: Sequence runner orchestrating commands, Session Replayer, Telemetry Bridge (MQTT/Webhook), and Session Recorder with PCAPNG/JSONL/CSV/BIN exporters.
+- **Presentation Layer**: Command-line interface (`omniuart.cli`), AsyncAPI docs builder (`omniuart.docs_generator`), and FastAPI/WebSocket dynamic web interface (`omniuart.ui.app`).
 
 ```mermaid
 flowchart TD
     subgraph SpecLayer["1. Specification Layer"]
         P_YAML["Protocol Spec (YAML/JSON)\n- Metadata & Serial Config\n- Framing & CRC Rules\n- Command & Telemetry Definitions"]
         S_YAML["Script Spec (YAML/JSON)\n- Sequence Steps\n- Assertions & Timeouts\n- Variables & Iterations"]
+        AsyncAPI_Spec["AsyncAPI 2.6.0 Spec Exporter\n(Channels, Messages, Server Bindings)"]
     end
 
     subgraph CoreLayer["2. Core Codec Layer"]
-        SchemaValidator["Schema Validator\n(Pydantic v2 Models)"]
-        StreamDecoder["Streaming Frame Decoder\n(Sync Hunt & Slip Recovery)"]
+        CatalogManager["Catalog Manager\n(Auto-Discovery & Adapters)"]
+        SchemaValidator["Schema Validator & Linter\n(Pydantic v2 & JSON Schema)"]
+        StreamDecoder["Streaming Frame Decoder\n(Sync Hunt & Byte Recovery)"]
         PacketBuilder["Frame Builder\n(Dynamic Field Packer)"]
         CRCEngine["CRC & Checksum Engine\n(CRC8/16/32, Sum, XOR, Custom)"]
-        Dissector["Packet Dissector\n(Byte Slicing & Diagnostics)"]
-        Recorder["Session Recorder\n(Ring Buffer & Exporters)"]
+        Dissector["Packet Dissector\n(Semantic Byte Slicing)"]
+        Recorder["Session Recorder\n(JSONL, CSV, BIN, PCAPNG)"]
     end
 
     subgraph TransportLayer["3. Transport Layer"]
-        TransportInterface["Transport Abstract Interface"]
-        SerialTransport["Hardware Serial Transport\n(pyserial)"]
-        VirtualTransport["Virtual MCU Simulator\n(Loopback & Error Injection)"]
+        TransportInterface["AsyncTransport Abstract Interface\n- set_pin_state (DTR/RTS)\n- pulse_pins"]
+        SerialTransport["HardwareSerialTransport\n(pyserial + asyncio.to_thread)"]
+        VirtualTransport["Virtual MCU Simulator\n(Loopback & Fault Injection)"]
     end
 
-    subgraph RunnerLayer["4. Automation & Execution Layer"]
-        ScriptEngine["Batch Script Engine\n- Step Sequencer\n- Assertion Evaluator\n- Timing & Retries"]
-        ReportGen["Report Generator\n(Console, JSON, JUnit XML)"]
+    subgraph AutomationLayer["4. Automation & Telemetry Layer"]
+        ScriptEngine["Batch Script Engine\n- Step Sequencer\n- Assertion Evaluator"]
+        ReplayEngine["Session Replayer\n(Real-time / Scaled Playback)"]
+        TelemetryBridge["Telemetry Bridge\n(MQTT & HTTP Webhooks)"]
+        FuzzEngine["Protocol Fuzzer\n(Boundary Mutation Campaign)"]
     end
 
     subgraph PresentationLayer["5. Presentation Layer"]
-        CLI["Rich CLI\n- send / monitor\n- run / validate\n- ports / session"]
+        CLI["OmniUART CLI\n- send / info / list / run / docs\n- lint / convert / fuzz / replay / ui"]
         WebServer["Embedded Web Server\n(FastAPI + WebSockets)"]
-        WebUI["Dynamic Web UI\n- Dynamic Forms\n- Dual Comms Panel (Raw/Decoded)\n- Session Recorder Controls"]
+        WebUI["Dynamic Web UI\n- Dynamic Forms & Tag Tabs\n- Dark/Light Theme & Compact Mode\n- 60 FPS WebSocket Comms Monitor"]
+        DocsGen["Documentation Site Generator\n(AsyncAPI + MkDocs Hub)"]
     end
 
-    P_YAML --> SchemaValidator
-    S_YAML --> SchemaValidator
+    P_YAML --> CatalogManager
+    S_YAML --> CatalogManager
+    CatalogManager --> SchemaValidator
+    SchemaValidator --> AsyncAPI_Spec
     SchemaValidator --> PacketBuilder
     SchemaValidator --> StreamDecoder
 
@@ -71,167 +78,64 @@ flowchart TD
     StreamDecoder --> Dissector
     PacketBuilder --> Dissector
     Dissector --> Recorder
+    Dissector --> TelemetryBridge
 
     ScriptEngine --> PacketBuilder
-    StreamDecoder --> ScriptEngine
-    ScriptEngine --> ReportGen
+    ReplayEngine --> TransportInterface
+    FuzzEngine --> TransportInterface
 
     PresentationLayer --> PacketBuilder
     StreamDecoder --> PresentationLayer
     Recorder --> PresentationLayer
+    AsyncAPI_Spec --> DocsGen
 ```
-[[CAPTION:Figure]] High-level modular architecture of OmniUART.
+[[CAPTION:Figure]] High-level modular architecture of OmniUART v0.4.0.
 
 ---
 
-## 3. C4 Architecture Models (PlantUML Generated)
+## 3. Subsystem Breakdown
 
-OmniUART employs the **C4 Model** to document architecture across progressive levels of abstraction.
+### 3.1 Catalog Manager & Adapters (`omniuart.core.catalog`)
+- **Auto-Discovery**: Scans registered protocol and script directories dynamically. Automatically picks up newly added protocol definition files (`.json`, `.yaml`) or test sequences without code changes.
+- **Kit & Sequence Adapters**:
+  - `kit_adapter.py`: Converts standard `uart-interface-schema-kit` AsyncAPI protocol definitions into internal `ProtocolSpec` data models.
+  - `sequence_adapter.py`: Converts sequence files into `ScriptSpec` models.
+- **Security Policy**: Strictly enforces G460 protocol exclusion across all directory scanners.
 
-### 3.1 C4 Level 1: System Context
-The System Context diagram positions OmniUART within its operational environment, showing interactions between embedded firmware developers, QA test runners, physical hardware devices, and host filesystems:
-
-![OmniUART C4 System Context Diagram](../diagrams/images/c4_context.svg)
-[[CAPTION:Figure]] C4 Level 1: System Context diagram for OmniUART.
-
-### 3.2 C4 Level 2: Container Model
-The Container diagram illustrates the high-level executable and data boundary containers:
-
-![OmniUART C4 Container Diagram](../diagrams/images/c4_container.svg)
-[[CAPTION:Figure]] C4 Level 2: Container diagram for OmniUART.
-
-### 3.3 C4 Level 3: Component Models
-Detailed component interactions for the Core Codec and Transport subsystems:
-
-#### Core Engine & Codec Components
-![OmniUART C4 Core Component Diagram](../diagrams/images/c4_component_core.svg)
-[[CAPTION:Figure]] C4 Level 3: Core Codec, Dissector, CRC, and Recorder component model.
-
-#### Transport & Virtual MCU Components
-![OmniUART C4 Transport Component Diagram](../diagrams/images/c4_component_transport.svg)
-[[CAPTION:Figure]] C4 Level 3: Hardware Serial and Virtual MCU Loopback component model.
-
----
-
-## 4. Streaming Sync Hunt & Recovery State Machine
-
-The stream parser operates as a deterministic finite-state automaton designed to withstand noisy physical serial lines, partial fragment arrivals, and corrupt frames:
-
-```mermaid
-stateDiagram-v2
-    [*] --> HUNTING_PREAMBLE: Initialize buffer
-    HUNTING_PREAMBLE --> HUNTING_PREAMBLE: Discard noise byte & advance 1 byte
-    HUNTING_PREAMBLE --> READING_LENGTH: Header preamble matched (e.g. 0xAA 0x55)
-    READING_LENGTH --> BUFFERING_PAYLOAD: Length extracted & satisfies bounds (<= max_frame)
-    READING_LENGTH --> HUNTING_PREAMBLE: Illegal length (> max_frame) -> Sync Slip discard
-    BUFFERING_PAYLOAD --> BUFFERING_PAYLOAD: Accumulate chunk fragments (partial read)
-    BUFFERING_PAYLOAD --> VERIFYING_INTEGRITY: Complete payload + footer bytes arrived
-    VERIFYING_INTEGRITY --> DISPATCHING: CRC / Checksum matches computed value
-    VERIFYING_INTEGRITY --> HUNTING_PREAMBLE: CRC mismatch -> Emit diagnostic event & hunt next byte
-    DISPATCHING --> HUNTING_PREAMBLE: Reset state & search next frame
-```
-[[CAPTION:Figure]] Finite state machine for streaming UART preamble detection and recovery.
-
----
-
-## 5. Subsystem Breakdown
-
-### 3.1 Specification Layer (`omniuart.core.models`)
-The specification layer defines the data contracts using Pydantic v2. The schema validates protocol definitions containing:
-- **`meta`**: Name, description, protocol version, author, and schema compliance version.
-- **`serial_defaults`**: Default baud rate, data bits, parity, stop bits, and timeout.
-- **`framing`**:
-  - Delimited mode (ASCII tokens with delimiters such as `\r\n` or `STX`/`ETX`) vs Binary frame mode.
-  - Sync/Preamble header sequence (e.g. `[0xAA, 0x55]`).
-  - Length field offset, size, endianness, and inclusion semantics (payload only vs full frame).
-  - Command ID / Opcode field offset and size.
-  - Integrity algorithm: `none`, `xor`, `sum8`, `sum16`, `crc8`, `crc16_ccitt`, `crc16_modbus`, `crc32`.
-  - Footer / Postamble byte sequence.
-- **`commands`**: List of commands with parameterized fields (type, scale, min, max, enums) and expected response definitions.
-- **`telemetry`**: Definitions of unsolicited status packets or periodic measurement frames.
-
-### 3.2 Core Codec Layer (`omniuart.core.codec` & `omniuart.core.crc`)
-- **Streaming Parser & Sync Hunt**:
-  The parser maintains an internal sliding FIFO byte buffer. When incoming data arrives in arbitrary chunks or with noise, the parser scans for the sync sequence, extracts the length field, validates that the entire frame has arrived, verifies the checksum/CRC, and extracts fields into structured dictionaries.
-- **Dynamic Field Serialization**:
-  Converts user-supplied parameters into binary data using standard `struct` pack/unpack logic according to field specifications (`uint8`, `uint16`, `uint32`, `int8`, `int16`, `int32`, `float32`, `float64`, `bool`, `enum`, `string`, `bytes`, and bitfields).
-- **CRC & Integrity Engine**:
-  A zero-dependency pure-Python implementation implementing standard polynomial presets (CRC8, CRC16 Modbus/CCITT, CRC32, Sum, XOR) as well as **fully custom parametric CRCs** based on the Rocksoft Parameter Model (`width`, `poly`, `init`, `refin`, `refout`, `xorout`, `endian`).
+### 3.2 Core Codec & CRC Engine (`omniuart.core.crc` & `omniuart.core.models`)
+- **Pydantic v2 Specifications**: Validates protocol framing rules, preambles, variable-length headers, footers, command parameters, and expected response payloads.
+- **Parametric CRC Engine**: Pure-Python zero-dependency implementation supporting standard presets (`crc8`, `crc16_modbus`, `crc16_ccitt`, `crc32`, `sum8`, `sum16`, `xor8`) and custom Rocksoft models (`width`, `poly`, `init`, `refin`, `refout`, `xorout`, `endian`).
 
 ### 3.3 Transport Abstraction Layer (`omniuart.core.transport`)
-All communication occurs through a common asynchronous transport interface:
-- **`SerialTransport`**: Interacts with physical COM ports or `/dev/ttyUSB*` devices. Configures hardware flow control (RTS/CTS), software flow control (XON/XOFF), and RS-485 half-duplex direction switching where required.
-- **`VirtualTransport`**: An in-memory software loopback transport that simulates target microcontrollers. It features:
-  - Configurable lookup table of request/response matching rules.
-  - Controllable latency and transmission jitter.
-  - Fault injection (CRC corruption, dropped bytes, intermittent timeout) to verify client resilience.
+- **`AsyncTransport`**: Abstract interface providing non-blocking `open()`, `close()`, `read()`, `write()`, `set_pin_state()`, and `pulse_pins()`.
+- **`HardwareSerialTransport`**: Interacts with physical hardware COM ports using PySerial wrapped in `asyncio.to_thread` for non-blocking I/O. Supports hardware RTS/CTS flow control and DTR/RTS bootloader pin pulsing.
+- **`VirtualTransport`**: In-memory software MCU simulator for offline testing. Features configurable rule-based response generation, latency jitter, and fault injection (CRC bit-flip, frame drop rate).
 
-### 3.4 Script Execution Engine (`omniuart.runner.executor`)
-Orchestrates automated test scripts defined in YAML or JSON:
-- Sequentially dispatches commands with variable substitutions.
-- Awaits expected responses within specified timeouts.
-- Executes assertions (`==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `contains`, `tolerance`).
-- Implements retry policies and execution control (`abort_on_error`, `continue`).
-- Generates test execution summaries in human-readable console tables and machine-readable JSON/JUnit XML formats.
+### 3.4 Data Persistence & Session Recorder (`omniuart.core.recorder`)
+- **Transaction Buffer**: Thread-safe ring buffer capturing raw byte dumps, timestamps, directions (`tx`/`rx`), decoded payload fields, and CRC integrity status.
+- **Multi-Format Exporters**:
+  - **JSON Lines (`.jsonl`)**: Machine-readable log ingestion format used for automated auditing and session replaying.
+  - **CSV (`.csv`)**: Tabular export for spreadsheet analysis.
+  - **Raw Binary (`.bin`)**: Binary payload bytes.
+  - **Wireshark PCAPNG (`.pcapng`)**: Standard Wireshark packet capture format with Section Header, Interface Description, and Enhanced Packet Blocks.
 
-### 3.5 Session Recording & Data Persistence (`omniuart.core.recorder`)
-Captures all live serial transactions during ad-hoc sessions, CLI monitoring, or automated script execution:
-- **Streaming Session Buffer**: Records chronological event records including microsecond timestamps, direction (`tx` / `rx`), raw byte payloads, decoded command identifiers, unpacked field dictionaries, and CRC validation status.
-- **Export Formats**:
-  - **JSON Lines (`.jsonl`)**: Structured, line-delimited records suitable for automated parsing, log ingestion, and replay.
-  - **Comma-Separated Values (`.csv`)**: Tabular export of timestamps, opcodes, and decoded parameter values for Excel / pandas analysis.
-  - **Raw Binary Stream (`.bin`)**: Unmodified raw byte sequence for low-level protocol playback.
+### 3.5 Replayer, Telemetry Bridge & Fuzzer
+- **`SessionReplayer` (`omniuart.core.replayer`)**: Replays recorded `.jsonl` session transactions onto physical or virtual serial links with real-time or speed-scaled timing.
+- **`TelemetryBridge` (`omniuart.core.telemetry`)**: Dispatches parsed UART telemetry events to external HTTP Webhook endpoints and MQTT topics (`omniuart/telemetry/<cmd_name>`).
+- **`ProtocolFuzzer` (`omniuart.core.fuzzer`)**: Executes automated boundary mutation campaigns (bit flips, length corruptions, string overflows, integer boundary values) against target MCUs to assess firmware stability.
 
-### 3.6 Deep Dissection & Diagnostic Debugger (`omniuart.core.dissector`)
-Provides comprehensive debugging information on raw and decoded streams:
-- **Byte-by-Byte Visual Dissection**: Color-coded categorization separating Header preambles, Length fields, Command IDs, Payload byte slices, CRC checksums, and Footers.
-- **CRC Diagnostics**: Explicit debug logs detailing calculated vs received checksums, the exact byte range hashed, and bit-level diffs on mismatch.
-- **Sync Hunt Diagnostics**: Logs synchronization acquisitions, byte slip occurrences, discarded noise counts, and incomplete frame buffer states.
-
-### 3.7 Presentation Layer
-- **CLI (`omniuart.cli.main`)**: Built with Typer and Rich to provide formatted terminal tables, color-coded logging, and progress bars.
-- **Web UI & Server (`omniuart.ui.server`)**: Built with FastAPI and Starlette WebSockets. Emits bidirectional JSON messages containing:
-  - Real-time TX and RX packet records with millisecond timestamps and raw hex dumps.
-  - Decoded key-value trees.
-  - Dynamic forms automatically rendered from the protocol schema.
+### 3.6 Presentation & Web UI (`omniuart.cli` & `omniuart.ui.app`)
+- **Interactive Web UI**: Zero-dependency FastAPI + WebSockets local web interface. Auto-generates command parameter forms, auto-runs dashboard diagnostics, streams 60 FPS real-time serial traffic, and provides dark/light themes and compact mode.
+- **GUI Launch Mode**: Double-clicking `omni-uart-windows-amd64.exe` (or running zero CLI arguments) automatically starts the Web UI server and opens the browser to `http://localhost:8000`.
 
 ---
 
-## 4. Data Flow Sequences
-
-### 4.1 Command Dispatch & Response Evaluation (CLI / Script)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as User / Script
-    participant Codec as Frame Codec
-    participant Transport as Transport Layer
-    participant Device as Target MCU / Virtual MCU
-
-    User->>Codec: pack_command("set_led", {color: "red", brightness: 85})
-    Codec->>Codec: Pack fields into binary buffer
-    Codec->>Codec: Compute CRC & assemble frame
-    Codec->>Transport: send_bytes(raw_frame)
-    Transport->>Device: Physical UART TX (or loopback queue)
-    Device-->>Transport: Physical UART RX (response bytes)
-    Transport->>Codec: feed_bytes(chunk)
-    Codec->>Codec: Sync hunt -> Validate Length -> Verify CRC
-    Codec->>Codec: Unpack response fields
-    Codec-->>User: DecodedResponse(status=0x00, message="OK")
-```
-[[CAPTION:Figure]] Sequence diagram for command dispatch, framing, and response decoding.
-
----
-
-## 5. Architectural Quality Attributes
+## 4. Architectural Quality Attributes
 
 | Attribute | Architectural Mechanism | Verification Target |
 | :--- | :--- | :--- |
-| **Portability** | PyInstaller single-file packaging; pure-Python core without native binary compilation dependencies. | Runs on clean Windows, Linux, and macOS environments without Python installed. |
-| **Robustness** | Streaming sync hunt with sliding FIFO; garbage byte discarding; strict CRC validation. | Recovers framing sync within 1 frame when preceded by 1024 random noise bytes. |
-| **Extensibility** | Schema-driven protocol specifications (YAML/JSON); decoupled transport interfaces. | Adding a new custom protocol requires zero changes to the underlying Python codebase. |
-| **Testability** | Built-in Virtual Transport with mock responses and fault injection. | Full test suite executable in headless CI environments without physical hardware. |
-| **Low Latency** | Async I/O, lookup-table-accelerated CRC calculations, and streaming WebSockets. | Sub-millisecond packet processing overhead in user space. |
-
-[[CAPTION:Table]] Architectural quality attributes and verification targets.
+| **Portability** | PyInstaller single-file executable packaging; pure-Python core without native compilation dependencies. | Runs on clean Windows and Linux environments without Python installed. |
+| **Robustness** | Streaming sync hunt with sliding FIFO; garbage byte discarding; strict CRC validation. | Recovers framing sync within 1 frame when preceded by random noise bytes. |
+| **Extensibility** | Declarative JSON/YAML specifications; dynamic catalog auto-discovery; AsyncAPI 2.6.0 exporter. | Adding a new protocol definition requires zero code changes to the underlying Python codebase. |
+| **Testability** | Built-in Virtual MCU Transport with mock responses and fault injection. | Full test suite (60+ tests) executable in headless CI environments without physical hardware. |
+| **Low Latency** | Async I/O with `asyncio.to_thread`, lookup-table CRC calculation, and 60 FPS WebSockets. | Sub-millisecond packet processing overhead in user space. |

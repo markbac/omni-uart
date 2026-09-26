@@ -24,10 +24,6 @@ jobs:
             artifact_name: omni-uart-linux-amd64
             binary_path: dist/omni-uart
             archive_name: omni-uart-linux-amd64.tar.gz
-          - os: macos-latest
-            artifact_name: omni-uart-macos-universal
-            binary_path: dist/omni-uart
-            archive_name: omni-uart-macos-universal.tar.gz
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -101,12 +97,11 @@ jobs:
           body: |
             ## OmniUART Standalone Release
             
-            This release contains standalone single-file executables for Windows, Linux, and macOS.
+            This release contains standalone single-file executables for Windows and Linux.
             **No Python installation is required to run this tool.**
             
             ### Quickstart
-            - **Windows**: Download `omni-uart-windows-amd64.zip`, extract, and execute `.\omni-uart-windows-amd64.exe --help`.
-            - **Linux**: Download `omni-uart-linux-amd64.tar.gz`, extract, and execute `./omni-uart-linux-amd64 --help`.
-            - **macOS**: Download `omni-uart-macos-universal.tar.gz`, extract, and execute `./omni-uart-macos-universal --help`.
+            - **Windows**: Download `omni-uart-windows-amd64.zip`, extract, and execute `.\omni-uart-windows-amd64.exe`.
+            - **Linux**: Download `omni-uart-linux-amd64.tar.gz`, extract, and execute `./omni-uart-linux-amd64`.
             
             Refer to the included `RELEASE_GUIDANCE.md` for complete user instructions and protocol schema documentation.

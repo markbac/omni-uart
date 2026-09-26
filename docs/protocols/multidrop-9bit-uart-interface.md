@@ -1,0 +1,77 @@
+# Hardware Protocol Specification: 9-bit UART multidrop addressing
+
+**Version**: `generic (common 8051/PIC UART mode)`  
+**Physical Layer**: `9600 bps, 9N1.0`  
+**Framing**: `binary`  
+**Integrity Algorithm**: `checksum_8`  
+
+## Description
+RS-485 multidrop scheme common on small microcontroller UARTs: a 9th data bit (not parity) flags whether a byte is an ADDRESS (bit=1) or DATA (bit=0), so slaves can filter in hardware without the CPU inspecting every byte. dataBits=9 was already a valid enum value but never actually exercised until now.
+
+## Command Catalog & Message Signatures
+
+### Category: GENERAL
+
+#### `SlaveMessage` (Command ID: `0x00`) - The 9th bit is now representable directly via each field's ninthBitSet.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `address` | `bytes` | - | - | - |
+| `data` | `bytes` | - | - | - |
+| `checksum` | `bytes` | - | - | - |
+
+## Formal AsyncAPI 2.6.0 Specification
+
+```yaml
+asyncapi: 2.6.0
+info:
+  title: 9-bit UART multidrop addressing
+  version: generic (common 8051/PIC UART mode)
+  description: 'RS-485 multidrop scheme common on small microcontroller UARTs: a 9th
+    data bit (not parity) flags whether a byte is an ADDRESS (bit=1) or DATA (bit=0),
+    so slaves can filter in hardware without the CPU inspecting every byte. dataBits=9
+    was already a valid enum value but never actually exercised until now.'
+  contact:
+    name: Mark Bacon
+servers:
+  serial_link:
+    url: serial://tty/9600
+    protocol: serial
+    description: Physical UART Transport (9600 bps, 9N1.0)
+    bindings:
+      serial:
+        baudRate: 9600
+        dataBits: 9
+        parity: none
+        stopBits: 1.0
+        framingType: binary
+        integrity: checksum_8
+channels:
+  omniuart/cmd/SlaveMessage:
+    publish:
+      summary: 'Send command SlaveMessage (ID: 0x00)'
+      description: The 9th bit is now representable directly via each field's ninthBitSet.
+      message:
+        name: SlaveMessage_Message
+        title: SlaveMessage Command
+        payload:
+          $ref: '#/components/schemas/SlaveMessage_Request'
+components:
+  messages: {}
+  schemas:
+    SlaveMessage_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 0
+          description: Opcode ID for SlaveMessage
+        address:
+          type: integer
+        data:
+          type: integer
+        checksum:
+          type: integer
+      description: The 9th bit is now representable directly via each field's ninthBitSet.
+
+```
