@@ -1,0 +1,45 @@
+{
+  "title": "DMX512",
+  "version": "USITT DMX512-A",
+  "description": "Unidirectional lighting-control broadcast. Frame boundary is a UART break condition (an extended low period), not a byte value, not silence, and not an identifier lookup -- none of which this schema's framing styles model precisely.",
+  "physicalLayer": {
+    "baudRate": 250000,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 2,
+    "duplex": "simplex"
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "break-delimited",
+    "breakMinDurationBitTimes": 23
+  },
+  "integrityCheck": {
+    "algorithm": "none"
+  },
+  "commandResponseModel": {
+    "initiator": "device"
+  },
+  "commands": [
+    {
+      "name": "ChannelFrame",
+      "description": "Start code (0x00 for standard dimmer data) followed by up to 512 channel values; a receiver simply takes however many bytes arrive before the next break.",
+      "fields": [
+        {
+          "name": "startCode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0,
+          "role": "discriminator"
+        },
+        {
+          "name": "channelData",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    }
+  ]
+}

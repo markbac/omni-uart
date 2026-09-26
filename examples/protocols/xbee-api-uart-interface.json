@@ -1,0 +1,119 @@
+{
+  "title": "XBee API Mode",
+  "version": "S2C Zigbee firmware",
+  "description": "Digi XBee radio module binary command protocol, including an AT Command frame setting ATCH (the RF channel/frequency).",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1,
+    "flowControl": "rts-cts",
+    "wiringLines": [
+      "TX",
+      "RX",
+      "GND",
+      "RTS",
+      "CTS"
+    ],
+    "hardwareFlowControlDetails": {
+      "localRole": "dte",
+      "rtsAssertedMeans": "Asserted by the host: while asserted, permits the module to transmit to the host.",
+      "ctsAssertedMeans": "Asserted by the module: while asserted, permits the host to transmit to the module.",
+      "notes": "Assumed for this example, matching the same convention as the PPPoS example."
+    }
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "sync-length-payload-crc",
+    "syncBytes": [
+      126
+    ],
+    "lengthField": {
+      "sizeBytes": 2,
+      "countsFrom": "payload-only"
+    }
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "finalTransform": "onesComplement",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "fieldTypes": {
+    "frameType": {
+      "baseType": "enum",
+      "sizeBytes": 1,
+      "enumValues": {
+        "8": "ATCommand",
+        "136": "ATCommandResponse"
+      }
+    }
+  },
+  "commands": [
+    {
+      "name": "SetChannelATCommand",
+      "description": "Frame type 0x08: local AT Command. The AT command here is 'CH' (RF channel/frequency), one of 16 channels in the 2.4GHz band.",
+      "fields": [
+        {
+          "name": "frameType",
+          "type": "frameType",
+          "constValue": 8,
+          "role": "discriminator"
+        },
+        {
+          "name": "frameId",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "atCommand",
+          "type": "string",
+          "constValue": "CH"
+        },
+        {
+          "name": "parameterValue",
+          "type": "uint",
+          "sizeBytes": 1,
+          "description": "New channel number, e.g. 0x0C."
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "ATCommandResponse",
+      "fields": [
+        {
+          "name": "frameType",
+          "type": "frameType",
+          "constValue": 136,
+          "role": "discriminator"
+        },
+        {
+          "name": "frameId",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "atCommand",
+          "type": "string"
+        },
+        {
+          "name": "commandStatus",
+          "type": "enum",
+          "sizeBytes": 1
+        },
+        {
+          "name": "commandData",
+          "type": "bytes",
+          "variableLength": "remainder",
+          "optional": true
+        }
+      ]
+    }
+  ]
+}

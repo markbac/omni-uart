@@ -1,0 +1,93 @@
+{
+  "title": "Generic MCU normal operation (illustrative)",
+  "version": "illustrative",
+  "description": "Minimal stand-in application-mode protocol, existing only to demonstrate a fully-specified relatedInterfaces transition into the auto-baud bootloader above.",
+  "physicalLayer": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "little-endian"
+  },
+  "framing": {
+    "style": "fixed-length",
+    "fixedLengthBytes": 4
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "client"
+  },
+  "commands": [
+    {
+      "name": "Ping",
+      "fields": [
+        {
+          "name": "opcode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 1
+        },
+        {
+          "name": "reserved",
+          "type": "bytes",
+          "sizeBytes": 2
+        }
+      ]
+    },
+    {
+      "name": "EnterBootloader",
+      "description": "Requests a jump into the ROM bootloader for firmware update. See relatedInterfaces for exactly what happens next.",
+      "fields": [
+        {
+          "name": "opcode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 255
+        },
+        {
+          "name": "reserved",
+          "type": "bytes",
+          "sizeBytes": 2
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "BootloaderEntryConfirmed",
+      "description": "Distinct from an ordinary ack -- confirms the device is about to reset into the bootloader, not that it merely accepted the command.",
+      "fields": [
+        {
+          "name": "status",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 1
+        },
+        {
+          "name": "reserved",
+          "type": "bytes",
+          "sizeBytes": 2
+        }
+      ]
+    }
+  ],
+  "relatedInterfaces": [
+    {
+      "name": "Generic MCU serial bootloader (illustrative, sync-byte auto-baud)",
+      "documentRef": "autobaud-bootloader-uart-interface.json",
+      "relationship": "bootloader-mode",
+      "triggerCommand": "EnterBootloader",
+      "triggerResponse": "BootloaderEntryConfirmed",
+      "switchDelayMs": 50,
+      "fallbackBehavior": "requires-power-cycle",
+      "returnTrigger": "Sending Go with the application's entry address, or a power cycle if that never arrives.",
+      "description": "50ms after BootloaderEntryConfirmed, the device resets and starts waiting for the bootloader's own auto-baud sync byte -- an entirely different framing, at whatever new baud rate auto-baud detects, not the 115200 this interface used."
+    }
+  ]
+}

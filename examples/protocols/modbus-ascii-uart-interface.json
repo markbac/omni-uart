@@ -1,0 +1,74 @@
+{
+  "title": "Modbus ASCII",
+  "version": "1.0",
+  "description": "Modbus over serial, ASCII transmission mode. Every logical byte is sent as 2 ASCII hex characters, framed between ':' and CRLF.",
+  "physicalLayer": {
+    "dataBits": 7,
+    "parity": "even",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "big-endian",
+    "textEncoding": "ascii"
+  },
+  "framing": {
+    "style": "delimiter-framed",
+    "startDelimiter": 58,
+    "endDelimiter": [
+      13,
+      10
+    ],
+    "bodyEncoding": "ascii-hex"
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "finalTransform": "twosComplement",
+    "placement": "trailing",
+    "coverage": "payload-only",
+    "valueEncoding": "ascii-hex"
+  },
+  "commandResponseModel": {
+    "initiator": "client",
+    "responseTimeoutMs": 1000
+  },
+  "fieldTypes": {
+    "slaveAddress": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    },
+    "functionCode": {
+      "baseType": "enum",
+      "sizeBytes": 1,
+      "enumValues": {
+        "3": "ReadHoldingRegisters"
+      }
+    }
+  },
+  "commands": [
+    {
+      "name": "ReadHoldingRegistersRequest",
+      "fields": [
+        {
+          "name": "slaveAddress",
+          "type": "slaveAddress"
+        },
+        {
+          "name": "functionCode",
+          "type": "functionCode",
+          "constValue": 3,
+          "role": "discriminator"
+        },
+        {
+          "name": "startAddress",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "quantity",
+          "type": "uint",
+          "sizeBytes": 2
+        }
+      ]
+    }
+  ]
+}

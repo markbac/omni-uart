@@ -1,0 +1,2111 @@
+{
+  "title": "AT Command Set for a GSM/Cellular Modem (Hayes + 3GPP TS 27.007 subset)",
+  "version": "V.250 / TS 27.007",
+  "description": "Plain text command/response lines. No length field, no CRC, and no escaping -- a delimiter-framed protocol with only an end marker, CRLF, for almost every message. One command (SendSmsBody) is the exception: its body is terminated by Ctrl-Z instead, via endDelimiterOverride -- see its own description.",
+  "physicalLayer": {
+    "baudRate": [
+      9600,
+      115200
+    ],
+    "defaultBaudRate": 115200,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "big-endian",
+    "textEncoding": "ascii"
+  },
+  "framing": {
+    "style": "delimiter-framed",
+    "endDelimiter": [
+      13,
+      10
+    ]
+  },
+  "integrityCheck": {
+    "algorithm": "none"
+  },
+  "commandResponseModel": {
+    "initiator": "client",
+    "responseTimeoutMs": 5000
+  },
+  "fieldTypes": {
+    "psmActiveMode": {
+      "baseType": "enum",
+      "enumValues": {
+        "0": "Disable",
+        "1": "Enable"
+      },
+      "description": "Restricted to {0,1} specifically so SetPsmParameters can't overlap with SetPsmDisabled's mode=2."
+    },
+    "edrxMode": {
+      "baseType": "enum",
+      "enumValues": {
+        "0": "Disable",
+        "1": "Enable",
+        "2": "EnableWithUrc"
+      },
+      "description": "Restricted to {0,1,2} specifically so SetEdrxParameters can't overlap with SetEdrxDisabled's mode=3."
+    }
+  },
+  "tags": [
+    {
+      "name": "general",
+      "description": "Basic attention, echo, reset, and factory-default commands, and their generic error responses. No SIM or network state involved."
+    },
+    {
+      "name": "identification",
+      "description": "Read-only queries about the modem hardware/firmware itself -- manufacturer, model, serial number."
+    },
+    {
+      "name": "sim-network",
+      "description": "SIM status, network registration, and radio signal quality."
+    },
+    {
+      "name": "data-connection",
+      "description": "PDP context setup, dialing, and the switch into PPP data mode."
+    },
+    {
+      "name": "sms",
+      "description": "Text-mode SMS: sending a message, including its two-stage command/body exchange."
+    }
+  ],
+  "commands": [
+    {
+      "name": "AttentionCheck",
+      "description": "The base 'is anybody there' command every AT command set supports.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT",
+          "role": "discriminator"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Checking the modem is responsive.",
+          "raw": "AT\\r\\n",
+          "fieldValues": {
+            "text": "AT"
+          }
+        }
+      ]
+    },
+    {
+      "name": "SetEchoOff",
+      "description": "ATE0 -- stop the modem echoing back everything it receives. Most scripted/automated use wants this; interactive terminal use usually wants echo on (ATE1) so what you type is visible.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "ATE0",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetEchoOn",
+      "description": "ATE1 -- the modem's power-on default on most hardware.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "ATE1",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "Reset",
+      "description": "ATZ -- reset to the profile stored in non-volatile memory (not necessarily factory defaults -- see FactoryDefaults for that).",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "ATZ",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "FactoryDefaults",
+      "description": "AT&F -- restore factory default configuration.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT&F",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "Identify",
+      "description": "ATI -- a free-form multi-line identification string, format entirely vendor-specific.",
+      "tags": [
+        "general",
+        "identification"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "ATI",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetManufacturer",
+      "description": "AT+CGMI.",
+      "tags": [
+        "identification"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CGMI",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetModel",
+      "description": "AT+CGMM.",
+      "tags": [
+        "identification"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CGMM",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetSerialNumber",
+      "description": "AT+CGSN -- returns the modem's IMEI.",
+      "tags": [
+        "identification"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CGSN",
+          "role": "discriminator"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Reading the IMEI for asset tracking.",
+          "raw": "AT+CGSN\\r\\n"
+        }
+      ]
+    },
+    {
+      "name": "GetPinStatus",
+      "description": "AT+CPIN? -- whether the SIM needs a PIN/PUK entered before it can be used.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CPIN?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetNetworkRegistration",
+      "description": "AT+CREG? -- whether, and how, the modem is registered on the network.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CREG?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SignalQuery",
+      "description": "AT+CSQ",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CSQ",
+          "role": "discriminator"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Checking signal strength before a data session.",
+          "raw": "AT+CSQ\\r\\n"
+        }
+      ]
+    },
+    {
+      "name": "GetExtendedSignalQuality",
+      "description": "AT+CESQ -- supersedes CSQ with metrics meaningful for UMTS/LTE (RSCP, EcNo, RSRQ, RSRP), not just GSM RSSI/BER.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CESQ",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetOperator",
+      "description": "AT+COPS? -- the currently selected network operator and how it was selected.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+COPS?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetOperatorAutomatic",
+      "description": "AT+COPS=0 -- automatic network/operator selection. Each COPS mode is its own command here, the same way SetEchoOff/SetEchoOn are separate rather than one parameterized command: the trailing parameters COPS actually accepts genuinely differ by mode (0 and 2 take none at all; 1 and 4 require an operator; 3 takes only a format), and this schema has no way to make a message's own required fields conditional on another field's value within the same message.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+COPS=0",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetOperatorManual",
+      "description": "AT+COPS=1,<format>,<oper> -- manually select a specific operator. The real command also accepts an optional trailing <AcT> (radio access technology); left out of this modeled version for simplicity rather than made a genuinely optional positional field, which this delimiter-based field model handles awkwardly.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+COPS=1,",
+          "role": "discriminator"
+        },
+        {
+          "name": "format",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "oper",
+          "type": "string"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Manually forcing a specific operator by numeric code.",
+          "raw": "AT+COPS=1,2,\\\"23415\\\"\\r\\n",
+          "fieldValues": {
+            "format": 2,
+            "oper": "\\\"23415\\\""
+          }
+        }
+      ]
+    },
+    {
+      "name": "SetOperatorDeregister",
+      "description": "AT+COPS=2 -- deregister from the network and remain deregistered until told otherwise.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+COPS=2",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetOperatorFormatOnly",
+      "description": "AT+COPS=3,<format> -- sets how OperatorResult's oper field will be formatted on future queries, without changing registration at all.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+COPS=3,",
+          "role": "discriminator"
+        },
+        {
+          "name": "format",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "SetOperatorManualAutomatic",
+      "description": "AT+COPS=4,<format>,<oper> -- try the given operator manually; fall back to automatic selection if that specific one can't be reached. Same AcT simplification as SetOperatorManual.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+COPS=4,",
+          "role": "discriminator"
+        },
+        {
+          "name": "format",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "oper",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "EnterPin",
+      "description": "AT+CPIN=<pin> -- from the Quectel BC660K-GL manual (AT+CPIN, section 8.6): entering a plain SIM PIN. See EnterPukWithNewPin for the other shape this same command takes.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CPIN=",
+          "role": "discriminator"
+        },
+        {
+          "name": "pin",
+          "type": "string"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Unlocking a SIM PIN.",
+          "raw": "AT+CPIN=1234\\r\\n",
+          "fieldValues": {
+            "pin": "1234"
+          }
+        }
+      ]
+    },
+    {
+      "name": "EnterPukWithNewPin",
+      "description": "AT+CPIN=<puk>,<newpin> -- when the SIM demands PUK (not plain PIN), a second argument -- the new PIN to set -- is required. Genuinely COPS-like: same command name, argument COUNT (not a leading mode digit this time) selects which shape applies, and this schema has no way to make newpin conditionally required on pin actually being a PUK rather than a PIN -- an engine, or a human, has to know which case applies from GetPinStatus's own +CPIN: SIM PUK result first.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CPIN=",
+          "role": "discriminator"
+        },
+        {
+          "name": "puk",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "newpin",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "UnlockFacility",
+      "description": "AT+CLCK=<fac>,0[,<passwd>] -- from the manual's AT+CLCK (section 8.5). fac is quoted, e.g. \\\"SC\\\" for the SIM facility.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CLCK=",
+          "role": "discriminator"
+        },
+        {
+          "name": "fac",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "mode",
+          "type": "uint",
+          "constValue": 0
+        }
+      ]
+    },
+    {
+      "name": "LockFacility",
+      "description": "AT+CLCK=<fac>,1[,<passwd>].",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CLCK=",
+          "role": "discriminator"
+        },
+        {
+          "name": "fac",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "mode",
+          "type": "uint",
+          "constValue": 1
+        }
+      ]
+    },
+    {
+      "name": "QueryFacilityLock",
+      "description": "AT+CLCK=<fac>,2 -- the third CLCK shape: mode=2 needs no password, and gets a genuinely different response format (FacilityLockResult lines, not a bare OK) from mode=0/1 -- but that's not actually ambiguous for this schema's dispatch algorithm, since FacilityLockResult has its own +CLCK: prefix distinguishing it from Ok. Worth including precisely because it's a case where a mode-dependent response DOESN'T need special handling, unlike G460's write-variant ambiguity.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CLCK=",
+          "role": "discriminator"
+        },
+        {
+          "name": "fac",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "mode",
+          "type": "uint",
+          "constValue": 2
+        }
+      ],
+      "examples": [
+        {
+          "description": "Checking whether the SIM lock facility is active.",
+          "raw": "AT+CLCK=\\\"SC\\\",2\\r\\n",
+          "fieldValues": {
+            "fac": "\\\"SC\\\"",
+            "mode": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "SetPsmDisabled",
+      "description": "AT+CPSMS=2 -- from the manual's AT+CPSMS (section 9.4): mode=2 is a 'special form' that takes no further parameters at all and resets everything to defaults, unlike mode=0/1 below.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CPSMS=2",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetPsmParameters",
+      "description": "AT+CPSMS=<mode>,,,<TAU>,<activeTime> -- mode 0 (disable) or 1 (enable) plus the requested timer values. Two literal empty positions (the manual's own ',,,' -- unused parameters this module doesn't support) sit between mode and TAU; modeled as a literal separator field rather than tidied away, since that's genuinely how the command is written on the wire. mode is restricted to {0,1} via a named enum type specifically so this can't overlap with SetPsmDisabled's mode=2 -- with a plain unrestricted uint here, an engine could wrongly treat 'AT+CPSMS=2' as this command's prefix plus mode=2 rather than SetPsmDisabled's own single constValue, a genuine ambiguity risk this fixes rather than leaves.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CPSMS=",
+          "role": "discriminator"
+        },
+        {
+          "name": "mode",
+          "type": "psmActiveMode"
+        },
+        {
+          "name": "separator",
+          "type": "string",
+          "constValue": ",,,"
+        },
+        {
+          "name": "tau",
+          "type": "string",
+          "description": "8-bit encoded requested periodic TAU, e.g. \\\"01000111\\\" for 70 hours.",
+          "delimiter": ","
+        },
+        {
+          "name": "activeTime",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "QcfgGetDataInactTimer",
+      "description": "AT+QCFG=\\\"DataInactTimer\\\" -- Quectel's AT+QCFG (section 11.1) is itself a text-based sub-command dispatcher: its first argument, a quoted function name, selects an entirely different parameter set for everything after it -- the same COPS-like pattern, but keyed on a string rather than a mode digit. Modeled as separate commands per function, the same way COPS's modes are. Omitting the value here means query.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+QCFG=\\\"DataInactTimer\\\"",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "QcfgSetDataInactTimer",
+      "description": "AT+QCFG=\\\"DataInactTimer\\\",<value> -- supplying the value switches this from a query to a set.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+QCFG=\\\"DataInactTimer\\\",",
+          "role": "discriminator"
+        },
+        {
+          "name": "value",
+          "type": "uint",
+          "description": "Seconds; 0 disables the timer, 15-255 enables it."
+        }
+      ]
+    },
+    {
+      "name": "QcfgGpioInitialize",
+      "description": "AT+QCFG=\\\"GPIO\\\",1,<pin>,<dir>,<pullsel>,<level> -- a SECOND, nested level of the same COPS-like pattern: within the 'GPIO' function specifically, a further <mode> digit (1/2/3) selects yet another shape. mode=1 (initialize) requires every parameter; contrast QcfgGpioQuery and QcfgGpioConfigure below, which need fewer. This is genuinely a two-level dispatch (function name, then mode within it), and it validates fine with nothing beyond the ordinary field/constValue/role mechanism already used for COPS -- no new schema capability was needed for this, just more layers of the same one.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+QCFG=\\\"GPIO\\\",1,",
+          "role": "discriminator"
+        },
+        {
+          "name": "pin",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "dir",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "pullsel",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "level",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "QcfgGpioQuery",
+      "description": "AT+QCFG=\\\"GPIO\\\"[,2[,<pin>]] -- mode=2 (the default if omitted entirely) with pin optional: omit it for every GPIO's status, or give one for just that pin. Modeled here as the explicit mode=2,pin form; the bare AT+QCFG=\\\"GPIO\\\" (mode and pin both omitted) is QcfgGetDataInactTimer's sibling case and isn't separately modeled to keep this set from growing unboundedly -- the pattern is established by the two variants that are here.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+QCFG=\\\"GPIO\\\",2,",
+          "role": "discriminator"
+        },
+        {
+          "name": "pin",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "QcfgGpioConfigure",
+      "description": "AT+QCFG=\\\"GPIO\\\",3,<pin>,<level> -- mode=3: set one GPIO's output level. Per the manual, 'only and must set value of a specified GPIO' -- pin and level only, no dir/pullsel, a third distinct trailing shape for the same function name.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+QCFG=\\\"GPIO\\\",3,",
+          "role": "discriminator"
+        },
+        {
+          "name": "pin",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "level",
+          "type": "uint"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Setting GPIO2 high.",
+          "raw": "AT+QCFG=\\\"GPIO\\\",3,2,1\\r\\n",
+          "fieldValues": {
+            "pin": 2,
+            "level": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "GetIccidQuectel",
+      "description": "AT+QCCID -- correction: an earlier version of this file modeled a generic, vendor-unspecified 'AT+CCID' for this. The Quectel BC660K-GL manual's actual command (section 8.11) is AT+QCCID, an execution command with no arguments at all; response is +QCCID:, not +CCID:. Kept alongside the generic GetIccid/IccidResult below rather than replacing them, since other vendors do genuinely use the generic form -- but where you have the real target module's manual, as here, prefer the sourced command over the generic guess.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+QCCID",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetFirmwareRevision",
+      "description": "AT+CGMR -- from the BC660K-GL manual (section 2.4). Worth flagging: its response line is literally 'Revision: <revision>', not a '+CGMR:' prefix the way almost every other query response here works -- a genuine, sourced exception to the pattern, not a modeling choice.",
+      "tags": [
+        "identification"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CGMR",
+          "role": "discriminator"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Reading the firmware build.",
+          "raw": "AT+CGMR\\r\\n"
+        }
+      ]
+    },
+    {
+      "name": "GetBaudRate",
+      "description": "AT+IPR? (section 3.2).",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+IPR?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetBaudRate",
+      "description": "AT+IPR=<rate> -- one of the module's own real supported rates (2400-460800). Wired up to this whole interface's own baudRateNegotiation (see the top-level property): the module acks at the OLD rate, then the host must reconfigure its own UART to match.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+IPR=",
+          "role": "discriminator"
+        },
+        {
+          "name": "rate",
+          "type": "uint"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Switching to the module's fastest supported rate.",
+          "raw": "AT+IPR=460800\\r\\n",
+          "fieldValues": {
+            "rate": 460800
+          }
+        }
+      ]
+    },
+    {
+      "name": "SetVerboseErrors",
+      "description": "AT+CMEE=2 (section 10.2) -- without this, most of the CmeError responses modeled throughout this whole file wouldn't actually be returned at all; the module would send plain ERROR instead. Worth sending early in any real integration's init sequence, right after SetEchoOff.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CMEE=2",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetPdpContextActivation",
+      "description": "AT+CGACT=<state>,<cid> (section 5.1) -- brings the data connection actually up (or down). DefinePdpContext only defines the context's parameters; nothing flows until this activates it.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CGACT=",
+          "role": "discriminator"
+        },
+        {
+          "name": "state",
+          "type": "uint",
+          "delimiter": ",",
+          "description": "0=deactivate, 1=activate."
+        },
+        {
+          "name": "cid",
+          "type": "uint"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Activating context 1.",
+          "raw": "AT+CGACT=1,1\\r\\n",
+          "fieldValues": {
+            "state": 1,
+            "cid": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "GetPdpAddress",
+      "description": "AT+CGPADDR (section 4.4, bare execution form) -- the IP address actually assigned to the device once its PDP context is active.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CGPADDR",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SendControlPlaneData",
+      "description": "AT+CSODCP=<cid>,<cpdataLength>,<cpdata> (section 7.4) -- the actual point of this NB-IoT module for many real products: small non-IP data sent via the control plane (NIDD), avoiding the overhead of a full IP stack. This, not a PPP-style data-mode switch, is the primary data path this specific hardware is built for. Simplified from the manual's full AT+CSODCP=<cid>,<cpdataLength>,<cpdata>[,<RAI>[,<type_of_user_data>]] by omitting the two trailing optional parameters, the same simplification already used for SetOperatorManual.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CSODCP=",
+          "role": "discriminator"
+        },
+        {
+          "name": "cid",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "cpdataLength",
+          "type": "uint",
+          "delimiter": ",",
+          "description": "Byte length of cpdata; 0-950."
+        },
+        {
+          "name": "cpdata",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "SetControlPlaneDataReporting",
+      "description": "AT+CRTDCP=<reporting> (section 7.3) -- enables the +CRTDCP: URC (ControlPlaneDataReceived) for downlink data arriving the same way SendControlPlaneData sends it uplink.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CRTDCP=",
+          "role": "discriminator"
+        },
+        {
+          "name": "reporting",
+          "type": "uint",
+          "description": "0=disable, 1=enable."
+        }
+      ]
+    },
+    {
+      "name": "GetBatteryVoltage",
+      "description": "AT+CBC (section 10.1) -- for a battery-powered deployment, worth polling before/after any high-current radio activity.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CBC",
+          "role": "discriminator"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Checking remaining battery voltage.",
+          "raw": "AT+CBC\\r\\n"
+        }
+      ]
+    },
+    {
+      "name": "ResetModule",
+      "description": "AT+QRST=1 (section 10.4) -- immediate reset, without a clean network detach first.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+QRST=1",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetClock",
+      "description": "AT+CCLK? (section 12.1).",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CCLK?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetClock",
+      "description": "AT+CCLK=<time>, format \\\"YY/MM/DD,hh:mm:ss+zz\\\" (quarter-hours from GMT, not whole hours -- +08 means +2 hours, per the manual's own worked example).",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CCLK=",
+          "role": "discriminator"
+        },
+        {
+          "name": "time",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "SetEdrxDisabled",
+      "description": "AT+CEDRXS=3 (section 9.1) -- the exact same COPS/CPSMS-like pattern again: a bare mode value that takes no further parameters and resets everything, distinct from mode 0/1/2 below which all need AcT_type and a requested value.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CEDRXS=3",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetEdrxParameters",
+      "description": "AT+CEDRXS=<mode>,<AcT_type>,<requested_eDRX_value> -- mode restricted to {0,1,2} via a named enum type for the same reason SetPsmParameters restricts its own mode: so this can't overlap with SetEdrxDisabled's mode=3.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CEDRXS=",
+          "role": "discriminator"
+        },
+        {
+          "name": "mode",
+          "type": "edrxMode",
+          "delimiter": ","
+        },
+        {
+          "name": "actType",
+          "type": "uint",
+          "delimiter": ",",
+          "description": "5 = E-UTRAN (NB-S1 mode) on this module."
+        },
+        {
+          "name": "requestedEdrxValue",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "GetOperatorNames",
+      "description": "AT+COPN -- dumps the modem's whole built-in numeric-to-alphanumeric operator name table. The device sends one OperatorNameResult line per known operator, then OK -- a burst of many same-shaped response frames, not one. No special modeling needed for that: each line dispatches independently like any other response, there just happen to be a lot of them in a row.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+COPN",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetPreferredListSelection",
+      "description": "AT+CPLS? -- which preferred-PLMN list is currently active: 0=SIM/USIM (user-controlled), 1=operator-controlled, 2=HPLMN selector.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CPLS?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetPreferredOperatorList",
+      "description": "AT+CPOL? -- entries stored in the list GetPreferredListSelection points at. Like GetOperatorNames, typically returns several PreferredOperatorResult lines, one per stored entry, before OK.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CPOL?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetImsi",
+      "description": "AT+CIMI -- the SIM's IMSI. Response is the raw digit string with no +CIMI: prefix at all, unlike most other query responses here -- see ImsiResult.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CIMI",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetIccid",
+      "description": "Reads the SIM's ICCID. Genuinely non-standardized across vendors (AT+CCID, AT+ICCID, AT+QCCID and others all exist) -- AT+CCID modeled here as one common form, not a universal one.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CCID",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetSerialNumberLegacy",
+      "description": "AT+GSN -- the older Hayes-style serial number query. Response is the raw IMEI digit string with no prefix, unlike GetSerialNumber's AT+CGSN which modern modules also usually support; both often return the same value.",
+      "tags": [
+        "identification"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+GSN",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetGprsRegistration",
+      "description": "AT+CGREG? -- packet-switched (GPRS/UMTS) registration status, analogous to GetNetworkRegistration's AT+CREG? for circuit-switched.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CGREG?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetEpsRegistration",
+      "description": "AT+CEREG? -- LTE/EPS registration status, the AT+CREG?/AT+CGREG? equivalent for 4G.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CEREG?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetGprsAttach",
+      "description": "AT+CGATT=1 -- attach to the GPRS/packet-data service, a precondition for DefinePdpContext.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CGATT=1",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "DefinePdpContext",
+      "description": "AT+CGDCONT=<cid>,<pdpType>,<apn> -- the first genuinely parameterized command here, showing delimiter-separated arguments rather than a single constValue line.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CGDCONT=",
+          "role": "discriminator"
+        },
+        {
+          "name": "cid",
+          "type": "uint",
+          "delimiter": ",",
+          "description": "PDP context identifier, e.g. 1."
+        },
+        {
+          "name": "pdpType",
+          "type": "string",
+          "constValue": "\\\"IP\\\"",
+          "delimiter": ","
+        },
+        {
+          "name": "apn",
+          "type": "string",
+          "description": "Quoted access point name, e.g. \\\"internet\\\"."
+        }
+      ],
+      "examples": [
+        {
+          "description": "Defining context 1 for a generic 'internet' APN.",
+          "raw": "AT+CGDCONT=1,\\\"IP\\\",\\\"internet\\\"\\r\\n",
+          "fieldValues": {
+            "cid": 1,
+            "pdpType": "\\\"IP\\\"",
+            "apn": "\\\"internet\\\""
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dial",
+      "description": "ATD<number> -- for a circuit-switched or legacy dial-up data call.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "ATD",
+          "role": "discriminator"
+        },
+        {
+          "name": "phoneNumber",
+          "type": "string"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Dialing an access number.",
+          "raw": "ATD*99#\\r\\n",
+          "fieldValues": {
+            "phoneNumber": "*99#"
+          }
+        }
+      ]
+    },
+    {
+      "name": "HangUp",
+      "description": "ATH.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "ATH",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "EnterDataMode",
+      "description": "AT+CGDATA=\\\"PPP\\\",1 -- switches this same link from AT command mode into raw PPP. See relatedInterfaces.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CGDATA=\\\"PPP\\\",1",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SmsTextMode",
+      "description": "AT+CMGF=1 -- text mode rather than PDU mode, a precondition for SendSmsHeader as modeled here.",
+      "tags": [
+        "sms"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+CMGF=1",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SendSmsHeader",
+      "description": "AT+CMGS=\\\"<number>\\\" -- the modem replies with a bare '> ' prompt (not modeled as its own response here -- it's a 2-character prompt, not a CRLF-terminated line, and this schema's message model assumes the latter), then waits for SendSmsBody.",
+      "tags": [
+        "sms"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "AT+CMGS=\\\"",
+          "role": "discriminator"
+        },
+        {
+          "name": "phoneNumber",
+          "type": "string"
+        },
+        {
+          "name": "suffix",
+          "type": "string",
+          "constValue": "\\\""
+        }
+      ]
+    },
+    {
+      "name": "SendSmsBody",
+      "description": "The actual message text, sent only after SendSmsHeader's '> ' prompt. Terminated by Ctrl-Z (0x1A), NOT this interface's usual CRLF -- endDelimiterOverride exists specifically for this case. (Esc instead of Ctrl-Z cancels the send instead; not separately modeled here.)",
+      "tags": [
+        "sms"
+      ],
+      "endDelimiterOverride": 26,
+      "fields": [
+        {
+          "name": "messageText",
+          "type": "string",
+          "variableLength": "remainder"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Sending a short status message.",
+          "raw": "Tank level normal.\\x1a",
+          "fieldValues": {
+            "messageText": "Tank level normal."
+          }
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "Ok",
+      "description": "The generic success response to almost any command.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "OK",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "Error",
+      "description": "Generic failure with no further detail -- contrast CmeError, which at least gives a code.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "ERROR",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "CmeError",
+      "description": "+CME ERROR: <code> -- an extended error report, typically only enabled after AT+CMEE=1 (not separately modeled here).",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CME ERROR:",
+          "role": "discriminator"
+        },
+        {
+          "name": "code",
+          "type": "uint"
+        }
+      ],
+      "examples": [
+        {
+          "description": "SIM not inserted.",
+          "raw": "+CME ERROR: 10\\r\\n",
+          "fieldValues": {
+            "code": 10
+          }
+        }
+      ]
+    },
+    {
+      "name": "PinStatusResult",
+      "description": "+CPIN: READY (no PIN needed) or +CPIN: SIM PIN (one is required), among other states.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CPIN:",
+          "role": "discriminator"
+        },
+        {
+          "name": "status",
+          "type": "string"
+        }
+      ],
+      "examples": [
+        {
+          "description": "SIM ready, no PIN entry needed.",
+          "raw": "+CPIN: READY\\r\\n",
+          "fieldValues": {
+            "status": "READY"
+          }
+        }
+      ]
+    },
+    {
+      "name": "NetworkRegistrationResult",
+      "description": "+CREG: <n>,<stat> -- n is the reporting mode previously set; stat is the registration state (1=registered home, 5=registered roaming, etc.).",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CREG:",
+          "role": "discriminator"
+        },
+        {
+          "name": "n",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "stat",
+          "type": "uint"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Registered on the home network.",
+          "raw": "+CREG: 0,1\\r\\n",
+          "fieldValues": {
+            "n": 0,
+            "stat": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "SignalQueryResult",
+      "description": "+CSQ: 15,99 followed by OK, each its own CRLF-terminated line.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CSQ:",
+          "role": "discriminator"
+        },
+        {
+          "name": "rssi",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "ber",
+          "type": "string"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Good signal, bit-error-rate not reported.",
+          "raw": "+CSQ: 22,99\\r\\n",
+          "fieldValues": {
+            "rssi": "22",
+            "ber": "99"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ExtendedSignalQualityResult",
+      "description": "+CESQ: <rssi>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp> -- 6 comma-separated values, most using 99/255-style sentinels for 'not known/not detectable' on fields that don't apply to the current radio access technology.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CESQ:",
+          "role": "discriminator"
+        },
+        {
+          "name": "rssi",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "ber",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "rscp",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "ecno",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "rsrq",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "rsrp",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "OperatorResult",
+      "description": "+COPS: <mode>[,<format>,<oper>][,<AcT>] -- per the manual (section 7.2): format/oper/AcT are genuinely OPTIONAL, omitted together when no operator is selected -- modeled below as always-present for simplicity, a real gap against the manual's own read-command response shape, not fixed here. AcT on THIS module is 9 (E-UTRAN NB-S1 mode) -- an earlier version of this file used 7 (generic LTE from the wider 3GPP TS 27.007 AcT table), which is wrong for this specific module; corrected.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+COPS:",
+          "role": "discriminator"
+        },
+        {
+          "name": "mode",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "format",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "oper",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "accessTechnology",
+          "type": "uint"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Automatically selected, numeric format, registered NB-IoT.",
+          "raw": "+COPS: 0,2,\"46000\",9\r\n",
+          "fieldValues": {
+            "mode": 0,
+            "format": 2,
+            "oper": "\"46000\"",
+            "accessTechnology": 9
+          }
+        }
+      ]
+    },
+    {
+      "name": "TestOperators",
+      "description": "AT+COPS=? -- the test command form, genuinely distinct from GetOperator (AT+COPS?): scans and lists every operator the module currently sees, not just the selected one. Response (OperatorScanResult) is a compound per-operator list, not the simple mode/format/oper/AcT shape.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "AT+COPS=?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "OperatorScanResult",
+      "description": "+COPS: (<stat>,<longOper>,<shortOper>,<numericOper>,<AcT>),(...),...,,(list of supported <mode>s),(list of supported <format>s) -- TestOperators's response, and genuinely too structurally complex for this schema to decompose field-by-field: an arbitrary-count LIST of parenthesized 5-tuples (one per operator the module currently sees), followed by two more parenthesized compound lists for supported modes/formats. Nothing in this schema models 'a variable number of grouped, parenthesized sub-fields' -- there's no equivalent to variableLength for a repeating STRUCTURED group, only for a single flat run of bytes/text. Modeled as one opaque remainder string rather than force a wrong decomposition; a real implementation needs its own parser for this one response, not this schema's ordinary field model. stat: 0=unknown, 1=available, 2=currently selected, 3=forbidden.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+COPS:",
+          "role": "discriminator"
+        },
+        {
+          "name": "operatorListRaw",
+          "type": "string",
+          "variableLength": "remainder"
+        }
+      ]
+    },
+    {
+      "name": "OperatorNameResult",
+      "description": "+COPN: <numeric>,<alpha> -- one line per operator in the modem's built-in table; GetOperatorNames's own description covers the multi-line pattern this and PreferredOperatorResult both share.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+COPN:",
+          "role": "discriminator"
+        },
+        {
+          "name": "numeric",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "alpha",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "PreferredListSelectionResult",
+      "description": "+CPLS: <list>",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CPLS:",
+          "role": "discriminator"
+        },
+        {
+          "name": "list",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "PreferredOperatorResult",
+      "description": "+CPOL: <index>,<format>,<oper> -- one line per stored preferred-operator entry.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CPOL:",
+          "role": "discriminator"
+        },
+        {
+          "name": "index",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "format",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "oper",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "ImsiResult",
+      "description": "Raw IMSI digit string, no +CIMI: prefix -- unlike almost every other query response here, so nothing to use as role=discriminator. Worth flagging: IMSI and IMEI (SerialNumberLegacyResult) are both commonly 15 prefix-less digits, so if their lengths coincide, this schema's dispatch algorithm genuinely cannot tell them apart by content alone -- real disambiguation relies entirely on which request (GetImsi vs GetSerialNumberLegacy) is outstanding, the same correlation problem noted for G460's AckResponse.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "imsi",
+          "type": "string"
+        }
+      ],
+      "examples": [
+        {
+          "description": "A typical IMSI.",
+          "raw": "234151234567890\\r\\n",
+          "fieldValues": {
+            "imsi": "234151234567890"
+          }
+        }
+      ]
+    },
+    {
+      "name": "IccidResult",
+      "description": "+CCID: <iccid> as modeled here (vendor-specific -- see GetIccid).",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CCID:",
+          "role": "discriminator"
+        },
+        {
+          "name": "iccid",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "IccidQuectelResult",
+      "description": "+QCCID: <ICCID> -- the Quectel BC660K-GL manual's actual response to AT+QCCID (GetIccidQuectel), with its own distinct prefix from the generic IccidResult above.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+QCCID:",
+          "role": "discriminator"
+        },
+        {
+          "name": "iccid",
+          "type": "string"
+        }
+      ],
+      "examples": [
+        {
+          "description": "Reading the SIM's ICCID.",
+          "raw": "+QCCID: 89860446091891372008\\r\\n",
+          "fieldValues": {
+            "iccid": "89860446091891372008"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FacilityLockResult",
+      "description": "+CLCK: <status>[,<class>] -- QueryFacilityLock's response. class is optional and omitted here for simplicity; a real implementation may see it, or several repeated lines for different classes.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CLCK:",
+          "role": "discriminator"
+        },
+        {
+          "name": "status",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "DataInactTimerResult",
+      "description": "+QCFG: \"DataInactTimer\",<value> -- QcfgGetDataInactTimer's response.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+QCFG:\\\"DataInactTimer\\\",",
+          "role": "discriminator"
+        },
+        {
+          "name": "value",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "GpioStatusResult",
+      "description": "+QCFG: \"GPIO\",<level>[,<level>,<level>,<level>] -- QcfgGpioQuery's response: one level if a specific pin was queried, four (comma-joined) if all were. Modeled as a single variable-length string covering however many comma-separated levels are actually present, rather than as separate optional fields -- this schema has no clean way to say 'either 1 or 4 of this field, never 2 or 3.'",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+QCFG:\\\"GPIO\\\",",
+          "role": "discriminator"
+        },
+        {
+          "name": "levels",
+          "type": "string",
+          "variableLength": "remainder"
+        }
+      ]
+    },
+    {
+      "name": "FirmwareRevisionResult",
+      "description": "Revision: <revision> -- see GetFirmwareRevision for why this doesn't follow the usual '+CGMR:' shape.",
+      "tags": [
+        "identification"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "Revision:",
+          "role": "discriminator"
+        },
+        {
+          "name": "revision",
+          "type": "string"
+        }
+      ],
+      "examples": [
+        {
+          "description": "A typical firmware build string.",
+          "raw": "Revision: BC660KGLAAR01A03\r\n",
+          "fieldValues": {
+            "revision": "BC660KGLAAR01A03"
+          }
+        }
+      ]
+    },
+    {
+      "name": "BaudRateResult",
+      "description": "+IPR: <rate> -- GetBaudRate's response.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+IPR:",
+          "role": "discriminator"
+        },
+        {
+          "name": "rate",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "PdpAddressResult",
+      "description": "+CGPADDR: <cid>,<address> -- GetPdpAddress's response.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CGPADDR:",
+          "role": "discriminator"
+        },
+        {
+          "name": "cid",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "address",
+          "type": "string"
+        }
+      ],
+      "examples": [
+        {
+          "description": "An assigned IPv4 address.",
+          "raw": "+CGPADDR: 1,\"10.45.2.17\"\r\n",
+          "fieldValues": {
+            "cid": 1,
+            "address": "\"10.45.2.17\""
+          }
+        }
+      ]
+    },
+    {
+      "name": "ControlPlaneDataReceived",
+      "description": "+CRTDCP: <cid>,<cpdataLength>,<cpdata> -- an unsolicited result code (URC), not a reply to any specific command: arrives whenever the network sends downlink data via the control plane, once SetControlPlaneDataReporting has enabled it.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CRTDCP:",
+          "role": "discriminator"
+        },
+        {
+          "name": "cid",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "cpdataLength",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "cpdata",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "NonIpDataReceived",
+      "description": "+RECVNONIP: <cid>,<dataLength>,<data> -- a second, distinct URC for incoming non-IP data, via the user plane rather than SendControlPlaneData/ControlPlaneDataReceived's control-plane path.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+RECVNONIP:",
+          "role": "discriminator"
+        },
+        {
+          "name": "cid",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "dataLength",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "data",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "BatteryVoltageResult",
+      "description": "+CBC: <voltage> in mV -- GetBatteryVoltage's response.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CBC:",
+          "role": "discriminator"
+        },
+        {
+          "name": "voltage",
+          "type": "uint"
+        }
+      ],
+      "examples": [
+        {
+          "description": "A healthy Li-ion cell reading.",
+          "raw": "+CBC: 3369\r\n",
+          "fieldValues": {
+            "voltage": 3369
+          }
+        }
+      ]
+    },
+    {
+      "name": "ClockResult",
+      "description": "+CCLK: <time> -- GetClock's response.",
+      "tags": [
+        "general"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CCLK:",
+          "role": "discriminator"
+        },
+        {
+          "name": "time",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "SerialNumberLegacyResult",
+      "description": "Raw IMEI digit string, no prefix -- same shape as ImsiResult; see its description for the resulting dispatch ambiguity when lengths coincide.",
+      "tags": [
+        "identification"
+      ],
+      "fields": [
+        {
+          "name": "imei",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "GprsRegistrationResult",
+      "description": "+CGREG: <n>,<stat> -- same stat encoding as NetworkRegistrationResult, for packet-switched registration.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CGREG:",
+          "role": "discriminator"
+        },
+        {
+          "name": "n",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "stat",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "EpsRegistrationResult",
+      "description": "+CEREG: <n>,<stat> -- same shape again, for LTE/EPS registration.",
+      "tags": [
+        "sim-network"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CEREG:",
+          "role": "discriminator"
+        },
+        {
+          "name": "n",
+          "type": "uint",
+          "delimiter": ","
+        },
+        {
+          "name": "stat",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "SmsSentResult",
+      "description": "+CMGS: <messageReference> -- confirms SendSmsBody's message was actually sent, with a reference number for delivery-status tracking.",
+      "tags": [
+        "sms"
+      ],
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "+CMGS:",
+          "role": "discriminator"
+        },
+        {
+          "name": "messageReference",
+          "type": "uint"
+        }
+      ]
+    },
+    {
+      "name": "Connect",
+      "description": "Sent instead of OK for EnterDataMode: confirms the switch, after which every byte on the wire is PPP, not AT text, until the link drops back to command mode.",
+      "tags": [
+        "data-connection"
+      ],
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "CONNECT",
+          "role": "discriminator"
+        }
+      ]
+    }
+  ],
+  "baudRateNegotiation": {
+    "triggerCommand": "SetBaudRate",
+    "newRateFieldName": "rate",
+    "acknowledgementBeforeSwitch": true,
+    "switchDelayMs": 100
+  },
+  "relatedInterfaces": [
+    {
+      "name": "PPPoS (PPP over Serial, e.g. to a GSM/cellular modem)",
+      "documentRef": "pppos-uart-interface.json",
+      "relationship": "negotiated-upgrade",
+      "triggerCommand": "EnterDataMode",
+      "triggerResponse": "Connect",
+      "switchDelayMs": 0,
+      "fallbackBehavior": "reverts-on-timeout",
+      "returnTrigger": "A +++ escape sequence (guard-timed, no PPP traffic immediately before/after) drops back to AT command mode; losing carrier does too.",
+      "description": "After CONNECT, the same physical UART carries PPP's async HDLC framing instead of AT text -- an entirely different framing, integrityCheck and message set, described as its own separate interface rather than nested here."
+    }
+  ]
+}

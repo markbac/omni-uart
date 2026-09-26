@@ -1,0 +1,121 @@
+{
+  "title": "Generic MCU serial bootloader (illustrative, sync-byte auto-baud)",
+  "version": "illustrative",
+  "description": "Not modelling any specific vendor's exact protocol -- illustrates the auto-baud mechanism common to several real MCU ROM bootloaders.",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "even",
+    "stopBits": 1,
+    "autoBaud": {
+      "syncByte": 127
+    }
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "implicit-length"
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "client",
+    "responseTimeoutMs": 1000
+  },
+  "commands": [
+    {
+      "name": "AutoBaudSync",
+      "description": "The sync byte itself (physicalLayer.autoBaud.syncByte) -- not a normal command, just the timing reference the bootloader measures before anything else can happen.",
+      "fields": [
+        {
+          "name": "syncByte",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 127,
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "GetVersion",
+      "fields": [
+        {
+          "name": "opcode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 1,
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "WriteMemory",
+      "fields": [
+        {
+          "name": "opcode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 2,
+          "role": "discriminator"
+        },
+        {
+          "name": "address",
+          "type": "uint",
+          "sizeBytes": 4
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    },
+    {
+      "name": "Go",
+      "description": "Jumps to application code at the given address, ending the bootloader session.",
+      "fields": [
+        {
+          "name": "opcode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 3,
+          "role": "discriminator"
+        },
+        {
+          "name": "address",
+          "type": "uint",
+          "sizeBytes": 4
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "Ack",
+      "fields": [
+        {
+          "name": "controlByte",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 121,
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "Nack",
+      "fields": [
+        {
+          "name": "controlByte",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 31,
+          "role": "discriminator"
+        }
+      ]
+    }
+  ]
+}

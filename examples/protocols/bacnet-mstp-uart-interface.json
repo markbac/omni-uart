@@ -1,0 +1,78 @@
+{
+  "title": "BACnet MS/TP (Master-Slave/Token-Passing)",
+  "version": "ANSI/ASHRAE 135",
+  "description": "Building-automation token-passing bus over RS-485. Has TWO independent CRCs in one frame: a header CRC and a separate data CRC -- and the data CRC is entirely absent when there's no data, not just zero-length.",
+  "physicalLayer": {
+    "baudRate": [
+      9600,
+      19200,
+      38400,
+      76800
+    ],
+    "defaultBaudRate": 38400,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1,
+    "electricalStandard": "rs485",
+    "duplex": "half"
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "sync-length-payload-crc",
+    "syncBytes": [
+      85,
+      255
+    ],
+    "lengthField": {
+      "sizeBytes": 2,
+      "countsFrom": "payload-only"
+    },
+    "secondaryIntegrityCheck": {
+      "check": {
+        "algorithm": "crc-16-arc",
+        "placement": "trailing",
+        "coverage": "payload-only"
+      },
+      "presentWhen": "when-data-present"
+    }
+  },
+  "integrityCheck": {
+    "algorithm": "crc-8",
+    "placement": "trailing",
+    "coverage": "length-to-payload-inclusive"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "commands": [
+    {
+      "name": "DataFrame",
+      "description": "integrityCheck (CRC-8) covers the fixed header only. secondaryIntegrityCheck (CRC-16, presentWhen=when-data-present) covers data and is entirely absent -- not even a zero-length placeholder -- when length=0, e.g. a Poll-For-Master token-passing frame with no data field at all.",
+      "fields": [
+        {
+          "name": "frameType",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "destinationAddress",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "sourceAddress",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "variableLength": "remainder",
+          "optional": true
+        }
+      ]
+    }
+  ]
+}

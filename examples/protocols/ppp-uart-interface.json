@@ -1,0 +1,64 @@
+{
+  "title": "PPP (HDLC-like async framing, RFC 1662)",
+  "version": "RFC 1662",
+  "description": "Escapes any occurrence of the flag/escape bytes (and, by default, control chars <0x20) by transmitting escapeByte then (originalByte XOR 0x20) -- a general transform rule, not SLIP's fixed substitute-byte-pair table.",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "delimiter-framed",
+    "startDelimiter": 126,
+    "endDelimiter": 126,
+    "escapeByte": 125,
+    "escapeScheme": "xor-transform",
+    "escapeXorMask": 32
+  },
+  "integrityCheck": {
+    "algorithm": "crc-16-ccitt-false",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "fieldTypes": {
+    "protocolId": {
+      "baseType": "uint",
+      "sizeBytes": 2,
+      "byteOrder": "big-endian"
+    }
+  },
+  "commands": [
+    {
+      "name": "Frame",
+      "fields": [
+        {
+          "name": "address",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 255
+        },
+        {
+          "name": "control",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 3
+        },
+        {
+          "name": "protocol",
+          "type": "protocolId"
+        },
+        {
+          "name": "information",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    }
+  ]
+}

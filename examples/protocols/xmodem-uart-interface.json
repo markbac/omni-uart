@@ -1,0 +1,149 @@
+{
+  "title": "XMODEM (checksum variant)",
+  "version": "classic",
+  "description": "File transfer over a serial link. Mixes 128/1024-byte framed data blocks (selected by leading byte, not a length field) with completely bare single-byte control codes -- no envelope at all around ACK/NAK/EOT/CAN.",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "implicit-length"
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "either",
+    "responseTimeoutMs": 10000,
+    "retryPolicy": "application-level"
+  },
+  "commands": [
+    {
+      "name": "DataBlock128",
+      "description": "Leading byte 0x01 (SOH) implies a 128-byte data field; nothing else about the length is transmitted.",
+      "fields": [
+        {
+          "name": "header",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 1,
+          "role": "discriminator"
+        },
+        {
+          "name": "blockNumber",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "blockNumberComplement",
+          "type": "uint",
+          "sizeBytes": 1,
+          "description": "255 - blockNumber."
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "sizeBytes": 128
+        }
+      ]
+    },
+    {
+      "name": "DataBlock1024",
+      "description": "Leading byte 0x02 (STX) implies a 1024-byte data field.",
+      "fields": [
+        {
+          "name": "header",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 2,
+          "role": "discriminator"
+        },
+        {
+          "name": "blockNumber",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "blockNumberComplement",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "sizeBytes": 1024
+        }
+      ]
+    },
+    {
+      "name": "EndOfTransmission",
+      "description": "A single bare byte, 0x04 -- no length field, no checksum, no envelope of any kind.",
+      "fields": [
+        {
+          "name": "controlByte",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 4,
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "Cancel",
+      "fields": [
+        {
+          "name": "controlByte",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 24,
+          "role": "discriminator"
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "Ack",
+      "fields": [
+        {
+          "name": "controlByte",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 6,
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "Nak",
+      "fields": [
+        {
+          "name": "controlByte",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 21,
+          "role": "discriminator"
+        }
+      ]
+    }
+  ],
+  "multipartTransfers": [
+    {
+      "name": "FileTransfer",
+      "description": "The whole file, sent as a sequence of DataBlock128/1024 frames, each individually ACKed or NAKed (and resent on NAK) before the next is sent. No total length is negotiated up front -- the sender just stops and sends EndOfTransmission when the file is exhausted, padding the final block if needed.",
+      "packetMessages": [
+        "DataBlock128",
+        "DataBlock1024"
+      ],
+      "sequenceFieldName": "blockNumber",
+      "terminationCondition": "control-message",
+      "terminationMessage": "EndOfTransmission"
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "title": "u-blox UBX",
+  "version": "34",
+  "description": "GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the length field -- before the length-counted region, unlike MAVLink's after.",
+  "physicalLayer": {
+    "baudRate": [
+      4800,
+      9600,
+      19200,
+      38400,
+      57600,
+      115200
+    ],
+    "defaultBaudRate": 9600,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "little-endian"
+  },
+  "framing": {
+    "style": "sync-length-payload-crc",
+    "syncBytes": [
+      181,
+      98
+    ],
+    "preLengthHeaderBytes": 2,
+    "lengthField": {
+      "sizeBytes": 2,
+      "countsFrom": "payload-only"
+    }
+  },
+  "integrityCheck": {
+    "algorithm": "fletcher-16",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "baudRateNegotiation": {
+    "triggerCommand": "CFG-PRT-SetBaud",
+    "newRateFieldName": "baudRate",
+    "acknowledgementBeforeSwitch": true,
+    "switchDelayMs": 0
+  },
+  "commands": [
+    {
+      "name": "CFG-PRT-Poll",
+      "description": "Poll vs SetBaud share identical class/id, so they don't disambiguate by value at all -- this schema's dispatch algorithm correctly falls back to resolved length instead (0 payload bytes here vs SetBaud's fixed 12), which is genuinely unambiguous, so no role=discriminator is needed on class/id.",
+      "fields": [
+        {
+          "name": "class",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 6,
+          "position": "before-length-field"
+        },
+        {
+          "name": "id",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0,
+          "position": "before-length-field"
+        }
+      ]
+    },
+    {
+      "name": "CFG-PRT-SetBaud",
+      "description": "Same class=0x06, id=0x00 as CFG-PRT-Poll, but with a payload requesting a new port baud rate. The module's own ack is sent at the OLD rate; the host must reconfigure its own UART to the new rate immediately afterwards, per baudRateNegotiation.",
+      "fields": [
+        {
+          "name": "class",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 6,
+          "position": "before-length-field"
+        },
+        {
+          "name": "id",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0,
+          "position": "before-length-field"
+        },
+        {
+          "name": "portId",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "reserved",
+          "type": "bytes",
+          "sizeBytes": 3
+        },
+        {
+          "name": "mode",
+          "type": "uint",
+          "sizeBytes": 4,
+          "description": "UART mode word (data bits, parity, stop bits)."
+        },
+        {
+          "name": "baudRate",
+          "type": "uint",
+          "sizeBytes": 4,
+          "description": "Requested new baud rate, e.g. 115200."
+        }
+      ]
+    }
+  ]
+}

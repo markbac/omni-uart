@@ -1,0 +1,71 @@
+{
+  "title": "Single-wire half-duplex UART link (illustrative)",
+  "version": "illustrative",
+  "description": "A genuine single shared data line, not just RTS/CTS omitted -- both sides' TX and RX are the same open-drain/tri-state pin, common on microcontroller debug or bootload pins wired for minimal pin count.",
+  "physicalLayer": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1,
+    "electricalStandard": "ttl",
+    "duplex": "half",
+    "wiringLines": [
+      "TXRX",
+      "GND"
+    ]
+  },
+  "encoding": {
+    "byteOrder": "little-endian"
+  },
+  "framing": {
+    "style": "fixed-length",
+    "fixedLengthBytes": 4
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "client",
+    "responseTimeoutMs": 100
+  },
+  "commands": [
+    {
+      "name": "Ping",
+      "fields": [
+        {
+          "name": "opcode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 1,
+          "role": "discriminator"
+        },
+        {
+          "name": "reserved",
+          "type": "bytes",
+          "sizeBytes": 2
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "Pong",
+      "fields": [
+        {
+          "name": "opcode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 129,
+          "role": "discriminator"
+        },
+        {
+          "name": "reserved",
+          "type": "bytes",
+          "sizeBytes": 2
+        }
+      ]
+    }
+  ]
+}

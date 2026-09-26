@@ -1,0 +1,390 @@
+{
+  "title": "MAVLink FTP",
+  "version": "MAVLink v1/v2 FILE_TRANSFER_PROTOCOL (msg 110)",
+  "description": "File transfer nested inside a normal MAVLink message: every FTP packet, of whatever kind, is the SAME outer message type, distinguished only by an inner opcode/offset/session sub-header.",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "little-endian"
+  },
+  "framing": {
+    "style": "sync-length-payload-crc",
+    "syncBytes": [
+      254
+    ],
+    "lengthField": {
+      "sizeBytes": 1,
+      "countsFrom": "payload-only",
+      "precedingHeaderBytes": 4
+    }
+  },
+  "integrityCheck": {
+    "algorithm": "custom",
+    "customParameters": {
+      "widthBits": 16,
+      "polynomial": "0x1021",
+      "initialValue": "0xFFFF",
+      "reflectInput": true,
+      "reflectOutput": true,
+      "finalXor": "0x0000"
+    },
+    "placement": "trailing",
+    "coverage": "length-to-payload-inclusive"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "fieldTypes": {
+    "seq": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    },
+    "sysId": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    },
+    "compId": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    },
+    "msgId": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    },
+    "ftpOpcode": {
+      "baseType": "enum",
+      "sizeBytes": 1,
+      "enumValues": {
+        "4": "OpenFileRO",
+        "15": "BurstReadFile",
+        "128": "Ack",
+        "129": "Nak"
+      }
+    }
+  },
+  "commands": [
+    {
+      "name": "FTP_OpenFileRO",
+      "description": "Opens a file for reading; the ack (FTP_Ack) returns a session id that scopes every subsequent read against this open file.",
+      "fields": [
+        {
+          "name": "seq",
+          "type": "seq",
+          "position": "before-length-field"
+        },
+        {
+          "name": "sysId",
+          "type": "sysId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "compId",
+          "type": "compId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "msgId",
+          "type": "msgId",
+          "constValue": 110,
+          "position": "before-length-field"
+        },
+        {
+          "name": "seqNumber",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "session",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0
+        },
+        {
+          "name": "opcode",
+          "type": "ftpOpcode",
+          "constValue": 4,
+          "role": "discriminator"
+        },
+        {
+          "name": "size",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "reqOpcode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0
+        },
+        {
+          "name": "burstComplete",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0
+        },
+        {
+          "name": "padding",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0
+        },
+        {
+          "name": "offset",
+          "type": "uint",
+          "sizeBytes": 4,
+          "constValue": 0
+        },
+        {
+          "name": "path",
+          "type": "string",
+          "variableLength": {
+            "fromField": "size"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FTP_BurstReadFile",
+      "description": "Requests the server stream the file from offset onward, without individual acks per chunk, until burstComplete is set on the final FTP_Ack.",
+      "fields": [
+        {
+          "name": "seq",
+          "type": "seq",
+          "position": "before-length-field"
+        },
+        {
+          "name": "sysId",
+          "type": "sysId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "compId",
+          "type": "compId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "msgId",
+          "type": "msgId",
+          "constValue": 110,
+          "position": "before-length-field"
+        },
+        {
+          "name": "seqNumber",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "session",
+          "type": "uint",
+          "sizeBytes": 1,
+          "description": "The session id returned by OpenFileRO's ack."
+        },
+        {
+          "name": "opcode",
+          "type": "ftpOpcode",
+          "constValue": 15,
+          "role": "discriminator"
+        },
+        {
+          "name": "size",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "reqOpcode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0
+        },
+        {
+          "name": "burstComplete",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0
+        },
+        {
+          "name": "padding",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0
+        },
+        {
+          "name": "offset",
+          "type": "uint",
+          "sizeBytes": 4,
+          "description": "Byte offset into the file to start streaming from."
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "FTP_Ack",
+      "description": "Every burst-read data packet is this same message, distinguished only by offset (where this chunk goes) and burstComplete (whether more are coming) -- there is no separate 'initial'/'follow-on' message name the way G460 or XMODEM have.",
+      "fields": [
+        {
+          "name": "seq",
+          "type": "seq",
+          "position": "before-length-field"
+        },
+        {
+          "name": "sysId",
+          "type": "sysId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "compId",
+          "type": "compId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "msgId",
+          "type": "msgId",
+          "constValue": 110,
+          "position": "before-length-field"
+        },
+        {
+          "name": "seqNumber",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "session",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "opcode",
+          "type": "ftpOpcode",
+          "constValue": 128,
+          "role": "discriminator"
+        },
+        {
+          "name": "size",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "reqOpcode",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "burstComplete",
+          "type": "uint",
+          "sizeBytes": 1,
+          "description": "1 on the last packet of the burst, 0 otherwise."
+        },
+        {
+          "name": "padding",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0
+        },
+        {
+          "name": "offset",
+          "type": "uint",
+          "sizeBytes": 4,
+          "description": "Absolute byte position in the file that this packet's data starts at -- not a sequence index."
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "variableLength": {
+            "fromField": "size"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FTP_Nak",
+      "fields": [
+        {
+          "name": "seq",
+          "type": "seq",
+          "position": "before-length-field"
+        },
+        {
+          "name": "sysId",
+          "type": "sysId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "compId",
+          "type": "compId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "msgId",
+          "type": "msgId",
+          "constValue": 110,
+          "position": "before-length-field"
+        },
+        {
+          "name": "seqNumber",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "session",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "opcode",
+          "type": "ftpOpcode",
+          "constValue": 129,
+          "role": "discriminator"
+        },
+        {
+          "name": "size",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "reqOpcode",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "burstComplete",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0
+        },
+        {
+          "name": "padding",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 0
+        },
+        {
+          "name": "offset",
+          "type": "uint",
+          "sizeBytes": 4
+        },
+        {
+          "name": "errorCode",
+          "type": "uint",
+          "sizeBytes": 1
+        }
+      ]
+    }
+  ],
+  "multipartTransfers": [
+    {
+      "name": "FTP_BurstRead",
+      "description": "Streaming read of a file opened by FTP_OpenFileRO. Positioned by byte offset, not an ordinal packet count -- a retry can re-request a specific offset directly. Scoped by the session id from the open exchange, which isn't itself one of packetMessages.",
+      "packetMessages": [
+        "FTP_Ack"
+      ],
+      "offsetFieldName": "offset",
+      "sessionFieldName": "session",
+      "terminationCondition": "explicit-last-packet-flag",
+      "lastPacketFlagFieldName": "burstComplete"
+    }
+  ]
+}

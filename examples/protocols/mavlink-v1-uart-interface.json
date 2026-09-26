@@ -1,0 +1,119 @@
+{
+  "title": "MAVLink v1",
+  "version": "1.0",
+  "description": "Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit between the length field and the region LEN actually counts.",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "little-endian"
+  },
+  "framing": {
+    "style": "sync-length-payload-crc",
+    "syncBytes": [
+      254
+    ],
+    "lengthField": {
+      "sizeBytes": 1,
+      "countsFrom": "payload-only",
+      "precedingHeaderBytes": 4
+    }
+  },
+  "integrityCheck": {
+    "algorithm": "custom",
+    "customParameters": {
+      "widthBits": 16,
+      "polynomial": "0x1021",
+      "initialValue": "0xFFFF",
+      "reflectInput": true,
+      "reflectOutput": true,
+      "finalXor": "0x0000"
+    },
+    "placement": "trailing",
+    "coverage": "length-to-payload-inclusive",
+    "valueEncoding": "binary"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "fieldTypes": {
+    "seq": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    },
+    "sysId": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    },
+    "compId": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    },
+    "msgId": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    }
+  },
+  "commands": [
+    {
+      "name": "HEARTBEAT",
+      "description": "Message ID 0. seq/sysId/compId/msgId are the 4 precedingHeaderBytes counted separately from LEN, now declared as position=before-length-field fields rather than left as an anonymous count; the fields below them are the LEN-counted payload.",
+      "fields": [
+        {
+          "name": "seq",
+          "type": "seq",
+          "position": "before-length-field"
+        },
+        {
+          "name": "sysId",
+          "type": "sysId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "compId",
+          "type": "compId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "msgId",
+          "type": "msgId",
+          "constValue": 0,
+          "position": "before-length-field",
+          "role": "discriminator"
+        },
+        {
+          "name": "customMode",
+          "type": "uint",
+          "sizeBytes": 4
+        },
+        {
+          "name": "vehicleType",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "autopilot",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "baseMode",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "systemStatus",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "mavlinkVersion",
+          "type": "uint",
+          "sizeBytes": 1
+        }
+      ]
+    }
+  ]
+}

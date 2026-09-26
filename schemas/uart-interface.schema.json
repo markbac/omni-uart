@@ -1,0 +1,1305 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://landisgyr.example/schemas/uart-interface-definition.schema.json",
+  "title": "UART Interface Definition",
+  "description": "Describes a point-to-point, command/response UART interface: its physical-layer settings, frame structure, byte/bit encoding conventions, integrity check, and the commands and responses it carries. One instance of this schema replaces a device's own 'wire protocol' document (e.g. the G460 production-configuration protocol, which validates against it -- see the accompanying example) with a single machine-readable definition that different protocols can all be expressed in.\n\nMessage dispatch algorithm (for an implementer building a generic engine from this schema, not a per-instance configuration choice): once a frame is deframed per framing's style, decide which channel it belongs to (commands if flowing toward the device, responses if away from it, per commandResponseModel). First, if any candidate message in that channel has a field whose type declares valueSizeMap (an identifier field, e.g. G460's dataItemId), read that field's actual value from the frame and look up its size: if present in the map, that size -- compared against the fixed-field total of each remaining ambiguous candidate -- resolves which one applies directly, without needing the frame's own length to disambiguate at all. Otherwise (or once value-size resolution has narrowed the field as far as it can), try each remaining message definition in order. A candidate matches if (1) every field in it with role=discriminator has a constValue that equals the corresponding bytes in the received frame, AND (2) the candidate's resolved total length -- the sum of every field's size, with sizeBytes fixed fields counted directly, a variableLength: {fromField} field's size read from the named field's own parsed value, and at most one variableLength: remainder field absorbing whatever's left -- equals the frame's actual length. If exactly one candidate matches, that's the message. If a candidate has no role=discriminator fields at all, condition (1) is vacuously satisfied and dispatch relies on (2) alone -- valid when that's already unambiguous (e.g. an empty-payload poll vs a fixed-size set sharing an otherwise identical header), not valid if two candidates would then tie. If zero or more than one candidate matches even after value-size resolution, dispatch has failed -- either the input is malformed, or the protocol needs a distinguishing rule this algorithm doesn't cover.",
+  "type": "object",
+  "required": [
+    "title",
+    "version",
+    "physicalLayer",
+    "encoding",
+    "framing",
+    "integrityCheck"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "commands"
+      ]
+    },
+    {
+      "required": [
+        "responses"
+      ]
+    }
+  ],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Human name of the interface, e.g. 'G460 Configuration Interface'."
+    },
+    "version": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "physicalLayer": {
+      "type": "object",
+      "description": "UART line settings. Optional fields may be omitted where the interface auto-bauds or the setting doesn't apply.",
+      "required": [
+        "dataBits",
+        "parity",
+        "stopBits"
+      ],
+      "properties": {
+        "baudRate": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Bits per second, e.g. 115200. A single value, or an array of every rate the interface supports (e.g. M-Bus's 300/600/1200/2400/4800/9600) -- pair an array with defaultBaudRate. Omit entirely if auto-baud or out of band."
+        },
+        "defaultBaudRate": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Which of baudRate's values a device uses unless told otherwise, when baudRate is an array."
+        },
+        "autoBaud": {
+          "type": "object",
+          "description": "Set when the receiver detects the line's baud rate dynamically from a known sync byte's bit timing, rather than both sides using a rate agreed in advance -- common in MCU ROM bootloaders (e.g. many ST, NXP and TI parts). Independent of baudRate: a detector can usually only reliably discriminate a limited set of standard rates, which baudRate can still list even though nothing pre-selects one of them.",
+          "required": [
+            "syncByte"
+          ],
+          "properties": {
+            "syncByte": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255,
+              "description": "The byte value sent purely as a timing reference, e.g. 0x7F or 0x55 ('U') -- chosen for a mixed 1/0 bit pattern that lets the receiver measure both a short and a long edge-to-edge interval."
+            },
+            "precededByBreak": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether a break condition precedes the sync byte, e.g. to first get attention before rate detection."
+            }
+          }
+        },
+        "startBits": {
+          "type": "integer",
+          "const": 1,
+          "default": 1,
+          "description": "Always 1 for genuine asynchronous UART -- included for symmetry with stopBits/dataBits, not because real hardware varies it. A protocol needing something other than 1 isn't running over ordinary UART framing."
+        },
+        "dataBits": {
+          "enum": [
+            7,
+            8,
+            9
+          ]
+        },
+        "parity": {
+          "enum": [
+            "none",
+            "even",
+            "odd",
+            "mark",
+            "space"
+          ]
+        },
+        "stopBits": {
+          "enum": [
+            1,
+            1.5,
+            2
+          ]
+        },
+        "flowControl": {
+          "enum": [
+            "none",
+            "rts-cts",
+            "xon-xoff"
+          ],
+          "default": "none"
+        },
+        "electricalStandard": {
+          "enum": [
+            "ttl",
+            "rs232",
+            "rs485",
+            "rs422",
+            "current-loop",
+            "optical",
+            "other"
+          ],
+          "description": "The controlled vocabulary version of what portType's free text otherwise only documents for a human -- ttl: 0-3.3V or 0-5V logic-level, single-ended. rs232: +/-3 to +/-15V, single-ended, historically point-to-point. rs485: differential, half-duplex multidrop bus (pairs with duplex=half and transmitEnableControl). rs422: differential, usually full-duplex point-to-multipoint. current-loop: e.g. M-Bus's 2-wire bus. optical: e.g. G460's optical port variant of its galvanic protocol. other: anything not listed -- use portType's free text to say what."
+        },
+        "wiringLines": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "TX",
+              "RX",
+              "TXRX",
+              "GND",
+              "RTS",
+              "CTS",
+              "DTR",
+              "DSR",
+              "DCD",
+              "RI"
+            ]
+          },
+          "uniqueItems": true,
+          "minItems": 1,
+          "description": "Which EIA/RS-232-style signal lines are actually connected -- this is what 'a 3-wire link' (TX, RX, GND only -- no hardware flow control is even physically possible) vs '5-wire' (+RTS, CTS) vs a full 9-wire link means in concrete terms, rather than a count that hides which lines those are. TXRX (instead of separate TX and RX) means a single shared half-duplex data line -- true single-wire UART, e.g. many microcontroller debug/bootloader pins -- not just 'RTS/CTS omitted'. Meaningful for point-to-point links; doesn't apply to a differential multidrop bus (RS-485), which has no separate RTS/CTS wire to the far end at all -- see transmitEnableControl for that case instead."
+        },
+        "hardwareFlowControlDetails": {
+          "type": "object",
+          "description": "Only meaningful when flowControl=rts-cts, and optional even then: there is no single standard for what asserting RTS or CTS actually means, so this exists to state a protocol's own convention explicitly rather than let 'rts-cts' imply one. Classic EIA-232 DTE/DCE modem handshaking, direct microcontroller-to-microcontroller GPIO 'pause line' wiring, and vendor-specific conventions all use the same two pins for different things -- sometimes even with RTS/CTS's roles reversed from the classic convention. Don't assume a meaning that isn't stated here or in the message descriptions.",
+          "properties": {
+            "localRole": {
+              "enum": [
+                "dte",
+                "dce",
+                "neither"
+              ],
+              "description": "Which formal role, if either, the side being described plays. 'neither' covers direct chip-to-chip links (e.g. two microcontrollers) that repurpose the RTS/CTS pins as plain ready/pause signals without following DTE/DCE conventions at all."
+            },
+            "rtsAssertedMeans": {
+              "type": "string",
+              "description": "What it means, and who asserts it, when RTS is asserted -- e.g. 'asserted by the host: permits the peer to transmit to the host'."
+            },
+            "ctsAssertedMeans": {
+              "type": "string",
+              "description": "What it means, and who asserts it, when CTS is asserted."
+            },
+            "notes": {
+              "type": "string"
+            }
+          }
+        },
+        "idleState": {
+          "enum": [
+            "mark",
+            "space"
+          ],
+          "description": "Line level when idle."
+        },
+        "portType": {
+          "type": "string",
+          "description": "Physical medium, e.g. 'rs232', 'rs485', 'ttl', 'optical'. Free text -- meters commonly expose a galvanic or optical variant of the same logical protocol."
+        },
+        "duplex": {
+          "enum": [
+            "full",
+            "half",
+            "simplex"
+          ],
+          "default": "full",
+          "description": "full: both sides may drive the wire simultaneously. half: one shared pair, only one side may drive it at a time (typically rs485). simplex: only one side can ever transmit -- there is no return path at all, e.g. DMX512 or a one-way sensor telemetry feed."
+        },
+        "transmitEnableControl": {
+          "enum": [
+            "automatic",
+            "rts-toggle"
+          ],
+          "description": "Only meaningful when duplex=half. How the bus driver is switched between transmit and receive -- 'automatic' if the transceiver senses direction itself, 'rts-toggle' if software must assert RTS before sending and release it once the last byte has cleared the UART. This is a distinct concern from flowControl: it controls which side may drive the wire at all, not how fast data may flow once it is that side's turn -- a common point of confusion, and a common source of bugs, in RS-485 deployments of protocols such as Modbus RTU."
+        }
+      }
+    },
+    "encoding": {
+      "type": "object",
+      "description": "Default byte/bit conventions for multi-byte fields; individual fields may override byteOrder.",
+      "required": [
+        "byteOrder"
+      ],
+      "properties": {
+        "byteOrder": {
+          "enum": [
+            "little-endian",
+            "big-endian"
+          ],
+          "description": "Default byte order for multi-byte integer fields."
+        },
+        "bitOrder": {
+          "enum": [
+            "lsb-first",
+            "msb-first"
+          ],
+          "default": "lsb-first",
+          "description": "Bit transmission order on the wire (UART is conventionally LSB-first)."
+        },
+        "textEncoding": {
+          "enum": [
+            "ascii",
+            "utf-8",
+            "latin1",
+            "bcd"
+          ],
+          "default": "ascii",
+          "description": "Encoding used for string-typed fields. 'bcd' = binary-coded decimal."
+        }
+      }
+    },
+    "framing": {
+      "type": "object",
+      "description": "How a frame is delimited on the wire and where the length/CRC fields sit within it.",
+      "required": [
+        "style"
+      ],
+      "properties": {
+        "style": {
+          "enum": [
+            "sync-length-payload-crc",
+            "delimiter-framed",
+            "fixed-length",
+            "type-length-value",
+            "cobs",
+            "silence-delimited",
+            "implicit-length",
+            "break-delimited"
+          ],
+          "description": "sync-length-payload-crc: <sync><len><payload><crc>, as used by the G460, MAVLink and u-blox UBX protocols. delimiter-framed: start/end marker bytes with byte stuffing to escape them inside the payload (e.g. SLIP, NMEA 0183). fixed-length: every frame is the same, pre-agreed length; no length field. type-length-value: <type><len><value> with no separate sync. cobs: Consistent Overhead Byte Stuffing, delimited by a zero byte. silence-delimited: no sync/length field at all -- a gap of line IDLE marks frame start/end (e.g. Modbus RTU); message length is implicit in the fields the receiver parses. implicit-length: no length field and no idle gap either -- the receiver already knows each message's length from its identifier via a table agreed out of band (e.g. LIN). break-delimited: frame start is marked by a UART break condition -- an ACTIVE low period longer than a normal stop bit, the opposite signal of silence-delimited's idle gap (e.g. DMX512, and LIN's wakeup before its sync byte)."
+        },
+        "breakMinDurationBitTimes": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Required for style=break-delimited. Minimum duration of the break condition, in bit-time units at the interface's baud rate (e.g. DMX512's >=92us break at 250kbit/s is ~23 bit times)."
+        },
+        "precededByBreak": {
+          "type": "object",
+          "description": "Optional, and independent of style: set when every frame is preceded by a UART break condition used only as a wake-up/resync preamble, with the frame's actual structure still determined by style -- e.g. LIN, where an implicit-length frame (sync byte, PID, data, checksum) is itself preceded by a break. Contrast with style=break-delimited, where the break is the only boundary marker there is.",
+          "required": [
+            "minDurationBitTimes"
+          ],
+          "properties": {
+            "minDurationBitTimes": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "syncBytes": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "minItems": 1,
+          "description": "Required for style=sync-length-payload-crc. One or more sync octets marking frame start, e.g. [165] for 0xA5 (repeated, as G460 does), a single byte (e.g. [254] for MAVLink's 0xFE), or a fixed sequence of distinct bytes (e.g. [181, 98] for u-blox UBX's 0xB5 0x62)."
+        },
+        "preLengthHeaderBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Fixed-size header bytes that appear between the sync pattern and the length field itself, and aren't counted by it -- e.g. u-blox UBX's 2-byte class+id, which comes before LENGTH. Naming them in a message's own fields would wrongly imply they follow the length field (that's what 'fields' always means here), so this only records how many such bytes exist; describe their meaning in the message's description text."
+        },
+        "startDelimiter": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "style=delimiter-framed needs at least one of startDelimiter/endDelimiter. A single byte, or an ordered array for a multi-byte marker."
+        },
+        "endDelimiter": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "style=delimiter-framed needs at least one of startDelimiter/endDelimiter. A single byte, or an ordered array for a multi-byte marker, e.g. [13, 10] for a trailing CRLF."
+        },
+        "escapeByte": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255,
+          "description": "Optional for style=delimiter-framed. Escapes any literal delimiter/escape byte inside the payload; omit for protocols with no escaping (e.g. plain CRLF-terminated text lines)."
+        },
+        "escapeScheme": {
+          "enum": [
+            "literal-substitution",
+            "xor-transform"
+          ],
+          "default": "literal-substitution",
+          "description": "How escapeByte is used. literal-substitution: escapeByte is followed by a fixed, protocol-specific substitute byte for each escaped value (e.g. SLIP: ESC,ESC_END stands for a literal END; the substitute bytes are protocol lookup, not derivable from a rule). xor-transform: escapeByte is followed by (originalByte XOR escapeXorMask), a general rule covering any byte that needs escaping rather than a fixed table -- e.g. PPP/HDLC async framing."
+        },
+        "escapeXorMask": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255,
+          "description": "Required when escapeScheme=xor-transform, e.g. 0x20 for PPP."
+        },
+        "fixedLengthBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Required for style=fixed-length."
+        },
+        "lengthField": {
+          "$ref": "#/$defs/lengthField"
+        },
+        "syncRepeatsAfterLength": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, syncBytes is transmitted a second time immediately after the length field (or its repeat, if lengthField.repeated), before the length-counted region begins -- e.g. M-Bus's long frame: START, L, L, START."
+        },
+        "trailingDelimiter": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "An extra fixed byte (or bytes) sent after the integrity check value, redundant with the length field rather than a substitute for it -- e.g. M-Bus's closing 0x16 after the checksum. Only meaningful alongside a length-based style; a purely delimiter-framed protocol should use endDelimiter instead."
+        },
+        "typeField": {
+          "type": "object",
+          "description": "Required for style=type-length-value.",
+          "required": [
+            "sizeBytes"
+          ],
+          "properties": {
+            "sizeBytes": {
+              "type": "integer",
+              "enum": [
+                1,
+                2
+              ]
+            }
+          }
+        },
+        "bodyEncoding": {
+          "enum": [
+            "binary",
+            "ascii-hex"
+          ],
+          "default": "binary",
+          "description": "Transform applied to the whole frame body (everything between the delimiters, or between length field and crc). 'ascii-hex' means every logical byte -- including the integrity check value -- is sent as 2 ASCII hex characters rather than 1 raw byte, as Modbus ASCII does. Field sizeBytes values always refer to logical bytes, before this transform."
+        },
+        "dataBlockChecking": {
+          "type": "object",
+          "description": "Some protocols chunk their data into fixed-size blocks, each followed by its own separate check value -- distinct from (and in addition to) integrityCheck, which still covers the frame (or a stated region of it) as a whole. DNP3 data-link frames do exactly this: application data is split into 16-byte blocks, each with its own trailing CRC-16/DNP, the last block possibly shorter. Recording that this structure exists lets an engine account for it; it does NOT by itself reconcile the arithmetic with a variableLength:remainder field inside the same region -- working out the exact logical byte count when block-check overhead is interleaved requires actually walking the blocks, not a single subtraction, and this schema doesn't encode that walking logic.",
+          "required": [
+            "blockSizeBytes",
+            "checkSizeBytes",
+            "checkAlgorithm"
+          ],
+          "properties": {
+            "blockSizeBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Logical data bytes per block before its check value, e.g. 16 for DNP3."
+            },
+            "checkSizeBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Size of the check value appended after each block, e.g. 2 for a CRC-16."
+            },
+            "checkAlgorithm": {
+              "$ref": "#/$defs/integrityCheck"
+            },
+            "lastBlockMayBeShorter": {
+              "type": "boolean",
+              "default": true,
+              "description": "Whether a final, shorter block (still followed by its own check value) is allowed when the data doesn't divide evenly."
+            }
+          }
+        },
+        "secondaryIntegrityCheck": {
+          "type": "object",
+          "description": "Some protocols carry a second, independently-computed check value covering a DIFFERENT region than integrityCheck's own coverage -- e.g. BACnet MS/TP's separate header CRC (integrityCheck, covering the fixed header) and data CRC (this, covering only the variable data region). Distinct from dataBlockChecking (repeats one check per fixed-size block within a single region) and multipartTransfers.reassembledIntegrityCheck (covers an entire multi-frame transfer) -- this is a second check within one frame, over a region integrityCheck doesn't already cover.",
+          "required": [
+            "check",
+            "presentWhen"
+          ],
+          "properties": {
+            "check": {
+              "$ref": "#/$defs/integrityCheck"
+            },
+            "presentWhen": {
+              "enum": [
+                "always",
+                "when-data-present"
+              ],
+              "description": "always: transmitted even when the region it covers is zero bytes. when-data-present: entirely absent from the frame -- not even a placeholder -- when that region is zero bytes, e.g. BACnet MS/TP's data CRC, which doesn't exist at all for a length=0 frame such as Poll-For-Master."
+            }
+          }
+        },
+        "variantsByType": {
+          "type": "object",
+          "description": "For protocols where a single leading discriminator byte -- typeField (style=type-length-value) or the byte right after syncBytes/preLengthHeaderBytes (style=sync-length-payload-crc) -- selects between genuinely DIFFERENT frame layouts, not just different payload contents within one layout. E.g. Bluetooth HCI H4: Command/Event packets use a 1-byte length field, but ACL/SCO data packets use a 2-byte one with a different preceding header size. Without this, framing's top-level lengthField has to be right for every packet type at once, which for HCI it can't be. Keys are the discriminator's value as a decimal string; each value's lengthField entirely replaces (not merges with) framing's own top-level lengthField for frames beginning with that byte. A discriminator value not listed here uses framing's top-level lengthField unchanged.",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "lengthField"
+            ],
+            "properties": {
+              "lengthField": {
+                "$ref": "#/$defs/lengthField"
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "style": {
+                "const": "sync-length-payload-crc"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "syncBytes",
+              "lengthField"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "style": {
+                "const": "delimiter-framed"
+              }
+            }
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "startDelimiter"
+                ]
+              },
+              {
+                "required": [
+                  "endDelimiter"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "escapeScheme"
+            ],
+            "properties": {
+              "escapeScheme": {
+                "const": "xor-transform"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "escapeXorMask"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "style": {
+                "const": "fixed-length"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "fixedLengthBytes"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "style": {
+                "const": "type-length-value"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "typeField",
+              "lengthField"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "style": {
+                "const": "silence-delimited"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "interFrameSilenceChars"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "style": {
+                "const": "break-delimited"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "breakMinDurationBitTimes"
+            ]
+          }
+        }
+      ]
+    },
+    "integrityCheck": {
+      "$ref": "#/$defs/integrityCheck"
+    },
+    "multipartTransfers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/multipartTransfer"
+      },
+      "description": "File transfers, firmware updates, or any payload spanning more than one frame -- see $defs/multipartTransfer."
+    },
+    "relatedInterfaces": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relatedInterface"
+      },
+      "description": "Other UART interfaces reachable from this one on the SAME wire, most commonly a bootloader/firmware-update mode that speaks an entirely different protocol -- different framing, encoding, integrityCheck, everything -- once triggered. This schema describes one framing/protocol per document; it doesn't try to nest a second, unrelated one inline. Model the other protocol as its own separate interface document and just reference it here."
+    },
+    "baudRateNegotiation": {
+      "type": "object",
+      "description": "Set when this SAME interface (same framing, same protocol) can change its own operating baud rate mid-session via a command, rather than only ever using a fixed pre-agreed rate. Distinct from relatedInterfaces: nothing else about the protocol changes, only the bit rate.",
+      "required": [
+        "triggerCommand",
+        "newRateFieldName"
+      ],
+      "properties": {
+        "triggerCommand": {
+          "type": "string",
+          "description": "Name of the command in this interface's own commands[] that requests the change."
+        },
+        "newRateFieldName": {
+          "type": "string",
+          "description": "Field name, within triggerCommand, carrying the requested new baud rate."
+        },
+        "acknowledgementBeforeSwitch": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether an ack to triggerCommand is sent at the OLD rate before both sides switch (true, the common/safe pattern), or the switch happens with no ack at the old rate at all (false -- the requester must simply start using the new rate and hope)."
+        },
+        "switchDelayMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How long the device waits after its ack before actually switching its own UART, giving the host time to reconfigure too."
+        }
+      }
+    },
+    "compoundMessageDelimiter": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1,
+      "description": "Set when a single physical frame MAY carry more than one logical message from commands/responses -- of possibly different types -- chained back-to-back with this delimiter, rather than framing always meaning exactly one message per frame. E.g. SCPI's ';', letting one line read '*RST;*CLS;MEAS:VOLT:DC?' as three separate command invocations rather than one. Doesn't change how any individual message's own fields are parsed -- only that more than one of them may appear before the frame's actual terminator."
+    },
+    "commandResponseModel": {
+      "type": "object",
+      "description": "Turnaround behaviour. Omit for streaming/broadcast interfaces with no response.",
+      "properties": {
+        "initiator": {
+          "enum": [
+            "client",
+            "device",
+            "either"
+          ],
+          "default": "client",
+          "description": "Which side always starts a transaction."
+        },
+        "commandTimeoutMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Max time to receive a complete command frame before the receiver discards it."
+        },
+        "responseTimeoutMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Max time the initiator waits for a response before retrying/giving up."
+        },
+        "retryPolicy": {
+          "enum": [
+            "none",
+            "resend-immediately",
+            "resend-with-backoff",
+            "application-level"
+          ],
+          "default": "none"
+        }
+      }
+    },
+    "fieldTypes": {
+      "type": "object",
+      "description": "Reusable named field-type definitions, referenced by name from command/response fields.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "baseType"
+        ],
+        "properties": {
+          "baseType": {
+            "enum": [
+              "uint",
+              "int",
+              "float",
+              "bytes",
+              "string",
+              "enum",
+              "bitfield"
+            ]
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "byteOrder": {
+            "enum": [
+              "little-endian",
+              "big-endian"
+            ],
+            "description": "Overrides the interface default for this type only."
+          },
+          "enumValues": {
+            "type": "object",
+            "description": "For baseType=enum: value -> label.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "units": {
+            "type": "string"
+          },
+          "valueSizeMap": {
+            "type": "object",
+            "description": "For a field acting as a data-item/register identifier: maps each possible value (decimal string key) to the byte size of the data associated with that identifier ELSEWHERE in the protocol -- e.g. G460's per-dataItemId catalogue of item sizes. This is what actually resolves a dispatch ambiguity that discriminator/length alone cannot: when several messages share a discriminator value and each has its own variableLength:remainder field (e.g. a plain write vs its multipart-initial vs multipart-follow-on shapes, all sharing cmdId=4), a receiver reads the identifier field's actual value FIRST, looks up its size here, and only then knows which of the candidate shapes applies -- rather than guessing from the frame's own length, which is exactly what's ambiguous in the first place. A value genuinely absent from this map means its size isn't known from this document; dispatch for it falls back to the ordinary discriminator/length algorithm, unresolved.",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "bits": {
+            "type": "array",
+            "description": "For baseType=bitfield: the sub-byte fields packed inside it, most-significant first, e.g. LIN's PID byte = 6-bit identifier + 2-bit parity.",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "widthBits"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "widthBits": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 64
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "description": "Messages the client may send.",
+      "items": {
+        "$ref": "#/$defs/message"
+      }
+    },
+    "responses": {
+      "type": "array",
+      "description": "Messages the device may send back.",
+      "items": {
+        "$ref": "#/$defs/message"
+      }
+    },
+    "tags": {
+      "type": "array",
+      "description": "Logical groupings for commands/responses/data items, e.g. for grouping items onto UI pages.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "message": {
+      "type": "object",
+      "required": [
+        "name",
+        "fields"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names matching the root-level tags list -- e.g. for grouping every command/response sharing a tag onto the same tab or page in a generated UI."
+        },
+        "endDelimiterOverride": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 255
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 255
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Only meaningful for style=delimiter-framed. Overrides framing's own endDelimiter for just this one message -- e.g. AT+CMGS's SMS body, which is terminated by Ctrl-Z (0x1A) rather than the interface's usual CRLF. Without this, framing.endDelimiter is a single, global setting; a protocol where one specific command temporarily changes the terminator has no other way to say so."
+        },
+        "examples": {
+          "type": "array",
+          "description": "Worked examples of this exact message on the wire -- concrete, not just a prose description. Useful for documentation, for generating test fixtures, and for a human implementer checking their own encoding against a known-good case.",
+          "items": {
+            "type": "object",
+            "required": [
+              "raw"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "What this example shows, e.g. 'Querying signal quality on a healthy connection.'"
+              },
+              "raw": {
+                "type": "string",
+                "description": "The literal wire representation: exact text (with visible \\r\\n) for an ASCII protocol, or a hex byte string (e.g. 'A5 05 04 69 00 12 34') for a binary one."
+              },
+              "fieldValues": {
+                "type": "object",
+                "description": "The parsed field values raw actually represents, name -> value -- makes the mapping between bytes and meaning explicit rather than left for the reader to work out by hand.",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "description": "Either a baseType keyword or a name from fieldTypes."
+              },
+              "sizeBytes": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Fixed size in bytes. Omit (and use variableLength instead) for a field whose size isn't fixed -- not a free-text range like '1-58': bounds alone don't let an engine compute an exact byte count, only variableLength's two rules do."
+              },
+              "variableLength": {
+                "description": "Use instead of sizeBytes when this field's size isn't fixed. Exactly one of two mechanically resolvable rules -- deliberately not a free-text range. 'remainder': this field takes however many bytes are left in the message once every other field's size (fixed, or itself resolved via a fromField rule) is subtracted from the frame's own declared total length; at most one field per message may use 'remainder' (enforced below), since two would make the split ambiguous. {fromField: ...}: another field in the SAME message, appearing anywhere in fields (commonly, but not necessarily, earlier), whose parsed value IS this field's exact byte count -- e.g. MAVLink FTP's 'size' field stating how many of the following bytes are valid data.",
+                "oneOf": [
+                  {
+                    "const": "remainder"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "fromField"
+                    ],
+                    "properties": {
+                      "fromField": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                ]
+              },
+              "constValue": {
+                "description": "Present when this field is always one fixed value, e.g. a command opcode."
+              },
+              "role": {
+                "enum": [
+                  "data",
+                  "discriminator"
+                ],
+                "default": "data",
+                "description": "discriminator: this field (with constValue) is part of what identifies which message definition a received frame matches, among others in the same commands/responses list -- see the dispatch algorithm in this schema's own top-level description. Not every message needs one: if a channel's candidates are already distinguishable by resolved length alone (e.g. a poll with no payload vs a set with one, both otherwise identical), none is required. When more than one message in the same list shares an identical set of discriminator values AND the same resolved length, this schema cannot express the extra rule that tells them apart."
+              },
+              "position": {
+                "enum": [
+                  "after-length-field",
+                  "before-length-field"
+                ],
+                "default": "after-length-field",
+                "description": "after-length-field (the default): this field is part of the length-counted region, appearing in fields order right after any other after-length-field entries already listed. before-length-field: this field actually occupies part of framing.lengthField.precedingHeaderBytes or framing.preLengthHeaderBytes -- named here because its value varies per message (e.g. HCI's opcode) or is otherwise worth naming (MAVLink's seq/sysid/compid/msgid), rather than left as an anonymous byte count. The sum of a message's own before-length-field fields' sizeBytes should equal the declared precedingHeaderBytes/preLengthHeaderBytes count -- this schema doesn't cross-check that arithmetic mechanically; keep it consistent by hand."
+              },
+              "delimiter": {
+                "type": "string",
+                "maxLength": 1,
+                "description": "For ASCII/text payloads: this field's value runs up to (not including) the next occurrence of this character, e.g. ',' for NMEA 0183's comma-separated fields, instead of a fixed sizeBytes."
+              },
+              "optional": {
+                "type": "boolean",
+                "default": false
+              },
+              "ninthBitSet": {
+                "type": "boolean",
+                "description": "Only meaningful when physicalLayer.dataBits=9 and the 9th bit is used for something other than parity (e.g. RS-485 multidrop address/data marking). True if this field's byte(s) are sent with the 9th bit set (marking them, e.g., as an address byte rather than data)."
+              },
+              "units": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              }
+            },
+            "not": {
+              "required": [
+                "sizeBytes",
+                "variableLength"
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "variableLength": {
+                    "const": "remainder"
+                  }
+                },
+                "required": [
+                  "variableLength"
+                ]
+              },
+              "minContains": 0,
+              "maxContains": 1
+            }
+          ]
+        }
+      }
+    },
+    "integrityCheck": {
+      "type": "object",
+      "description": "The checksum/CRC protecting each frame (or 'none').",
+      "required": [
+        "algorithm"
+      ],
+      "properties": {
+        "algorithm": {
+          "enum": [
+            "none",
+            "checksum-8",
+            "checksum-16",
+            "xor-8",
+            "crc-8",
+            "crc-16-ccitt-false",
+            "crc-16-xmodem",
+            "crc-16-modbus",
+            "crc-16-arc",
+            "crc-16-dnp",
+            "crc-32-iso-hdlc",
+            "crc-32c",
+            "fletcher-16",
+            "custom"
+          ],
+          "description": "none: No integrity check field is present. / checksum-8: Simple 8-bit sum of all covered bytes, modulo 256. / checksum-16: Simple 16-bit sum of all covered bytes, modulo 65536. / xor-8: 8-bit XOR of all covered bytes (e.g. NMEA 0183 checksum). / crc-8: CRC-8/SMBUS: poly 0x07, init 0x00, refin/refout false, xorout 0x00. / crc-16-ccitt-false: poly 0x1021, init 0xFFFF, refin/refout false, xorout 0x0000. / crc-16-xmodem: poly 0x1021, init 0x0000, refin/refout false, xorout 0x0000. / crc-16-modbus: poly 0x8005, init 0xFFFF, refin/refout true, xorout 0x0000. Matches the G460 production-configuration protocol's CRC. / crc-16-arc: poly 0x8005, init 0x0000, refin/refout true, xorout 0x0000. / crc-16-dnp: poly 0x3D65, init 0x0000, refin/refout true, xorout 0xFFFF. / crc-32-iso-hdlc: The common 'CRC-32': poly 0x04C11DB7, init 0xFFFFFFFF, refin/refout true, xorout 0xFFFFFFFF. / crc-32c: Castagnoli: poly 0x1EDC6F41, init 0xFFFFFFFF, refin/refout true, xorout 0xFFFFFFFF. / fletcher-16: Two 8-bit running sums combined into a 16-bit value. / custom: Explicit width/polynomial/init/refin/refout/xorout given in customParameters."
+        },
+        "customParameters": {
+          "type": "object",
+          "description": "Required when algorithm=custom.",
+          "required": [
+            "widthBits",
+            "polynomial",
+            "initialValue",
+            "reflectInput",
+            "reflectOutput",
+            "finalXor"
+          ],
+          "properties": {
+            "widthBits": {
+              "enum": [
+                8,
+                16,
+                32
+              ]
+            },
+            "polynomial": {
+              "type": "string",
+              "pattern": "^0x[0-9A-Fa-f]+$"
+            },
+            "initialValue": {
+              "type": "string",
+              "pattern": "^0x[0-9A-Fa-f]+$"
+            },
+            "reflectInput": {
+              "type": "boolean"
+            },
+            "reflectOutput": {
+              "type": "boolean"
+            },
+            "finalXor": {
+              "type": "string",
+              "pattern": "^0x[0-9A-Fa-f]+$"
+            }
+          }
+        },
+        "placement": {
+          "enum": [
+            "trailing",
+            "leading"
+          ],
+          "default": "trailing",
+          "description": "Where the check value sits in the frame."
+        },
+        "coverage": {
+          "enum": [
+            "length-to-payload-inclusive",
+            "payload-only",
+            "whole-frame-excluding-check"
+          ],
+          "description": "Which bytes the check value is calculated over."
+        },
+        "coverageEndMarker": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 255,
+          "description": "For delimiter-framed protocols whose own encoded check value sits inside the frame before endDelimiter, separated from the checksummed region by another byte -- e.g. NMEA 0183's '*' (0x2A) separates the checksummed sentence from the trailing checksum digits and CRLF. When set, coverage actually runs from the start delimiter up to (not including) this marker, which the coverage enum's frame-level phrasing doesn't say on its own -- 'payload-only' alone would ambiguously seem to include the checksum's own encoded digits."
+        },
+        "summationMode": {
+          "enum": [
+            "modulo",
+            "carry-wrapped"
+          ],
+          "default": "modulo",
+          "description": "How the running sum is computed for a plain sum-based algorithm (checksum-8/checksum-16), before finalTransform is applied. modulo: the sum simply wraps/truncates (mod 256 or 65536) -- checksum-8's own stated definition. carry-wrapped: any carry out of the top bit is added back into the running sum during each addition (the 'Internet checksum' / ones'-complement-sum technique) -- matches LIN's classic/enhanced checksum and IP/TCP/UDP header checksums exactly, which plain modulo summation does not."
+        },
+        "valueEncoding": {
+          "enum": [
+            "binary",
+            "ascii-hex",
+            "ascii-decimal"
+          ],
+          "default": "binary",
+          "description": "How the check value itself is transmitted, e.g. NMEA 0183 sends its XOR-8 checksum as two ASCII hex characters rather than a raw byte."
+        },
+        "finalTransform": {
+          "enum": [
+            "none",
+            "onesComplement",
+            "twosComplement"
+          ],
+          "default": "none",
+          "description": "Bitwise transform applied to the raw sum before it's placed in the frame -- lets algorithm cover simple 'complement' checksum families without a named preset per variant. twosComplement matches Modbus ASCII's LRC (negated 8-bit sum); onesComplement matches LIN's classic/enhanced checksum when paired with summationMode=carry-wrapped (LIN's checksum wraps carries back into the sum during addition, which finalTransform alone doesn't capture -- see summationMode)."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "algorithm": {
+                "const": "custom"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "customParameters"
+            ]
+          }
+        }
+      ]
+    },
+    "multipartTransfer": {
+      "type": "object",
+      "description": "Describes a transfer (a file, a firmware image, any payload too big for one frame) assembled from a sequence of ordinary frames -- rather than inventing new framing machinery, this ties together frames already defined in commands/responses and says how they chain: which field carries each packet's position, and how the receiver knows the transfer is finished.",
+      "required": [
+        "name",
+        "packetMessages",
+        "terminationCondition"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "packetMessages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Names of the command/response messages that carry chunks of this transfer, e.g. an initial-packet type and a follow-on-packet type. A protocol that reuses one ordinary message type for every chunk (only an internal field distinguishes 'first' from 'later', or even nothing at all beyond offset -- e.g. MAVLink FTP's FTP_Ack) lists that one name here."
+        },
+        "sequenceFieldName": {
+          "type": "string",
+          "description": "The field name, present in every listed packetMessages entry, carrying each packet's ORDINAL position -- 0, 1, 2, ... -- e.g. 'packetNumber' (G460) or 'blockNumber' (XMODEM). Mutually exclusive in practice with offsetFieldName: use whichever the protocol actually transmits."
+        },
+        "offsetFieldName": {
+          "type": "string",
+          "description": "The field name carrying each packet's absolute BYTE POSITION within the reassembled data, for protocols that address chunks by offset rather than by an incrementing count -- e.g. MAVLink FTP's 'offset', which lets a retry re-request a specific byte position directly rather than only ever extending a strict sequence. At least one of sequenceFieldName/offsetFieldName is required; a protocol could in principle transmit both, but none tried so far does."
+        },
+        "sessionFieldName": {
+          "type": "string",
+          "description": "Optional: field name carrying a session/handle id that scopes this specific transfer instance, established by a prior open-style exchange that isn't itself one of packetMessages -- e.g. MAVLink FTP's session id, returned by OpenFileRO's ack and echoed by every read/write against that file. Omit for protocols with no such handshake (G460, XMODEM)."
+        },
+        "totalLengthFieldName": {
+          "type": "string",
+          "description": "Optional: field name carrying the total reassembled length, if the protocol states one up front (usually only in the first packet)."
+        },
+        "terminationCondition": {
+          "enum": [
+            "total-length-reached",
+            "packet-count-field",
+            "control-message",
+            "explicit-last-packet-flag"
+          ],
+          "description": "How the receiver knows the transfer is complete. total-length-reached: stop once totalLengthFieldName bytes have been received in total (G460's large-item write). packet-count-field: an initial packet states the total packet count up front. control-message: a separate message, not one of packetMessages, signals the end (e.g. XMODEM's EndOfTransmission) -- there's no length or count negotiated at all. explicit-last-packet-flag: a field within the packet stream itself (one of packetMessages, not a separate message) is set on the final packet only -- e.g. MAVLink FTP's burstComplete flag on a BurstReadFile transfer."
+        },
+        "packetCountFieldName": {
+          "type": "string",
+          "description": "Required when terminationCondition=packet-count-field."
+        },
+        "terminationMessage": {
+          "type": "string",
+          "description": "Required when terminationCondition=control-message: the name of the message that signals completion."
+        },
+        "lastPacketFlagFieldName": {
+          "type": "string",
+          "description": "Required when terminationCondition=explicit-last-packet-flag: the field name, within packetMessages, that's set (nonzero/true) only on the final packet."
+        },
+        "reassembledIntegrityCheck": {
+          "description": "Optional end-to-end check computed over the WHOLE reassembled transfer, distinct from (and in addition to) whatever integrityCheck already covers each individual packet. Omit if there is none at all -- e.g. XMODEM has no such check; each block's own checksum is all there is, and a corrupted-but-individually-valid reordering would go undetected.",
+          "allOf": [
+            {
+              "$ref": "#/$defs/integrityCheck"
+            }
+          ]
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "sequenceFieldName"
+          ]
+        },
+        {
+          "required": [
+            "offsetFieldName"
+          ]
+        }
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "terminationCondition": {
+                "const": "packet-count-field"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "packetCountFieldName"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "terminationCondition": {
+                "const": "control-message"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "terminationMessage"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "terminationCondition": {
+                "const": "explicit-last-packet-flag"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "lastPacketFlagFieldName"
+            ]
+          }
+        }
+      ]
+    },
+    "lengthField": {
+      "type": "object",
+      "description": "Required for styles sync-length-payload-crc and type-length-value.",
+      "required": [
+        "sizeBytes",
+        "countsFrom"
+      ],
+      "properties": {
+        "sizeBytes": {
+          "type": "integer",
+          "enum": [
+            1,
+            2,
+            4
+          ]
+        },
+        "countsFrom": {
+          "enum": [
+            "length-field-to-crc-inclusive",
+            "payload-only",
+            "whole-frame"
+          ],
+          "description": "What the length value actually counts, e.g. G460 counts from <len> to <crc> inclusive; MAVLink's LEN counts payload-only."
+        },
+        "precedingHeaderBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Fixed-size header bytes that appear between the length field and the region it counts, but aren't themselves counted -- e.g. MAVLink v1's 4-byte seq/sysid/compid/msgid header sits after LEN but before the LEN-counted payload."
+        },
+        "repeated": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, the length value is sent twice in immediate succession as an on-wire redundancy check (both copies identical) -- e.g. M-Bus's long frame sends L, L before the sync pattern repeats."
+        }
+      }
+    },
+    "relatedInterface": {
+      "type": "object",
+      "required": [
+        "name",
+        "relationship"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the other interface/protocol, e.g. 'STM32 System Bootloader'."
+        },
+        "documentRef": {
+          "type": "string",
+          "description": "Optional: a filename, relative path, or URL identifying the other interface's own definition document, so the relationship is actually followable rather than just named -- e.g. 'pppos-uart-interface.json'."
+        },
+        "relationship": {
+          "enum": [
+            "bootloader-mode",
+            "alternate-protocol-same-wire",
+            "negotiated-upgrade"
+          ],
+          "description": "bootloader-mode: a firmware-update-specific protocol entered via a trigger, wholly distinct from normal operation. alternate-protocol-same-wire: two unrelated protocols happen to share one physical link (e.g. time-multiplexed, or selected by a strap/pin at power-up). negotiated-upgrade: the link starts in one protocol and switches to a different one once both sides agree -- e.g. an AT-command modem that drops into raw PPP after a specific command."
+        },
+        "triggerCommand": {
+          "type": "string",
+          "description": "Name of a command in THIS interface's own commands[], if any, that causes the switch."
+        },
+        "triggerResponse": {
+          "type": "string",
+          "description": "Name of a response message (in THIS interface's own responses[]) that specifically confirms the switch is happening, if the protocol has one distinct from an ordinary ack -- e.g. AT's CONNECT, distinct from OK. Omit if there's no such distinct confirmation."
+        },
+        "switchDelayMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How long after triggerResponse (or triggerCommand's ordinary ack, if there's no distinct triggerResponse) before the OTHER interface's framing actually begins on the wire. Zero if it begins immediately."
+        },
+        "fallbackBehavior": {
+          "enum": [
+            "none",
+            "reverts-on-timeout",
+            "reverts-on-explicit-command",
+            "requires-power-cycle"
+          ],
+          "default": "none",
+          "description": "What happens if the switch doesn't succeed, or how to return to THIS interface afterwards. none: no defined recovery -- if the switch fails, the link is simply stuck. reverts-on-timeout: falls back to this interface automatically if no valid traffic in the new protocol arrives within some window. reverts-on-explicit-command: a specific action (e.g. a break condition, or a command in the OTHER protocol) returns to this one. requires-power-cycle: there is no software-only way back at all."
+        },
+        "returnTrigger": {
+          "type": "string",
+          "description": "Free-text description of what returns the link to THIS interface, when fallbackBehavior isn't 'none' -- e.g. 'a break condition longer than 500ms', or a command name in the OTHER protocol. Not a resolvable reference, just documentation."
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

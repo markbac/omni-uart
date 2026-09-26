@@ -1,0 +1,104 @@
+{
+  "title": "NMEA 0183",
+  "version": "4.11",
+  "description": "ASCII, delimiter-framed sentence protocol used by GPS/marine navigation equipment. No commands/responses in the request-reply sense -- the device streams sentences unsolicited.",
+  "physicalLayer": {
+    "baudRate": 4800,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1,
+    "portType": "rs422",
+    "duplex": "simplex"
+  },
+  "encoding": {
+    "byteOrder": "big-endian",
+    "textEncoding": "ascii"
+  },
+  "framing": {
+    "style": "delimiter-framed",
+    "startDelimiter": 36,
+    "endDelimiter": [
+      13,
+      10
+    ],
+    "escapeByte": 92
+  },
+  "integrityCheck": {
+    "algorithm": "xor-8",
+    "placement": "trailing",
+    "coverage": "payload-only",
+    "coverageEndMarker": 42,
+    "valueEncoding": "ascii-hex"
+  },
+  "commandResponseModel": {
+    "initiator": "device"
+  },
+  "responses": [
+    {
+      "name": "GGA",
+      "description": "Global Positioning System Fix Data, e.g. $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47",
+      "fields": [
+        {
+          "name": "sentenceId",
+          "type": "string",
+          "constValue": "GPGGA",
+          "delimiter": ",",
+          "role": "discriminator"
+        },
+        {
+          "name": "utcTime",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "latitude",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "latitudeHemisphere",
+          "type": "enum",
+          "delimiter": ",",
+          "description": "N or S."
+        },
+        {
+          "name": "longitude",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "longitudeHemisphere",
+          "type": "enum",
+          "delimiter": ",",
+          "description": "E or W."
+        },
+        {
+          "name": "fixQuality",
+          "type": "enum",
+          "delimiter": ","
+        },
+        {
+          "name": "satellitesUsed",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "hdop",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "altitude",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "altitudeUnits",
+          "type": "enum",
+          "constValue": "M",
+          "delimiter": ","
+        }
+      ]
+    }
+  ]
+}
