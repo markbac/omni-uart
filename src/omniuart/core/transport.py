@@ -222,3 +222,71 @@ class HardwareSerialTransport(AsyncTransport):
             self._serial.rts = state
         else:
             raise ValueError(f"Unsupported pin: {pin}")
+
+
+class PipeTransport(AsyncTransport):
+    """Bidirectional in-memory pipe transport representing one endpoint of a virtual serial pair."""
+
+    def __init__(self, port_name: str = "VIRTUAL_COM1") -> None:
+        self.port_name = port_name
+        self._rx_queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self._peer: Optional[PipeTransport] = None
+        self._is_open = False
+
+    def connect_peer(self, peer: PipeTransport) -> None:
+        self._peer = peer
+
+    async def open(self) -> None:
+        self._is_open = True
+
+    async def close(self) -> None:
+        self._is_open = False
+
+    @property
+    def is_open(self) -> bool:
+        return self._is_open
+
+    async def write(self, data: bytes) -> int:
+        if not self._is_open or not self._peer:
+            raise RuntimeError("PipeTransport is not open or connected to peer.")
+        await self._peer._rx_queue.put(data)
+        return len(data)
+
+    async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
+        if not self._is_open:
+            raise RuntimeError("PipeTransport is not open.")
+
+        timeout_sec = (timeout_ms / 1000.0) if timeout_ms else None
+        try:
+            buf = bytearray()
+            while len(buf) < size:
+                if timeout_sec is not None:
+                    chunk = await asyncio.wait_for(self._rx_queue.get(), timeout=timeout_sec)
+                else:
+                    chunk = await self._rx_queue.get()
+                buf.extend(chunk)
+            return bytes(buf[:size])
+        except asyncio.TimeoutError:
+            return bytes(buf)
+
+    async def set_pin_state(self, pin: str, state: bool) -> None:
+        pass
+
+
+class VirtualSerialPair:
+    """Pair of linked virtual serial transports (host and device) for zero-hardware simulation."""
+
+    def __init__(self, host_port: str = "COM_HOST", device_port: str = "COM_DEVICE") -> None:
+        self.host = PipeTransport(port_name=host_port)
+        self.device = PipeTransport(port_name=device_port)
+        self.host.connect_peer(self.device)
+        self.device.connect_peer(self.host)
+
+    async def open(self) -> None:
+        await self.host.open()
+        await self.device.open()
+
+    async def close(self) -> None:
+        await self.host.close()
+        await self.device.close()
+
