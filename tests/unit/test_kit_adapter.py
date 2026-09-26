@@ -11,6 +11,8 @@ KIT_EXAMPLES_DIR = Path("../uart-interface-schema-kit/kit/examples")
 
 def test_load_all_kit_examples_except_g460() -> None:
     """Verify that all kit protocol examples load successfully into ProtocolSpec except g460."""
+    if not KIT_EXAMPLES_DIR.exists():
+        pytest.skip("KIT_EXAMPLES_DIR directory not present on runner")
     json_files = list(KIT_EXAMPLES_DIR.glob("*.json"))
     assert len(json_files) >= 25, "Expected at least 25 kit example protocol files"
 

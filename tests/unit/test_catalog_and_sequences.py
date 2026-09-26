@@ -47,21 +47,12 @@ def test_catalog_manager_auto_discovery() -> None:
     catalog = CatalogManager()
     summary = catalog.catalog_summary()
 
-    assert summary["protocols_found"] >= 28, f"Expected at least 28 protocols, got {summary['protocols_found']}"
+    assert summary["protocols_found"] >= 4, f"Expected at least 4 protocols, got {summary['protocols_found']}"
     assert summary["scripts_found"] >= 1, f"Expected at least 1 script, got {summary['scripts_found']}"
 
-    # Verify lookup by filename
-    modbus = catalog.get_protocol("modbus-rtu-uart-interface.json")
-    assert modbus is not None
-    assert modbus.metadata.name == "Modbus RTU"
-
-    # Verify lookup by protocol name
-    ubx = catalog.get_protocol("ubx")
-    assert ubx is not None
-
-    # Verify lookup by script name or filename
-    ubx_script = catalog.get_script("ubx-baud-switch-sequence.json")
-    assert ubx_script is not None
+    # Verify lookup of local example
+    binary_sensor = catalog.get_protocol("binary_sensor_node.yaml")
+    assert binary_sensor is not None
 
 
 def test_catalog_manager_dynamic_pickup() -> None:

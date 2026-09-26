@@ -16,7 +16,7 @@ from omniuart.docs_generator import (
 def test_generate_markdown_and_html_docs() -> None:
     """Verify generating Markdown and HTML documentation for a protocol."""
     catalog = CatalogManager()
-    spec = catalog.get_protocol("modbus-rtu")
+    spec = catalog.get_protocol("binary_sensor_node")
     assert spec is not None
 
     md = generate_markdown_docs(spec)
@@ -39,7 +39,7 @@ def test_build_site_documentation() -> None:
 
         index_html = (site_dir / "index.html").read_text(encoding="utf-8")
         assert "⚡ OmniUART Hardware Protocol Specification Hub" in index_html
-        assert "Modbus RTU" in index_html
+        assert "BinarySensorNode" in index_html
 
 
 def test_cli_docs_command() -> None:
