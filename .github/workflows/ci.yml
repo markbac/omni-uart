@@ -39,6 +39,8 @@ jobs:
             ui
             recorder
             spec
+            deps
+            docs
             packaging
             release
             standards

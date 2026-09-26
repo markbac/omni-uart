@@ -328,7 +328,11 @@ def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
         from omniuart.core.kit_adapter import parse_kit_protocol
         return parse_kit_protocol(data, source_name=source_name)
 
-    return ProtocolSpec.model_validate(data)
+    spec = ProtocolSpec.model_validate(data)
+    for cmd in spec.commands:
+        if not cmd.tags and any(kw in cmd.name.lower() for kw in ("version", "status", "info", "read", "get", "poll", "ping")):
+            cmd.tags.append("dashboard")
+    return spec
 
 
 def load_script(source: Union[str, Path]) -> ScriptSpec:
