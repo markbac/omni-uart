@@ -14,6 +14,13 @@ from typing import List, Optional
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.models import ProtocolSpec, load_protocol, load_script
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build command line argument parser."""
