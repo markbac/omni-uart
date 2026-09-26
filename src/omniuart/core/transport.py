@@ -9,6 +9,7 @@ import random
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+import serial
 import serial.tools.list_ports
 
 from omniuart.core.crc import calculate_crc
@@ -58,11 +59,26 @@ class AsyncTransport(abc.ABC):
         """Check if transport is currently connected and open."""
         pass
 
+    @abc.abstractmethod
+    async def set_pin_state(self, pin: str, state: bool) -> None:
+        """Set DTR or RTS control pin state."""
+        pass
+
+    async def pulse_pins(self, pin_sequence: List[Dict[str, Any]]) -> None:
+        """Pulse pin sequence, e.g. [{'pin': 'dtr', 'state': True, 'duration_ms': 100}]."""
+        for step in pin_sequence:
+            pin = str(step.get("pin", "")).lower()
+            state = bool(step.get("state", True))
+            duration = float(step.get("duration_ms", 10)) / 1000.0
+            await self.set_pin_state(pin, state)
+            if duration > 0:
+                await asyncio.sleep(duration)
+
 
 class VirtualTransport(AsyncTransport):
     """In-memory virtual MCU transport simulating hardware UART over async queues.
     
-    Supports offline loopback, latency jitter, and fault injection (CRC bit-flip, byte drop).
+    Supports offline loopback, latency jitter, fault injection, and simulated DTR/RTS pins.
     """
 
     def __init__(
@@ -83,6 +99,7 @@ class VirtualTransport(AsyncTransport):
         self._rx_queue: asyncio.Queue[bytes] = asyncio.Queue()
         self._is_open = False
         self._rule_responses: Dict[int, bytes] = {}
+        self.pin_states: Dict[str, bool] = {"dtr": False, "rts": False}
 
     async def open(self) -> None:
         """Connect virtual MCU transport."""
@@ -97,6 +114,13 @@ class VirtualTransport(AsyncTransport):
     @property
     def is_open(self) -> bool:
         return self._is_open
+
+    async def set_pin_state(self, pin: str, state: bool) -> None:
+        """Set virtual DTR or RTS pin state."""
+        pin_key = pin.lower()
+        if pin_key in self.pin_states:
+            self.pin_states[pin_key] = state
+            logger.info(f"Virtual pin '{pin_key}' set to {state}")
 
     def register_response(self, command_id: int, response_payload: bytes) -> None:
         """Register custom raw response bytes for a specific command ID."""
@@ -144,13 +168,57 @@ class VirtualTransport(AsyncTransport):
 
     def _generate_response(self, request_bytes: bytes) -> bytes:
         """Simulate MCU frame processing and generate valid/mock response frame."""
-        # Extract command ID if possible
         cmd_id = request_bytes[4] if len(request_bytes) > 4 else 0x01
         if cmd_id in self._rule_responses:
             return self._rule_responses[cmd_id]
 
-        # Default echo / status response payload: [AA 55 04 00 <CMD_ID> 00 <CRC16_L> <CRC16_H>]
         resp = bytearray([0xAA, 0x55, 0x02, 0x00, cmd_id, 0x00])
         crc = calculate_crc(resp[2:], "crc16_modbus")
         resp.extend(crc.to_bytes(2, "little"))
         return bytes(resp)
+
+
+class HardwareSerialTransport(AsyncTransport):
+    """Physical serial hardware port transport using PySerial."""
+
+    def __init__(self, port: str, baudrate: int = 115200, timeout: float = 1.0) -> None:
+        self.port = port
+        self.baudrate = baudrate
+        self.timeout = timeout
+        self._serial: Optional[serial.Serial] = None
+
+    async def open(self) -> None:
+        """Open physical serial port connection."""
+        self._serial = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
+        logger.info(f"Connected hardware serial port: {self.port} at {self.baudrate} bps")
+
+    async def close(self) -> None:
+        """Close physical serial port connection."""
+        if self._serial and self._serial.is_open:
+            self._serial.close()
+            logger.info(f"Closed hardware serial port: {self.port}")
+
+    @property
+    def is_open(self) -> bool:
+        return self._serial is not None and self._serial.is_open
+
+    async def write(self, data: bytes) -> int:
+        if not self.is_open or not self._serial:
+            raise RuntimeError("HardwareSerialTransport is not open.")
+        return self._serial.write(data)
+
+    async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
+        if not self.is_open or not self._serial:
+            raise RuntimeError("HardwareSerialTransport is not open.")
+        return self._serial.read(size)
+
+    async def set_pin_state(self, pin: str, state: bool) -> None:
+        if not self.is_open or not self._serial:
+            raise RuntimeError("HardwareSerialTransport is not open.")
+        pin_key = pin.lower()
+        if pin_key == "dtr":
+            self._serial.dtr = state
+        elif pin_key == "rts":
+            self._serial.rts = state
+        else:
+            raise ValueError(f"Unsupported pin: {pin}")
