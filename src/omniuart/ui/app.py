@@ -262,6 +262,20 @@ def index() -> str:
       overflow-x: auto;
       max-height: 400px;
     }
+    body.light-theme {
+      --bg-color: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --border: #cbd5e1;
+    }
+    body.compact-mode .card {
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    body.compact-mode pre.response-box {
+      max-height: 250px;
+      font-size: 0.85rem;
+    }
     .badge-tx { background: #0284c7; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-rx { background: #16a34a; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
   </style>
@@ -269,7 +283,9 @@ def index() -> str:
 <body>
   <header>
     <h2>⚡ OmniUART Universal Dynamic UI & Live Streamer</h2>
-    <div>
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <button onclick="document.body.classList.toggle('light-theme')" style="background:var(--card-bg); border:1px solid var(--border); color:var(--text); padding:5px 10px; border-radius:4px; cursor:pointer;">🌓 Theme</button>
+      <button onclick="document.body.classList.toggle('compact-mode')" style="background:var(--card-bg); border:1px solid var(--border); color:var(--text); padding:5px 10px; border-radius:4px; cursor:pointer;">↕️ Compact</button>
       <label>Select Protocol: </label>
       <select id="protocolSelect" onchange="loadProtocol(this.value)"></select>
     </div>
