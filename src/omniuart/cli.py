@@ -42,6 +42,13 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run", help="Execute an automated sequence test script")
     run_parser.add_argument("script", help="Script name or filename (e.g. ubx-baud-switch-sequence.json)")
 
+    # 5. docs (Generate Documentation)
+    docs_parser = subparsers.add_parser("docs", help="Auto-generate Markdown/HTML protocol specification documentation site")
+    docs_parser.add_argument("protocol", nargs="?", default=None, help="Protocol name or filename (or omitted when using --all)")
+    docs_parser.add_argument("--all", action="store_true", help="Build full documentation site for all discovered protocols")
+    docs_parser.add_argument("--format", choices=["markdown", "html"], default="html", help="Documentation output format")
+    docs_parser.add_argument("--output-dir", "-o", default="_site", help="Output directory path")
+
     return parser
 
 
@@ -163,6 +170,26 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"  Step {idx}: Pause for {step.delay_ms} ms")
         print("Script execution completed successfully.")
         return 0
+
+    elif args.subcommand == "docs":
+        from omniuart.docs_generator import build_site_documentation, generate_html_docs, generate_markdown_docs
+        out_dir = Path(args.output_dir)
+        if args.all or not args.protocol:
+            site_path = build_site_documentation(out_dir)
+            print(f"Built complete protocol documentation site at: {site_path.resolve()}")
+            return 0
+        else:
+            spec = catalog.get_protocol(args.protocol)
+            if not spec:
+                print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
+                return 1
+            out_dir.mkdir(parents=True, exist_ok=True)
+            doc_str = generate_html_docs(spec) if args.format == "html" else generate_markdown_docs(spec)
+            ext = "html" if args.format == "html" else "md"
+            target_file = out_dir / f"{spec.metadata.name.lower().replace(' ', '_')}.{ext}"
+            target_file.write_text(doc_str, encoding="utf-8")
+            print(f"Generated protocol docs: {target_file.resolve()}")
+            return 0
 
     else:
         parser.print_help()
