@@ -1,0 +1,122 @@
+# Hardware Protocol Specification: Bluetooth HCI UART Transport (H4)
+
+**Version**: `5.4`  
+**Physical Layer**: `115200 bps, 8N1.0`  
+**Framing**: `binary`  
+**Integrity Algorithm**: `none`  
+
+## Description
+Host <-> Bluetooth radio controller link. Includes HCI_Set_AFH_Host_Channel_Classification, which is literally a frequency-hopping control command: it tells the radio which of Bluetooth's 79 hop channels to avoid. No checksum at all -- H4 relies entirely on the underlying UART/transport for integrity.
+
+## Command Catalog & Message Signatures
+
+### Category: GENERAL
+
+#### `HCI_Set_AFH_Host_Channel_Classification` (Command ID: `0xC3F`) - typeField=0x01 (Command), using framing's top-level lengthField (no variantsByType entry needed for Command itself). opcode is now a named, typed position=before-length-field value (OGF=0x03 Host Controller & Baseband, OCF=0x3F -> 0x0C3F) rather than an anonymous 2-byte count, and doubles as this message's discriminator against any other Command. The 10-byte channel map below is the LENGTH-counted payload: 79 bits, one per hop channel (1=unknown/usable, 0=bad), packed LSB-first.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `opcode` | `uint16` | - | - | - |
+| `channelClassification` | `bytes` | - | - | - |
+
+#### `HCI_ACL_Data` (Command ID: `0x01`) - typeField=0x02, selecting the variantsByType['2'] override: LENGTH is 2 bytes here (Data Total Length), not 1 -- ACL packets can carry far more data than a Command's single-byte length would allow. handleAndFlags is now correctly position=before-length-field -- it isn't part of the LENGTH-counted region either.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `handleAndFlags` | `bytes` | - | - | - |
+| `data` | `bytes` | - | - | - |
+
+## Formal AsyncAPI 2.6.0 Specification
+
+```yaml
+asyncapi: 2.6.0
+info:
+  title: Bluetooth HCI UART Transport (H4)
+  version: '5.4'
+  description: 'Host <-> Bluetooth radio controller link. Includes HCI_Set_AFH_Host_Channel_Classification,
+    which is literally a frequency-hopping control command: it tells the radio which
+    of Bluetooth''s 79 hop channels to avoid. No checksum at all -- H4 relies entirely
+    on the underlying UART/transport for integrity.'
+  contact:
+    name: Mark Bacon
+servers:
+  serial_link:
+    url: serial://tty/115200
+    protocol: serial
+    description: Physical UART Transport (115200 bps, 8N1.0)
+    bindings:
+      serial:
+        baudRate: 115200
+        dataBits: 8
+        parity: none
+        stopBits: 1.0
+        framingType: binary
+        integrity: none
+channels:
+  omniuart/cmd/HCI_Set_AFH_Host_Channel_Classification:
+    publish:
+      summary: 'Send command HCI_Set_AFH_Host_Channel_Classification (ID: 0xC3F)'
+      description: 'typeField=0x01 (Command), using framing''s top-level lengthField
+        (no variantsByType entry needed for Command itself). opcode is now a named,
+        typed position=before-length-field value (OGF=0x03 Host Controller & Baseband,
+        OCF=0x3F -> 0x0C3F) rather than an anonymous 2-byte count, and doubles as
+        this message''s discriminator against any other Command. The 10-byte channel
+        map below is the LENGTH-counted payload: 79 bits, one per hop channel (1=unknown/usable,
+        0=bad), packed LSB-first.'
+      message:
+        name: HCI_Set_AFH_Host_Channel_Classification_Message
+        title: HCI_Set_AFH_Host_Channel_Classification Command
+        payload:
+          $ref: '#/components/schemas/HCI_Set_AFH_Host_Channel_Classification_Request'
+  omniuart/cmd/HCI_ACL_Data:
+    publish:
+      summary: 'Send command HCI_ACL_Data (ID: 0x01)'
+      description: 'typeField=0x02, selecting the variantsByType[''2''] override:
+        LENGTH is 2 bytes here (Data Total Length), not 1 -- ACL packets can carry
+        far more data than a Command''s single-byte length would allow. handleAndFlags
+        is now correctly position=before-length-field -- it isn''t part of the LENGTH-counted
+        region either.'
+      message:
+        name: HCI_ACL_Data_Message
+        title: HCI_ACL_Data Command
+        payload:
+          $ref: '#/components/schemas/HCI_ACL_Data_Request'
+components:
+  messages: {}
+  schemas:
+    HCI_Set_AFH_Host_Channel_Classification_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 3135
+          description: Opcode ID for HCI_Set_AFH_Host_Channel_Classification
+        opcode:
+          type: integer
+        channelClassification:
+          type: integer
+      description: 'typeField=0x01 (Command), using framing''s top-level lengthField
+        (no variantsByType entry needed for Command itself). opcode is now a named,
+        typed position=before-length-field value (OGF=0x03 Host Controller & Baseband,
+        OCF=0x3F -> 0x0C3F) rather than an anonymous 2-byte count, and doubles as
+        this message''s discriminator against any other Command. The 10-byte channel
+        map below is the LENGTH-counted payload: 79 bits, one per hop channel (1=unknown/usable,
+        0=bad), packed LSB-first.'
+    HCI_ACL_Data_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 1
+          description: Opcode ID for HCI_ACL_Data
+        handleAndFlags:
+          type: integer
+        data:
+          type: integer
+      description: 'typeField=0x02, selecting the variantsByType[''2''] override:
+        LENGTH is 2 bytes here (Data Total Length), not 1 -- ACL packets can carry
+        far more data than a Command''s single-byte length would allow. handleAndFlags
+        is now correctly position=before-length-field -- it isn''t part of the LENGTH-counted
+        region either.'
+
+```

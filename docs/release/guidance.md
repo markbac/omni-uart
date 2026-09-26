@@ -1,17 +1,17 @@
-# OmniUART Release Guidance & User Manual
+# OmniUART Release Guidance & Complete User Manual
 
 ## 1. Quickstart Guide (No Python Required)
 
-OmniUART is distributed as a standalone, single-file binary. You do **not** need Python installed.
+OmniUART is distributed as a standalone, single-file binary for **Windows** and **Linux**. You do **not** need Python installed.
 
-### 1.1 Download and Run
+### 1.1 Download Links & Installation
 
 #### Windows
-1. Download `omni-uart-windows-amd64.exe` from the latest GitHub Release.
-2. Open PowerShell or Command Prompt.
-3. Verify installation:
+1. Download `omni-uart-windows-amd64.zip` from the latest GitHub Release.
+2. Extract the zip archive.
+3. Double-click `omni-uart-windows-amd64.exe` to launch the **Interactive Web UI** immediately in your default browser, or run via PowerShell:
    ```powershell
-   .\omni-uart-windows-amd64.exe --version
+   .\omni-uart-windows-amd64.exe --help
    ```
 
 #### Linux
@@ -19,161 +19,90 @@ OmniUART is distributed as a standalone, single-file binary. You do **not** need
 2. Extract and make executable:
    ```bash
    tar -xzf omni-uart-linux-amd64.tar.gz
-   chmod +x omni-uart
-   ./omni-uart --version
-   ```
-
-#### macOS
-1. Download `omni-uart-macos-universal.tar.gz`.
-2. Extract and run:
-   ```bash
-   tar -xzf omni-uart-macos-universal.tar.gz
-   chmod +x omni-uart
-   ./omni-uart --version
+   chmod +x omni-uart-linux-amd64
+   ./omni-uart-linux-amd64 --help
    ```
 
 ---
 
-## 2. Operational Modes
+## 2. Execution Modes & CLI Reference
 
-### Mode 1: Interactive CLI & Direct Commands
-Send individual commands to a target hardware device or virtual simulator:
-
+### 2.1 Interactive GUI Mode (Default Double-Click)
+Running the executable with no CLI parameters automatically starts the local Web UI server and opens your browser:
 ```bash
-# List available hardware serial ports
-omni-uart ports
-
-# Send a command to a physical serial port
-omni-uart send set_led --protocol protocols/sensor_node.yaml --port COM3 --baud 115200 --color red --brightness 80
-
-# Send a command in offline Virtual Device mode
-omni-uart send ping --protocol protocols/sensor_node.yaml --virtual
-
-# Sniff and decode incoming frames live
-omni-uart monitor --protocol protocols/sensor_node.yaml --port COM3
-
-# Sniff with byte-level color dissection and CRC debugging
-omni-uart monitor --protocol protocols/sensor_node.yaml --port COM3 --debug-dissect
-
-# Record live traffic to a JSON Lines or CSV session file
-omni-uart monitor --protocol protocols/sensor_node.yaml --port COM3 --record session_capture.jsonl
-
-# Export recorded session data to CSV or raw binary
-omni-uart session export session_capture.jsonl --format csv -o session_capture.csv
+# Starts Web UI on http://127.0.0.1:8000 and opens browser
+omni-uart
 ```
-
-### Mode 2: Automated Script Runner
-Run automated validation and regression test suites with assertions:
-
+Or specify custom host/port:
 ```bash
-# Run a test script against physical device and record full session
-omni-uart run scripts/sensor_test_suite.yaml --protocol protocols/sensor_node.yaml --port COM3 --record test_session.jsonl
-
-# Run a test script in CI using Virtual MCU loopback (no hardware needed)
-omni-uart run scripts/sensor_test_suite.yaml --protocol protocols/sensor_node.yaml --virtual --report-json report.json
+omni-uart ui --host 127.0.0.1 --port 8080
 ```
 
-### Mode 3: Dynamic Web Dashboard
-Launch the schema-driven web UI:
+### 2.2 CLI Commands
 
+#### 1. `list`: Auto-Discover Catalog Protocols & Scripts
 ```bash
-# Launch dynamic web UI on default port (http://127.0.0.1:8080)
-omni-uart ui --protocol protocols/sensor_node.yaml
-
-# Launch on custom host/port
-omni-uart ui --protocol protocols/sensor_node.yaml --host 0.0.0.0 --port 9000
+omni-uart list
 ```
-The browser will automatically open, providing dynamic form controls, real-time packet inspectors, and live telemetry graphs.
+Displays all 32+ discovered protocol definition files and test scripts. Use `--json` for structured JSON output.
 
----
-
-## 3. Protocol Authoring Guide
-
-Protocols are defined in YAML or JSON. A minimal binary protocol definition:
-
-```yaml
-schema_version: "1.0.0"
-metadata:
-  name: "SimpleSensor"
-  version: "1.0.0"
-
-serial_config:
-  baudrate: 115200
-
-framing:
-  type: "binary"
-  header: [0xAA, 0x55]
-  length:
-    type: "uint16"
-    endian: "little"
-    includes: "payload_only"
-  command_id:
-    type: "uint8"
-  integrity:
-    algorithm: "crc16_modbus"
-
-commands:
-  - name: "read_temperature"
-    id: 0x01
-    parameters: []
-    response:
-      id: 0x81
-      timeout_ms: 1000
-      fields:
-        - name: "temp_celsius"
-          type: "float32"
-          endian: "little"
-          unit: "°C"
-```
-
-### Defining a Custom CRC (Rocksoft Model)
-If your hardware uses a custom or proprietary polynomial, configure the `integrity` block directly:
-
-```yaml
-framing:
-  type: "binary"
-  header: [0xAA, 0x55]
-  integrity:
-    algorithm: "custom"
-    width: 16             # Bit width (8, 16, 24, 32)
-    poly: 0x1021          # Polynomial
-    init: 0xFFFF          # Initial value
-    refin: false          # Reflect input bytes
-    refout: false         # Reflect output register
-    xorout: 0x0000        # Final XOR value
-    endian: "big"         # Output endianness in frame
-```
-
-Validate your protocol definition against the formal schema before use:
+#### 2. `info`: Protocol Help & Tagged Command Catalog
 ```bash
-omni-uart validate protocols/my_protocol.yaml
+omni-uart info binary_sensor_node.yaml
+omni-uart info ubx-uart-interface.json
+```
+Displays baud rate, bytesize, framing rules, CRC integrity algorithm, parameters, response fields, and tag categories (`[DASHBOARD TAB]`, `[GENERAL TAB]`).
+
+#### 3. `send`: Format & Dispatch Command
+```bash
+omni-uart send binary_sensor_node.yaml get_readings --params channel=1
+```
+Formats header framing, packs fields, computes CRC, and decodes MCU response.
+
+#### 4. `run`: Execute Automated Test Sequence Script
+```bash
+omni-uart run sensor_test_suite.yaml
+omni-uart run ubx-baud-switch-sequence.json
+```
+Sequentially runs command steps, evaluates field assertions, and verifies response timeouts.
+
+#### 5. `fuzz`: Boundary Mutation Campaign Engine
+```bash
+omni-uart fuzz binary_sensor_node.yaml --vectors 50
+```
+Runs a 50-vector mutation campaign against MCU firmware, testing resilience to corrupted lengths, invalid CRCs, payload boundary values, and string overflows.
+
+#### 6. `replay`: Session Replay Engine
+```bash
+omni-uart replay session_log.jsonl --speed 2.0
+```
+Replays previously recorded `.jsonl` serial transactions back onto physical hardware or virtual loopback transports at 2.0x playback speed.
+
+#### 7. `lint` & `convert`: Protocol Linter & Converter
+```bash
+omni-uart lint my_custom_protocol.yaml
+omni-uart convert my_legacy_protocol.yaml -o schemas/my_protocol_kit.json
+```
+
+#### 8. `docs`: Build Static HTML/Markdown Documentation
+```bash
+omni-uart docs --all --output-dir _site
+```
+
+#### 9. `--log-file` and `--log-level`: Persistent File Logging
+```bash
+omni-uart --log-file ~/.omniuart/logs/session.log --log-level DEBUG list
 ```
 
 ---
 
-## 4. Automation Script Authoring Guide
+## 3. Dynamic Web UI Features
 
-Automation scripts define ordered steps and assertions:
-
-```yaml
-version: "1.0.0"
-meta:
-  name: "Temperature Verification"
-  protocol: "protocols/my_protocol.yaml"
-
-config:
-  abort_on_error: true
-  default_timeout_ms: 1000
-
-steps:
-  - name: "Query Temperature"
-    command: "read_temperature"
-    expect_response: "read_temperature_response"
-    assertions:
-      - field: "temp_celsius"
-        op: ">="
-        value: 15.0
-      - field: "temp_celsius"
-        op: "<="
-        value: 40.0
-```
+1. **Protocol Dropdown Selector**: Switch between any discovered hardware protocol interactively.
+2. **Tag-Based Dynamic Tabs**: Generates tabs based on tags in protocol definitions.
+3. **Auto-Run Dashboard Tab**: Automatically executes `dashboard`-tagged diagnostic commands on protocol switch to query hardware firmware version and uptime.
+4. **60 FPS Real-Time WebSocket Comms Monitor**: Side-by-side visualization of raw hex frames and decoded key-value semantic byte trees.
+5. **Theme Toggle & High-Density Compact Mode**:
+   - `🌓 Theme`: Toggle between Dark, Light, and High-Contrast terminal modes.
+   - `↕️ Compact`: Toggle high-density view for analyzing high-frequency 100 Hz+ packet streams.
+6. **Session Exporters**: Export live serial captures directly to **Wireshark PCAPNG (`.pcapng`)**, **JSON Lines (`.jsonl`)**, **CSV (`.csv`)**, or **Raw Binary (`.bin`)**.

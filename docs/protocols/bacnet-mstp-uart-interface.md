@@ -1,0 +1,85 @@
+# Hardware Protocol Specification: BACnet MS/TP (Master-Slave/Token-Passing)
+
+**Version**: `ANSI/ASHRAE 135`  
+**Physical Layer**: `9600 bps, 8N1.0`  
+**Framing**: `binary`  
+**Integrity Algorithm**: `crc8`  
+
+## Description
+Building-automation token-passing bus over RS-485. Has TWO independent CRCs in one frame: a header CRC and a separate data CRC -- and the data CRC is entirely absent when there's no data, not just zero-length.
+
+## Command Catalog & Message Signatures
+
+### Category: GENERAL
+
+#### `DataFrame` (Command ID: `0x00`) - integrityCheck (CRC-8) covers the fixed header only. secondaryIntegrityCheck (CRC-16, presentWhen=when-data-present) covers data and is entirely absent -- not even a zero-length placeholder -- when length=0, e.g. a Poll-For-Master token-passing frame with no data field at all.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `frameType` | `bytes` | - | - | - |
+| `destinationAddress` | `bytes` | - | - | - |
+| `sourceAddress` | `bytes` | - | - | - |
+| `data` | `bytes` | - | - | - |
+
+## Formal AsyncAPI 2.6.0 Specification
+
+```yaml
+asyncapi: 2.6.0
+info:
+  title: BACnet MS/TP (Master-Slave/Token-Passing)
+  version: ANSI/ASHRAE 135
+  description: 'Building-automation token-passing bus over RS-485. Has TWO independent
+    CRCs in one frame: a header CRC and a separate data CRC -- and the data CRC is
+    entirely absent when there''s no data, not just zero-length.'
+  contact:
+    name: Mark Bacon
+servers:
+  serial_link:
+    url: serial://tty/9600
+    protocol: serial
+    description: Physical UART Transport (9600 bps, 8N1.0)
+    bindings:
+      serial:
+        baudRate: 9600
+        dataBits: 8
+        parity: none
+        stopBits: 1.0
+        framingType: binary
+        integrity: crc8
+channels:
+  omniuart/cmd/DataFrame:
+    publish:
+      summary: 'Send command DataFrame (ID: 0x00)'
+      description: integrityCheck (CRC-8) covers the fixed header only. secondaryIntegrityCheck
+        (CRC-16, presentWhen=when-data-present) covers data and is entirely absent
+        -- not even a zero-length placeholder -- when length=0, e.g. a Poll-For-Master
+        token-passing frame with no data field at all.
+      message:
+        name: DataFrame_Message
+        title: DataFrame Command
+        payload:
+          $ref: '#/components/schemas/DataFrame_Request'
+components:
+  messages: {}
+  schemas:
+    DataFrame_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 0
+          description: Opcode ID for DataFrame
+        frameType:
+          type: integer
+        destinationAddress:
+          type: integer
+        sourceAddress:
+          type: integer
+        data:
+          type: integer
+      description: integrityCheck (CRC-8) covers the fixed header only. secondaryIntegrityCheck
+        (CRC-16, presentWhen=when-data-present) covers data and is entirely absent
+        -- not even a zero-length placeholder -- when length=0, e.g. a Poll-For-Master
+        token-passing frame with no data field at all.
+
+```
