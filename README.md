@@ -125,6 +125,8 @@ For commit conventions, scopes, branch naming, and release procedures, please re
 
 ---
 
-## License
+## License & Authorship
 
-OmniUART is licensed under the [MIT License](LICENSE).
+OmniUART is copyright © 2026 **Mark Bacon** and licensed under the [MIT License](LICENSE).
+
+> **AI Collaboration Statement**: OmniUART was architected, developed, and verified in pair-programming collaboration between Mark Bacon and AI autonomous coding agents (Google Antigravity). All legal copyright and rights are held by Mark Bacon under the MIT License.
