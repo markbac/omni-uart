@@ -72,6 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
     fuzz_parser.add_argument("protocol", help="Protocol name or filename to fuzz")
     fuzz_parser.add_argument("--vectors", "-n", type=int, default=20, help="Number of fuzz test vectors to run")
 
+    # 9. replay (Session Replay Engine)
+    replay_parser = subparsers.add_parser("replay", help="Replay recorded session transactions onto a serial transport")
+    replay_parser.add_argument("session_file", help="Path to recorded .jsonl session file")
+    replay_parser.add_argument("--speed", type=float, default=1.0, help="Playback speed multiplier (default: 1.0)")
+
     return parser
 
 
@@ -256,6 +261,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"  Handled / Rejected     : {report.handled_count}")
         print(f"  Hangs / Timeouts       : {report.hang_count}")
         print(f"  Crashes / Errors       : {report.crash_count}")
+        return 0
+
+    elif args.subcommand == "replay":
+        import asyncio
+        from omniuart.core.replayer import SessionReplayer
+        from omniuart.core.transport import VirtualTransport
+        print(f"Replaying session file: {args.session_file} (speed: {args.speed}x)...")
+        transport = VirtualTransport(latency_ms=1.0)
+        replayer = SessionReplayer(transport, speed_multiplier=args.speed)
+        count = asyncio.run(replayer.replay_file(args.session_file))
+        print(f"Successfully replayed {count} frames.")
         return 0
 
     else:
