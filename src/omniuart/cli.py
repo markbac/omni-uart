@@ -58,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
     convert_parser.add_argument("file", help="Path to legacy protocol definition file")
     convert_parser.add_argument("--output", "-o", help="Output JSON file path")
 
+    # 8. fuzz (Protocol Fuzzer & MCU Stress Tester)
+    fuzz_parser = subparsers.add_parser("fuzz", help="Run automated fuzzing & MCU firmware stress testing campaign")
+    fuzz_parser.add_argument("protocol", help="Protocol name or filename to fuzz")
+    fuzz_parser.add_argument("--vectors", "-n", type=int, default=20, help="Number of fuzz test vectors to run")
+
     return parser
 
 
@@ -219,6 +224,25 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"Successfully converted '{args.file}' to kit schema format: {args.output}")
         else:
             print(json.dumps(kit_data, indent=2))
+        return 0
+
+    elif args.subcommand == "fuzz":
+        import asyncio
+        from omniuart.core.fuzzer import ProtocolFuzzer
+        from omniuart.core.transport import VirtualTransport
+        spec = catalog.get_protocol(args.protocol)
+        if not spec:
+            print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
+            return 1
+        print(f"Starting Fuzzing Campaign for '{spec.metadata.name}' ({args.vectors} vectors)...")
+        fuzzer = ProtocolFuzzer(spec)
+        transport = VirtualTransport(spec, latency_ms=1.0)
+        report = asyncio.run(fuzzer.run_campaign(transport, max_vectors=args.vectors))
+        print(f"Campaign Completed:")
+        print(f"  Total Vectors Executed : {report.total_vectors}")
+        print(f"  Handled / Rejected     : {report.handled_count}")
+        print(f"  Hangs / Timeouts       : {report.hang_count}")
+        print(f"  Crashes / Errors       : {report.crash_count}")
         return 0
 
     else:
