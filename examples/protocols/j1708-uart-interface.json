@@ -1,0 +1,50 @@
+{
+  "title": "SAE J1708",
+  "version": "J1708",
+  "description": "Heavy-vehicle diagnostic multi-drop bus. Fixed 9600 8N1 -- no parity at all, unlike M-Bus's 8E1 or G460's default -- a third distinct combination across the protocols tried so far.",
+  "physicalLayer": {
+    "baudRate": 9600,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "silence-delimited",
+    "interFrameSilenceChars": 2
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "finalTransform": "twosComplement",
+    "placement": "trailing",
+    "coverage": "whole-frame-excluding-check"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "fieldTypes": {
+    "messageId": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    }
+  },
+  "commands": [
+    {
+      "name": "Message",
+      "description": "MID implies the message's format/length via an external lookup, much like LIN's identifier -- though here the boundary itself comes from bus silence, not a table (Message/data here has whatever length the specific MID's fields sum to).",
+      "fields": [
+        {
+          "name": "mid",
+          "type": "messageId"
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    }
+  ]
+}

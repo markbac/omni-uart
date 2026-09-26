@@ -1,0 +1,39 @@
+{
+  "title": "SLIP (Serial Line Internet Protocol)",
+  "version": "RFC 1055",
+  "description": "Pure framing protocol -- carries an arbitrary encapsulated packet (typically IP) with no application-level commands or integrity check of its own.",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "delimiter-framed",
+    "startDelimiter": 192,
+    "endDelimiter": 192,
+    "escapeByte": 219
+  },
+  "integrityCheck": {
+    "algorithm": "none",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "commands": [
+    {
+      "name": "EncapsulatedPacket",
+      "description": "The opaque packet being carried (e.g. an IP datagram); SLIP does not interpret it.",
+      "fields": [
+        {
+          "name": "data",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    }
+  ]
+}

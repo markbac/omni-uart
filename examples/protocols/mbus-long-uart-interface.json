@@ -1,0 +1,72 @@
+{
+  "title": "M-Bus (EN 13757-2/3), long/control frame",
+  "version": "EN 13757-2",
+  "description": "START L L START C A CI DATA CHECKSUM STOP -- the length is sent twice and the start byte repeats after it, both as on-wire redundancy checks; a STOP byte closes the frame after the checksum too.",
+  "physicalLayer": {
+    "baudRate": [
+      300,
+      600,
+      1200,
+      2400,
+      4800,
+      9600
+    ],
+    "defaultBaudRate": 2400,
+    "dataBits": 8,
+    "parity": "even",
+    "stopBits": 1,
+    "electricalStandard": "current-loop",
+    "duplex": "half"
+  },
+  "encoding": {
+    "byteOrder": "little-endian"
+  },
+  "framing": {
+    "style": "sync-length-payload-crc",
+    "syncBytes": [
+      104
+    ],
+    "syncRepeatsAfterLength": true,
+    "lengthField": {
+      "sizeBytes": 1,
+      "countsFrom": "payload-only",
+      "repeated": true
+    },
+    "trailingDelimiter": 22
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "device"
+  },
+  "responses": [
+    {
+      "name": "LongFrame",
+      "fields": [
+        {
+          "name": "cField",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "aField",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "ciField",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    }
+  ]
+}

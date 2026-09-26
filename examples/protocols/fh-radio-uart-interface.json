@@ -1,0 +1,155 @@
+{
+  "title": "Illustrative Frequency-Hopping Combat Net Radio Control Interface (fictional)",
+  "version": "0.1-illustrative",
+  "description": "NOT derived from, or a model of, any specific fielded system's published ICD -- no such document is publicly available. Built only from unclassified, widely-taught operator-level concepts (net ID, hopset/keyset selection by index, time-of-day sync, channel lockout, single-channel fallback) to exercise the schema against this domain without claiming to be real.",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "little-endian"
+  },
+  "framing": {
+    "style": "sync-length-payload-crc",
+    "syncBytes": [
+      126
+    ],
+    "lengthField": {
+      "sizeBytes": 1,
+      "countsFrom": "payload-only"
+    }
+  },
+  "integrityCheck": {
+    "algorithm": "crc-16-ccitt-false",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "client",
+    "commandTimeoutMs": 200,
+    "responseTimeoutMs": 2000,
+    "retryPolicy": "application-level"
+  },
+  "fieldTypes": {
+    "modeStatus": {
+      "baseType": "bitfield",
+      "sizeBytes": 1,
+      "bits": [
+        {
+          "name": "hoppingEnabled",
+          "widthBits": 1
+        },
+        {
+          "name": "netSynced",
+          "widthBits": 1
+        },
+        {
+          "name": "todValid",
+          "widthBits": 1
+        },
+        {
+          "name": "reserved",
+          "widthBits": 5
+        }
+      ]
+    }
+  },
+  "commands": [
+    {
+      "name": "SetNetId",
+      "tags": [
+        "net-control"
+      ],
+      "description": "Selects which hopping net this radio joins. Does not carry key material.",
+      "fields": [
+        {
+          "name": "netId",
+          "type": "uint",
+          "sizeBytes": 1
+        }
+      ]
+    },
+    {
+      "name": "SelectHopset",
+      "tags": [
+        "net-control"
+      ],
+      "description": "Selects a hopset/keyset by index into a locally fill-loaded table -- the index only, never the keyset contents.",
+      "fields": [
+        {
+          "name": "hopsetIndex",
+          "type": "uint",
+          "sizeBytes": 1
+        }
+      ]
+    },
+    {
+      "name": "SetTimeOfDay",
+      "tags": [
+        "net-control"
+      ],
+      "description": "Synchronises the radio's hop-timing clock.",
+      "fields": [
+        {
+          "name": "secondsSinceEpoch",
+          "type": "uint",
+          "sizeBytes": 4
+        }
+      ]
+    },
+    {
+      "name": "SetChannelLockout",
+      "tags": [
+        "frequency-management"
+      ],
+      "description": "Marks channels as excluded from the hop pattern (e.g. known-interfered channels), analogous in spirit to Bluetooth's AFH channel classification.",
+      "fields": [
+        {
+          "name": "lockoutBitmap",
+          "type": "bytes",
+          "sizeBytes": 16
+        }
+      ]
+    },
+    {
+      "name": "SetSingleChannelFrequency",
+      "tags": [
+        "frequency-management"
+      ],
+      "description": "Fallback non-hopping ('single channel') operating frequency.",
+      "fields": [
+        {
+          "name": "frequencyHz",
+          "type": "uint",
+          "sizeBytes": 4
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "StatusResponse",
+      "tags": [
+        "net-control",
+        "frequency-management"
+      ],
+      "fields": [
+        {
+          "name": "status",
+          "type": "modeStatus"
+        }
+      ]
+    }
+  ],
+  "tags": [
+    {
+      "name": "net-control",
+      "description": "Net membership, keyset selection, timing sync."
+    },
+    {
+      "name": "frequency-management",
+      "description": "Channel lockout and fallback frequency."
+    }
+  ]
+}

@@ -1,0 +1,151 @@
+{
+  "title": "Modbus RTU",
+  "version": "1.0",
+  "description": "Modbus over serial, RTU transmission mode. Frame boundaries are marked by line silence rather than sync bytes or a length field.",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "even",
+    "stopBits": 1,
+    "portType": "rs485",
+    "electricalStandard": "rs485",
+    "duplex": "half",
+    "transmitEnableControl": "rts-toggle"
+  },
+  "encoding": {
+    "byteOrder": "big-endian",
+    "textEncoding": "ascii"
+  },
+  "framing": {
+    "style": "silence-delimited",
+    "interFrameSilenceChars": 3.5
+  },
+  "integrityCheck": {
+    "algorithm": "crc-16-modbus",
+    "placement": "trailing",
+    "coverage": "whole-frame-excluding-check",
+    "valueEncoding": "binary"
+  },
+  "commandResponseModel": {
+    "initiator": "client",
+    "responseTimeoutMs": 1000,
+    "retryPolicy": "application-level"
+  },
+  "fieldTypes": {
+    "slaveAddress": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    },
+    "functionCode": {
+      "baseType": "enum",
+      "sizeBytes": 1,
+      "enumValues": {
+        "3": "ReadHoldingRegisters",
+        "6": "WriteSingleRegister",
+        "16": "WriteMultipleRegisters"
+      }
+    },
+    "register": {
+      "baseType": "uint",
+      "sizeBytes": 2,
+      "byteOrder": "big-endian"
+    }
+  },
+  "commands": [
+    {
+      "name": "ReadHoldingRegistersRequest",
+      "description": "Function 0x03: read a block of holding registers.",
+      "fields": [
+        {
+          "name": "slaveAddress",
+          "type": "slaveAddress"
+        },
+        {
+          "name": "functionCode",
+          "type": "functionCode",
+          "constValue": 3,
+          "role": "discriminator"
+        },
+        {
+          "name": "startAddress",
+          "type": "register"
+        },
+        {
+          "name": "quantity",
+          "type": "register",
+          "units": "registers"
+        }
+      ]
+    },
+    {
+      "name": "WriteSingleRegisterRequest",
+      "description": "Function 0x06: write one holding register.",
+      "fields": [
+        {
+          "name": "slaveAddress",
+          "type": "slaveAddress"
+        },
+        {
+          "name": "functionCode",
+          "type": "functionCode",
+          "constValue": 6,
+          "role": "discriminator"
+        },
+        {
+          "name": "registerAddress",
+          "type": "register"
+        },
+        {
+          "name": "value",
+          "type": "register"
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "ReadHoldingRegistersResponse",
+      "fields": [
+        {
+          "name": "slaveAddress",
+          "type": "slaveAddress"
+        },
+        {
+          "name": "functionCode",
+          "type": "functionCode",
+          "constValue": 3,
+          "role": "discriminator"
+        },
+        {
+          "name": "byteCount",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "registerValues",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    },
+    {
+      "name": "ExceptionResponse",
+      "description": "functionCode returned with its top bit set (i.e. original code + 0x80) -- a RANGE-based discriminator (\"top bit set\"), which this schema can't express as a constValue; no role=discriminator marking possible here, a genuine minor gap.",
+      "fields": [
+        {
+          "name": "slaveAddress",
+          "type": "slaveAddress"
+        },
+        {
+          "name": "functionCode",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "exceptionCode",
+          "type": "uint",
+          "sizeBytes": 1
+        }
+      ]
+    }
+  ]
+}

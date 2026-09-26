@@ -1,0 +1,120 @@
+{
+  "title": "SCPI (Standard Commands for Programmable Instruments) over RS-232",
+  "version": "SCPI-99 / IEEE 488.2",
+  "description": "ASCII line-based instrument control (oscilloscopes, PSUs, DMMs). Baud is configured manually on both sides -- no auto-negotiation -- and commonly must match exactly or the instrument just doesn't respond, with no error reported at all. Chains multiple independent commands onto one physical line via ';', which compoundMessageDelimiter exists specifically for.",
+  "physicalLayer": {
+    "baudRate": [
+      9600,
+      19200,
+      38400,
+      57600,
+      115200
+    ],
+    "defaultBaudRate": 9600,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "big-endian",
+    "textEncoding": "ascii"
+  },
+  "framing": {
+    "style": "delimiter-framed",
+    "endDelimiter": 10
+  },
+  "integrityCheck": {
+    "algorithm": "none"
+  },
+  "commandResponseModel": {
+    "initiator": "client",
+    "responseTimeoutMs": 2000
+  },
+  "compoundMessageDelimiter": ";",
+  "commands": [
+    {
+      "name": "Identify",
+      "description": "*IDN?",
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "*IDN?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "Reset",
+      "description": "*RST",
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "*RST",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "ClearStatus",
+      "description": "*CLS",
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "*CLS",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "MeasureVoltageDC",
+      "description": "MEAS:VOLT:DC? -- often chained after *RST;*CLS via compoundMessageDelimiter, e.g. one line reading '*RST;*CLS;MEAS:VOLT:DC?'.",
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "MEAS:VOLT:DC?",
+          "role": "discriminator"
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "IdentifyResult",
+      "description": "e.g. 'ACME,MM7,SN12345,FW2.1'",
+      "fields": [
+        {
+          "name": "manufacturer",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "serial",
+          "type": "string",
+          "delimiter": ","
+        },
+        {
+          "name": "firmware",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "MeasurementResult",
+      "fields": [
+        {
+          "name": "value",
+          "type": "string"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,155 @@
+{
+  "title": "Bluetooth HCI UART Transport (H4)",
+  "version": "5.4",
+  "description": "Host <-> Bluetooth radio controller link. Includes HCI_Set_AFH_Host_Channel_Classification, which is literally a frequency-hopping control command: it tells the radio which of Bluetooth's 79 hop channels to avoid. No checksum at all -- H4 relies entirely on the underlying UART/transport for integrity.",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1,
+    "flowControl": "rts-cts",
+    "wiringLines": [
+      "TX",
+      "RX",
+      "GND",
+      "RTS",
+      "CTS"
+    ],
+    "hardwareFlowControlDetails": {
+      "localRole": "dte",
+      "rtsAssertedMeans": "Asserted by the host: while asserted, permits the controller to transmit to the host.",
+      "ctsAssertedMeans": "Asserted by the controller: while asserted, permits the host to transmit to the controller.",
+      "notes": "Assumed for this example, matching the same convention as the PPPoS and XBee examples."
+    }
+  },
+  "encoding": {
+    "byteOrder": "little-endian"
+  },
+  "framing": {
+    "style": "type-length-value",
+    "typeField": {
+      "sizeBytes": 1
+    },
+    "lengthField": {
+      "sizeBytes": 1,
+      "countsFrom": "payload-only",
+      "precedingHeaderBytes": 2
+    },
+    "variantsByType": {
+      "4": {
+        "lengthField": {
+          "sizeBytes": 1,
+          "countsFrom": "payload-only",
+          "precedingHeaderBytes": 1
+        }
+      },
+      "2": {
+        "lengthField": {
+          "sizeBytes": 2,
+          "countsFrom": "payload-only",
+          "precedingHeaderBytes": 2
+        }
+      },
+      "3": {
+        "lengthField": {
+          "sizeBytes": 1,
+          "countsFrom": "payload-only",
+          "precedingHeaderBytes": 2
+        }
+      }
+    }
+  },
+  "integrityCheck": {
+    "algorithm": "none"
+  },
+  "commandResponseModel": {
+    "initiator": "either",
+    "responseTimeoutMs": 0
+  },
+  "fieldTypes": {
+    "packetType": {
+      "baseType": "enum",
+      "sizeBytes": 1,
+      "enumValues": {
+        "1": "Command",
+        "2": "ACLData",
+        "3": "SynchronousData",
+        "4": "Event"
+      }
+    },
+    "opcode": {
+      "baseType": "uint",
+      "sizeBytes": 2,
+      "byteOrder": "little-endian",
+      "description": "OCF (low 10 bits) + OGF (high 6 bits) packed into one field -- (OGF << 10) | OCF. An earlier version of this instance had OGF/OCF's bit positions backwards; fixed here."
+    }
+  },
+  "commands": [
+    {
+      "name": "HCI_Set_AFH_Host_Channel_Classification",
+      "description": "typeField=0x01 (Command), using framing's top-level lengthField (no variantsByType entry needed for Command itself). opcode is now a named, typed position=before-length-field value (OGF=0x03 Host Controller & Baseband, OCF=0x3F -> 0x0C3F) rather than an anonymous 2-byte count, and doubles as this message's discriminator against any other Command. The 10-byte channel map below is the LENGTH-counted payload: 79 bits, one per hop channel (1=unknown/usable, 0=bad), packed LSB-first.",
+      "fields": [
+        {
+          "name": "opcode",
+          "type": "opcode",
+          "constValue": 3135,
+          "position": "before-length-field",
+          "role": "discriminator"
+        },
+        {
+          "name": "channelClassification",
+          "type": "bytes",
+          "sizeBytes": 10,
+          "description": "79-bit AFH channel bitmap, 1 bit unused."
+        }
+      ]
+    },
+    {
+      "name": "HCI_ACL_Data",
+      "description": "typeField=0x02, selecting the variantsByType['2'] override: LENGTH is 2 bytes here (Data Total Length), not 1 -- ACL packets can carry far more data than a Command's single-byte length would allow. handleAndFlags is now correctly position=before-length-field -- it isn't part of the LENGTH-counted region either.",
+      "fields": [
+        {
+          "name": "handleAndFlags",
+          "type": "uint",
+          "sizeBytes": 2,
+          "position": "before-length-field",
+          "description": "12-bit connection handle + 2-bit PB flag + 2-bit BC flag, packed."
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "HCI_Command_Complete_Event",
+      "description": "typeField=0x04, selecting the variantsByType['4'] override: only 1 precedingHeaderByte (eventCode), not 2 -- an earlier version of this instance wrongly folded numHciCommandPackets into the header count. eventCode is now a named, typed position=before-length-field value (0x0E for Command Complete specifically) and doubles as this message's discriminator against any other Event. numHciCommandPackets is genuinely the first byte of THIS event's own LENGTH-counted parameters, alongside every other Command Complete field, which is where it's listed below.",
+      "fields": [
+        {
+          "name": "eventCode",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 14,
+          "position": "before-length-field",
+          "role": "discriminator"
+        },
+        {
+          "name": "numHciCommandPackets",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "commandOpcode",
+          "type": "opcode"
+        },
+        {
+          "name": "returnParameters",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    }
+  ]
+}

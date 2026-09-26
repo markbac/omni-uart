@@ -1,0 +1,58 @@
+{
+  "title": "UBX -- poll current port config, then switch to a higher baud rate",
+  "description": "Demonstrates a required gap: baudRateNegotiation's ack arrives at the OLD rate, and the module needs a moment before the NEW rate is actually live, so the tool's own port reconfiguration and the next send both need to happen after a pause, not immediately.",
+  "interfaceRef": "ubx-uart-interface.json",
+  "variables": {
+    "desiredBaudRate": 115200
+  },
+  "onSequenceFailure": "abort",
+  "steps": [
+    {
+      "name": "Poll current port config",
+      "action": "send",
+      "message": "CFG-PRT-Poll",
+      "expect": {
+        "responseMessages": [
+          "CFG-PRT-Poll"
+        ],
+        "timeoutMs": 200,
+        "onTimeout": "retry",
+        "onMismatch": "fail",
+        "retry": {
+          "maxAttempts": 2,
+          "backoffMs": 50
+        }
+      }
+    },
+    {
+      "name": "Request the new baud rate",
+      "action": "send",
+      "message": "CFG-PRT-SetBaud",
+      "fieldValues": {
+        "portId": 1,
+        "reserved": [
+          0,
+          0,
+          0
+        ],
+        "mode": 2080,
+        "baudRate": {
+          "fromVariable": "desiredBaudRate"
+        }
+      },
+      "expect": {
+        "responseMessages": [
+          "CFG-PRT-SetBaud"
+        ],
+        "timeoutMs": 500,
+        "onTimeout": "fail",
+        "onMismatch": "fail"
+      }
+    },
+    {
+      "name": "Wait for the module to actually switch before touching the port",
+      "action": "waitOnly",
+      "delayBeforeMs": 100
+    }
+  ]
+}

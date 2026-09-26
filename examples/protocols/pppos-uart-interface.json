@@ -1,0 +1,73 @@
+{
+  "title": "PPPoS (PPP over Serial, e.g. to a GSM/cellular modem)",
+  "version": "RFC 1662, over a serial modem link",
+  "description": "Same async HDLC framing as plain PPP, but hardware flow control isn't optional here: the underlying radio/modem can stall mid-transmission, and without RTS/CTS pacing the host will overrun its buffer.",
+  "physicalLayer": {
+    "baudRate": 115200,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1,
+    "flowControl": "rts-cts",
+    "wiringLines": [
+      "TX",
+      "RX",
+      "GND",
+      "RTS",
+      "CTS"
+    ],
+    "hardwareFlowControlDetails": {
+      "localRole": "dte",
+      "rtsAssertedMeans": "Asserted by the host (DTE): while asserted, permits the module to transmit to the host.",
+      "ctsAssertedMeans": "Asserted by the module (DCE): while asserted, permits the host to transmit to the module.",
+      "notes": "Assumed for this example -- the classic DTE/DCE modem convention. Real modules vary; state the actual convention when modelling a specific device."
+    }
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "delimiter-framed",
+    "startDelimiter": 126,
+    "endDelimiter": 126,
+    "escapeByte": 125,
+    "escapeScheme": "xor-transform",
+    "escapeXorMask": 32
+  },
+  "integrityCheck": {
+    "algorithm": "crc-16-ccitt-false",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "commands": [
+    {
+      "name": "Frame",
+      "fields": [
+        {
+          "name": "address",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 255
+        },
+        {
+          "name": "control",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 3
+        },
+        {
+          "name": "protocol",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "information",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "title": "Serial console (VT100-style CLI), software flow control",
+  "version": "illustrative",
+  "description": "Many console/CLI serial ports are wired with only TX/RX/GND -- no RTS/CTS lines exist to carry hardware flow control, so XON/XOFF (software, in-band) is the only option when the far end needs to pace output.",
+  "physicalLayer": {
+    "baudRate": [
+      9600,
+      115200
+    ],
+    "defaultBaudRate": 9600,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1,
+    "flowControl": "xon-xoff",
+    "electricalStandard": "rs232",
+    "wiringLines": [
+      "TX",
+      "RX",
+      "GND"
+    ]
+  },
+  "encoding": {
+    "byteOrder": "big-endian",
+    "textEncoding": "ascii"
+  },
+  "framing": {
+    "style": "delimiter-framed",
+    "endDelimiter": [
+      13,
+      10
+    ]
+  },
+  "integrityCheck": {
+    "algorithm": "none"
+  },
+  "commandResponseModel": {
+    "initiator": "client"
+  },
+  "commands": [
+    {
+      "name": "CommandLine",
+      "fields": [
+        {
+          "name": "text",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "responses": [
+    {
+      "name": "OutputLine",
+      "fields": [
+        {
+          "name": "text",
+          "type": "string"
+        }
+      ]
+    }
+  ]
+}

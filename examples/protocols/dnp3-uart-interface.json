@@ -1,0 +1,79 @@
+{
+  "title": "DNP3 (Distributed Network Protocol), serial data link layer",
+  "version": "DNP3-2013",
+  "description": "SCADA/utility protocol. Its data-link CRC is exactly this schema's existing crc-16-dnp preset -- unused since it was first added several rounds ago. Its real structural novelty: data is chunked into 16-byte blocks, EACH with its own trailing CRC, not one check for the whole frame.",
+  "physicalLayer": {
+    "baudRate": [
+      9600,
+      19200,
+      38400,
+      57600
+    ],
+    "defaultBaudRate": 9600,
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1,
+    "electricalStandard": "rs485",
+    "duplex": "half"
+  },
+  "encoding": {
+    "byteOrder": "little-endian"
+  },
+  "framing": {
+    "style": "sync-length-payload-crc",
+    "syncBytes": [
+      5,
+      100
+    ],
+    "lengthField": {
+      "sizeBytes": 1,
+      "countsFrom": "payload-only"
+    },
+    "dataBlockChecking": {
+      "blockSizeBytes": 16,
+      "checkSizeBytes": 2,
+      "checkAlgorithm": {
+        "algorithm": "crc-16-dnp",
+        "placement": "trailing",
+        "coverage": "payload-only"
+      },
+      "lastBlockMayBeShorter": true
+    }
+  },
+  "integrityCheck": {
+    "algorithm": "crc-16-dnp",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "commands": [
+    {
+      "name": "DataLinkFrame",
+      "description": "control/destination/source are the LENGTH-counted header; userData is the application payload. userData is actually split into 16-byte blocks, each followed by its OWN separate CRC-16/DNP (the final block may be shorter) -- now recorded via framing.dataBlockChecking, though variableLength:remainder here still computes userData's byte count by simple subtraction against the frame's declared length, which INCLUDES the interleaved per-block check bytes; the true logical (non-check) data length is smaller and only recoverable by actually walking the blocks, not by this schema's arithmetic alone -- see dataBlockChecking's own description.",
+      "fields": [
+        {
+          "name": "control",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "destination",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "source",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "userData",
+          "type": "bytes",
+          "variableLength": "remainder"
+        }
+      ]
+    }
+  ]
+}

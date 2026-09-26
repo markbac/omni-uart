@@ -1,0 +1,56 @@
+{
+  "title": "9-bit UART multidrop addressing",
+  "version": "generic (common 8051/PIC UART mode)",
+  "description": "RS-485 multidrop scheme common on small microcontroller UARTs: a 9th data bit (not parity) flags whether a byte is an ADDRESS (bit=1) or DATA (bit=0), so slaves can filter in hardware without the CPU inspecting every byte. dataBits=9 was already a valid enum value but never actually exercised until now.",
+  "physicalLayer": {
+    "baudRate": 9600,
+    "dataBits": 9,
+    "parity": "none",
+    "stopBits": 1,
+    "portType": "rs485",
+    "duplex": "half",
+    "transmitEnableControl": "rts-toggle"
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "implicit-length"
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "client"
+  },
+  "commands": [
+    {
+      "name": "SlaveMessage",
+      "description": "The 9th bit is now representable directly via each field's ninthBitSet.",
+      "fields": [
+        {
+          "name": "address",
+          "type": "uint",
+          "sizeBytes": 1,
+          "ninthBitSet": true,
+          "description": "Sent with the 9th (address-marker) bit set."
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "variableLength": "remainder",
+          "ninthBitSet": false,
+          "description": "Sent with the 9th bit clear."
+        },
+        {
+          "name": "checksum",
+          "type": "uint",
+          "sizeBytes": 1,
+          "ninthBitSet": false
+        }
+      ]
+    }
+  ]
+}

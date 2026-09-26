@@ -1,0 +1,65 @@
+{
+  "title": "LIN Bus (classic checksum)",
+  "version": "2.0",
+  "description": "Automotive master/slave bus. Genuinely UART-based (8N1 async bytes) but frame length is looked up by identifier, not sent on the wire.",
+  "physicalLayer": {
+    "dataBits": 8,
+    "parity": "none",
+    "stopBits": 1
+  },
+  "encoding": {
+    "byteOrder": "big-endian"
+  },
+  "framing": {
+    "style": "implicit-length",
+    "syncBytes": [
+      85
+    ],
+    "precededByBreak": {
+      "minDurationBitTimes": 13
+    }
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "summationMode": "carry-wrapped",
+    "finalTransform": "onesComplement",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "either"
+  },
+  "fieldTypes": {
+    "pid": {
+      "baseType": "bitfield",
+      "sizeBytes": 1,
+      "bits": [
+        {
+          "name": "identifier",
+          "widthBits": 6
+        },
+        {
+          "name": "parity",
+          "widthBits": 2
+        }
+      ]
+    }
+  },
+  "commands": [
+    {
+      "name": "WheelSpeedFrame",
+      "description": "One specific LIN identifier; its data length (4 bytes here) is known from the identifier, not transmitted.",
+      "fields": [
+        {
+          "name": "pid",
+          "type": "pid"
+        },
+        {
+          "name": "data",
+          "type": "bytes",
+          "sizeBytes": 4
+        }
+      ]
+    }
+  ]
+}

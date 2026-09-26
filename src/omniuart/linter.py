@@ -13,11 +13,18 @@ from omniuart.core.models import ProtocolSpec, load_protocol
 from omniuart.utils.resources import get_resource_path
 
 
-def load_kit_schema() -> Dict[str, Any]:
-    """Load uart-interface.schema.json standard JSON Schema."""
-    schema_path = get_resource_path("uart-interface-schema-kit/kit/schema/uart-interface.schema.json")
+def load_kit_schema(is_kit_format: bool = False) -> Dict[str, Any]:
+    """Load JSON Schema (uart-interface.schema.json or protocol.schema.json)."""
+    if is_kit_format:
+        schema_path = get_resource_path("schemas/uart-interface.schema.json")
+        if not schema_path.exists():
+            schema_path = get_resource_path("uart-interface-schema-kit/kit/schema/uart-interface.schema.json")
+    else:
+        schema_path = get_resource_path("schemas/protocol.schema.json")
+
     if not schema_path.exists():
         schema_path = get_resource_path("schemas/protocol.schema.json")
+
     raw = schema_path.read_text(encoding="utf-8")
     return json.loads(raw)
 
@@ -44,9 +51,14 @@ def lint_protocol_file(file_path: Union[str, Path]) -> Tuple[bool, List[str]]:
     except Exception as e:
         errors.append(f"OmniUART Model Validation: {e}")
 
+    # Detect kit format vs native format
+    is_kit_format = bool(
+        isinstance(data, dict) and ("title" in data or "physicalLayer" in data or "info" in data or "$schema" in data)
+    )
+
     # JSON Schema Draft2020-12 Validation check
     try:
-        schema = load_kit_schema()
+        schema = load_kit_schema(is_kit_format=is_kit_format)
         validator = Draft202012Validator(schema)
         for err in validator.iter_errors(data):
             path_str = " -> ".join(str(p) for p in err.absolute_path) or "root"

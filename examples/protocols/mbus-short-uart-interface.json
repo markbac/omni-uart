@@ -1,0 +1,65 @@
+{
+  "title": "M-Bus (EN 13757-2/3), short frame",
+  "version": "EN 13757-2",
+  "description": "Utility meter readout bus. 8E1 -- even parity, a format neither G460 nor any earlier test used -- at one of several fixed baud rates the spec enumerates (300/600/1200/2400/4800/9600).",
+  "physicalLayer": {
+    "baudRate": [
+      300,
+      600,
+      1200,
+      2400,
+      4800,
+      9600
+    ],
+    "defaultBaudRate": 2400,
+    "dataBits": 8,
+    "parity": "even",
+    "stopBits": 1,
+    "portType": "current-loop (M-Bus 2-wire)",
+    "electricalStandard": "current-loop",
+    "duplex": "half"
+  },
+  "encoding": {
+    "byteOrder": "little-endian"
+  },
+  "framing": {
+    "style": "delimiter-framed",
+    "startDelimiter": 16,
+    "endDelimiter": 22
+  },
+  "integrityCheck": {
+    "algorithm": "checksum-8",
+    "placement": "trailing",
+    "coverage": "payload-only"
+  },
+  "commandResponseModel": {
+    "initiator": "client",
+    "responseTimeoutMs": 500
+  },
+  "fieldTypes": {
+    "controlField": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    },
+    "addressField": {
+      "baseType": "uint",
+      "sizeBytes": 1
+    }
+  },
+  "commands": [
+    {
+      "name": "ShortFrame",
+      "description": "The whole frame is fixed at 5 bytes; there is no length field to describe.",
+      "fields": [
+        {
+          "name": "cField",
+          "type": "controlField"
+        },
+        {
+          "name": "aField",
+          "type": "addressField"
+        }
+      ]
+    }
+  ]
+}
