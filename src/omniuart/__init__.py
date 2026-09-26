@@ -1,3 +1,3 @@
 """OmniUART: Universal Schema-Driven UART Protocol Tool."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
