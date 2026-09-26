@@ -49,6 +49,15 @@ def build_parser() -> argparse.ArgumentParser:
     docs_parser.add_argument("--format", choices=["markdown", "html"], default="html", help="Documentation output format")
     docs_parser.add_argument("--output-dir", "-o", default="_site", help="Output directory path")
 
+    # 6. lint (Protocol Linter)
+    lint_parser = subparsers.add_parser("lint", help="Lint and validate protocol definition file against JSON Schema")
+    lint_parser.add_argument("file", help="Path to YAML or JSON protocol definition file")
+
+    # 7. convert (Schema Format Converter)
+    convert_parser = subparsers.add_parser("convert", help="Convert legacy protocol into standard uart-interface.schema.json format")
+    convert_parser.add_argument("file", help="Path to legacy protocol definition file")
+    convert_parser.add_argument("--output", "-o", help="Output JSON file path")
+
     return parser
 
 
@@ -190,6 +199,27 @@ def main(argv: Optional[List[str]] = None) -> int:
             target_file.write_text(doc_str, encoding="utf-8")
             print(f"Generated protocol docs: {target_file.resolve()}")
             return 0
+
+    elif args.subcommand == "lint":
+        from omniuart.linter import lint_protocol_file
+        is_valid, errors = lint_protocol_file(args.file)
+        if is_valid:
+            print(f"✅ [VALID] Protocol file '{args.file}' passed all linting & schema validations.")
+            return 0
+        else:
+            print(f"❌ [LINT ERRORS] Protocol file '{args.file}' failed validation:", file=sys.stderr)
+            for err in errors:
+                print(f"   • {err}", file=sys.stderr)
+            return 1
+
+    elif args.subcommand == "convert":
+        from omniuart.linter import convert_protocol_to_kit
+        kit_data = convert_protocol_to_kit(args.file, output_path=args.output)
+        if args.output:
+            print(f"Successfully converted '{args.file}' to kit schema format: {args.output}")
+        else:
+            print(json.dumps(kit_data, indent=2))
+        return 0
 
     else:
         parser.print_help()
