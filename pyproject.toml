@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "omni-uart"
-version = "0.2.0"
+version = "0.3.0"
 description = "Universal schema-driven UART protocol tool with interactive CLI, batch script runner, and dynamic Web UI"
 readme = "README.md"
 requires-python = ">=3.12"
