@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `none`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/at-commands-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/at-commands-uart-interface.html)
+
 ## Description
 Plain text command/response lines. No length field, no CRC, and no escaping -- a delimiter-framed protocol with only an end marker, CRLF, for almost every message. One command (SendSmsBody) is the exception: its body is terminated by Ctrl-Z instead, via endDelimiterOverride -- see its own description.
 

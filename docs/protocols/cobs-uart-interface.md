@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `crc16_modbus`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/cobs-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/cobs-uart-interface.html)
+
 ## Description
 Consistent Overhead Byte Stuffing: the encoding itself guarantees the delimiter byte (0x00) never appears in the encoded data, so -- unlike delimiter-framed -- no escapeByte is needed at all.
 

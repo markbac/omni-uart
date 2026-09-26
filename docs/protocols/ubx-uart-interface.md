@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `fletcher_16`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/ubx-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/ubx-uart-interface.html)
+
 ## Description
 GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the length field -- before the length-counted region, unlike MAVLink's after.
 

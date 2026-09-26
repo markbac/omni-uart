@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `crc16_modbus`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/modbus-rtu-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/modbus-rtu-uart-interface.html)
+
 ## Description
 Modbus over serial, RTU transmission mode. Frame boundaries are marked by line silence rather than sync bytes or a length field.
 

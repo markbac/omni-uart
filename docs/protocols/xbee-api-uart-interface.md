@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/xbee-api-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/xbee-api-uart-interface.html)
+
 ## Description
 Digi XBee radio module binary command protocol, including an AT Command frame setting ATCH (the RF channel/frequency).
 

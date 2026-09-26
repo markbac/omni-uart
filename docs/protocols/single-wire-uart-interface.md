@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/single-wire-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/single-wire-uart-interface.html)
+
 ## Description
 A genuine single shared data line, not just RTS/CTS omitted -- both sides' TX and RX are the same open-drain/tri-state pin, common on microcontroller debug or bootload pins wired for minimal pin count.
 

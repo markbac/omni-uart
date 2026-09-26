@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/xmodem-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/xmodem-uart-interface.html)
+
 ## Description
 File transfer over a serial link. Mixes 128/1024-byte framed data blocks (selected by leading byte, not a length field) with completely bare single-byte control codes -- no envelope at all around ACK/NAK/EOT/CAN.
 

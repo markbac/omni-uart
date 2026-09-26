@@ -6,6 +6,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `custom`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/custom_crc_device.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/custom_crc_device.html)
+
 ## Description
 Proprietary embedded device demonstrating fully custom Rocksoft-modeled CRC-16
 

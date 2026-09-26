@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `custom`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/mavlink-v1-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/mavlink-v1-uart-interface.html)
+
 ## Description
 Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit between the length field and the region LEN actually counts.
 

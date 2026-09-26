@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `none`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/slip-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/slip-uart-interface.html)
+
 ## Description
 Pure framing protocol -- carries an arbitrary encapsulated packet (typically IP) with no application-level commands or integrity check of its own.
 

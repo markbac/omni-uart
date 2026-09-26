@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `xor8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/nmea0183-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/nmea0183-uart-interface.html)
+
 ## Description
 ASCII, delimiter-framed sentence protocol used by GPS/marine navigation equipment. No commands/responses in the request-reply sense -- the device streams sentences unsolicited.
 

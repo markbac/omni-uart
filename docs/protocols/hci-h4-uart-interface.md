@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `none`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/hci-h4-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/hci-h4-uart-interface.html)
+
 ## Description
 Host <-> Bluetooth radio controller link. Includes HCI_Set_AFH_Host_Channel_Classification, which is literally a frequency-hopping control command: it tells the radio which of Bluetooth's 79 hop channels to avoid. No checksum at all -- H4 relies entirely on the underlying UART/transport for integrity.
 

@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `none`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/console-xonxoff-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/console-xonxoff-uart-interface.html)
+
 ## Description
 Many console/CLI serial ports are wired with only TX/RX/GND -- no RTS/CTS lines exist to carry hardware flow control, so XON/XOFF (software, in-band) is the only option when the far end needs to pace output.
 

@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/mbus-long-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/mbus-long-uart-interface.html)
+
 ## Description
 START L L START C A CI DATA CHECKSUM STOP -- the length is sent twice and the start byte repeats after it, both as on-wire redundancy checks; a STOP byte closes the frame after the checksum too.
 

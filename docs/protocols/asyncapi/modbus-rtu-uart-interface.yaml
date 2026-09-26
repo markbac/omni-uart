@@ -1,0 +1,76 @@
+asyncapi: 2.6.0
+info:
+  title: Modbus RTU
+  version: '1.0'
+  description: Modbus over serial, RTU transmission mode. Frame boundaries are marked
+    by line silence rather than sync bytes or a length field.
+  contact:
+    name: Mark Bacon
+servers:
+  serial_link:
+    url: serial://tty/115200
+    protocol: serial
+    description: Physical UART Transport (115200 bps, 8N1.0)
+    bindings:
+      serial:
+        baudRate: 115200
+        dataBits: 8
+        parity: even
+        stopBits: 1.0
+        framingType: delimited
+        integrity: crc16_modbus
+channels:
+  omniuart/cmd/ReadHoldingRegistersRequest:
+    publish:
+      summary: 'Send command ReadHoldingRegistersRequest (ID: 0x03)'
+      description: 'Function 0x03: read a block of holding registers.'
+      message:
+        name: ReadHoldingRegistersRequest_Message
+        title: ReadHoldingRegistersRequest Command
+        payload:
+          $ref: '#/components/schemas/ReadHoldingRegistersRequest_Request'
+  omniuart/cmd/WriteSingleRegisterRequest:
+    publish:
+      summary: 'Send command WriteSingleRegisterRequest (ID: 0x06)'
+      description: 'Function 0x06: write one holding register.'
+      message:
+        name: WriteSingleRegisterRequest_Message
+        title: WriteSingleRegisterRequest Command
+        payload:
+          $ref: '#/components/schemas/WriteSingleRegisterRequest_Request'
+components:
+  messages: {}
+  schemas:
+    ReadHoldingRegistersRequest_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 3
+          description: Opcode ID for ReadHoldingRegistersRequest
+        slaveAddress:
+          type: integer
+        functionCode:
+          type: integer
+        startAddress:
+          type: integer
+        quantity:
+          type: integer
+          unit: registers
+      description: 'Function 0x03: read a block of holding registers.'
+    WriteSingleRegisterRequest_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 6
+          description: Opcode ID for WriteSingleRegisterRequest
+        slaveAddress:
+          type: integer
+        functionCode:
+          type: integer
+        registerAddress:
+          type: integer
+        value:
+          type: integer
+      description: 'Function 0x06: write one holding register.'

@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `none`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/scpi-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/scpi-uart-interface.html)
+
 ## Description
 ASCII line-based instrument control (oscilloscopes, PSUs, DMMs). Baud is configured manually on both sides -- no auto-negotiation -- and commonly must match exactly or the instrument just doesn't respond, with no error reported at all. Chains multiple independent commands onto one physical line via ';', which compoundMessageDelimiter exists specifically for.
 

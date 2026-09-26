@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `crc_16_ccitt_false`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/pppos-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/pppos-uart-interface.html)
+
 ## Description
 Same async HDLC framing as plain PPP, but hardware flow control isn't optional here: the underlying radio/modem can stall mid-transmission, and without RTS/CTS pacing the host will overrun its buffer.
 

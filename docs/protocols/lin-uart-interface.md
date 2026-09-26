@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/lin-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/lin-uart-interface.html)
+
 ## Description
 Automotive master/slave bus. Genuinely UART-based (8N1 async bytes) but frame length is looked up by identifier, not sent on the wire.
 

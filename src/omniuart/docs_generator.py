@@ -15,7 +15,7 @@ from omniuart.core.catalog import CatalogManager
 from omniuart.core.models import ProtocolSpec, load_protocol
 
 
-def generate_markdown_docs(spec: ProtocolSpec) -> str:
+def generate_markdown_docs(spec: ProtocolSpec, safe_stem: Optional[str] = None) -> str:
     """Generate Markdown specification document for a protocol including AsyncAPI 2.6.0 spec."""
     meta = spec.metadata
     lines: List[str] = []
@@ -29,6 +29,9 @@ def generate_markdown_docs(spec: ProtocolSpec) -> str:
     if spec.framing.integrity:
         lines.append(f"**Integrity Algorithm**: `{spec.framing.integrity.algorithm}`  ")
     lines.append("")
+    if safe_stem:
+        lines.append(f"> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/{safe_stem}.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/{safe_stem}.html)")
+        lines.append("")
     if meta.description:
         lines.append(f"## Description\n{meta.description}\n")
 
@@ -99,15 +102,38 @@ def generate_html_docs(spec: ProtocolSpec) -> str:
 </html>"""
 
 
+def _compile_asyncapi_html(yaml_path: Path, html_path: Path, root_dir: Path, asyncapi_docs_dir: Path, safe_stem: str) -> None:
+    """Helper to compile standalone AsyncAPI HTML page via @asyncapi/cli."""
+    try:
+        tmp_out_dir = asyncapi_docs_dir / f"tmp_{safe_stem}"
+        tmp_out_dir.mkdir(exist_ok=True)
+        res = subprocess.run(
+            ["npx.cmd" if os.name == "nt" else "npx", "asyncapi", "generate", "fromTemplate", str(yaml_path), "@asyncapi/html-template", "-o", str(tmp_out_dir), "--param", "singleFile=true", "--force-write"],
+            cwd=str(root_dir),
+            capture_output=True,
+            text=True,
+        )
+        generated_index = tmp_out_dir / "index.html"
+        if generated_index.exists():
+            shutil.copy2(generated_index, html_path)
+        shutil.rmtree(tmp_out_dir, ignore_errors=True)
+    except Exception:
+        pass
+
+
 def build_site_documentation(output_dir: Union[str, Path]) -> Path:
     """Build static documentation site for all discovered protocols, AsyncAPI specs, schemas, and manuals."""
+    from concurrent.futures import ThreadPoolExecutor
+
     out = Path(output_dir).resolve()
     out.mkdir(parents=True, exist_ok=True)
 
     root_dir = Path(__file__).resolve().parent.parent.parent
     docs_dir = root_dir / "docs"
     protocols_docs_dir = docs_dir / "protocols"
+    asyncapi_docs_dir = protocols_docs_dir / "asyncapi"
     protocols_docs_dir.mkdir(parents=True, exist_ok=True)
+    asyncapi_docs_dir.mkdir(parents=True, exist_ok=True)
 
     catalog = CatalogManager()
     summary = catalog.catalog_summary()
@@ -117,19 +143,36 @@ def build_site_documentation(output_dir: Union[str, Path]) -> Path:
         "Below is the complete catalog of auto-discovered hardware UART protocols with detailed parameters, command signatures, and formal AsyncAPI 2.6.0 specifications.\n",
     ]
 
+    html_tasks = []
+
     for p in summary["protocols"]:
         spec = catalog.get_protocol(p["filename"])
         if not spec:
             continue
         safe_stem = Path(p["filename"]).stem
         md_path = protocols_docs_dir / f"{safe_stem}.md"
-        md_path.write_text(generate_markdown_docs(spec), encoding="utf-8")
+        yaml_path = asyncapi_docs_dir / f"{safe_stem}.yaml"
+        html_path = asyncapi_docs_dir / f"{safe_stem}.html"
+
+        # Write Markdown & AsyncAPI YAML specs
+        yaml_content = export_asyncapi_yaml(spec)
+        yaml_path.write_text(yaml_content, encoding="utf-8")
+        md_path.write_text(generate_markdown_docs(spec, safe_stem=safe_stem), encoding="utf-8")
+
+        html_tasks.append((yaml_path, html_path, root_dir, asyncapi_docs_dir, safe_stem))
 
         protocol_nav_index.append(
             f"### [{spec.metadata.name}]({safe_stem}.md) (v{spec.metadata.version})\n"
             f"- **Description**: {spec.metadata.description or 'N/A'}\n"
             f"- **Framing**: `{spec.framing.type.value.upper()}` | **Baudrate**: `{spec.serial_config.baudrate} bps` | **Commands**: `{len(spec.commands)}`\n"
+            f"- **AsyncAPI**: [YAML Spec](asyncapi/{safe_stem}.yaml) | [Interactive HTML Viewer](asyncapi/{safe_stem}.html)\n"
         )
+
+    # Parallelize AsyncAPI HTML compilation across worker threads
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(_compile_asyncapi_html, *task) for task in html_tasks]
+        for f in futures:
+            f.result()
 
     (protocols_docs_dir / "index.md").write_text("\n".join(protocol_nav_index), encoding="utf-8")
 
@@ -187,7 +230,7 @@ def build_site_documentation(output_dir: Union[str, Path]) -> Path:
         md_filename = f"{safe_stem}.md"
 
         (out / html_filename).write_text(generate_html_docs(spec), encoding="utf-8")
-        (out / md_filename).write_text(generate_markdown_docs(spec), encoding="utf-8")
+        (out / md_filename).write_text(generate_markdown_docs(spec, safe_stem=safe_stem), encoding="utf-8")
 
         index_lines.append(
             f"  <div class='card'>"

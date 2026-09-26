@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `custom`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/mavlink-ftp-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/mavlink-ftp-uart-interface.html)
+
 ## Description
 File transfer nested inside a normal MAVLink message: every FTP packet, of whatever kind, is the SAME outer message type, distinguished only by an inner opcode/offset/session sub-header.
 

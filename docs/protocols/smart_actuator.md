@@ -6,6 +6,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `crc32`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/smart_actuator.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/smart_actuator.html)
+
 ## Description
 Servo actuator protocol with CRC32 integrity checking and status reporting
 

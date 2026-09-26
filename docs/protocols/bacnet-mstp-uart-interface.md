@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `crc8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/bacnet-mstp-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/bacnet-mstp-uart-interface.html)
+
 ## Description
 Building-automation token-passing bus over RS-485. Has TWO independent CRCs in one frame: a header CRC and a separate data CRC -- and the data CRC is entirely absent when there's no data, not just zero-length.
 

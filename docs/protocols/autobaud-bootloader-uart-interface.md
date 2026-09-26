@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/autobaud-bootloader-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/autobaud-bootloader-uart-interface.html)
+
 ## Description
 Not modelling any specific vendor's exact protocol -- illustrates the auto-baud mechanism common to several real MCU ROM bootloaders.
 

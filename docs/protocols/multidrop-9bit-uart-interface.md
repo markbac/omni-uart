@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/multidrop-9bit-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/multidrop-9bit-uart-interface.html)
+
 ## Description
 RS-485 multidrop scheme common on small microcontroller UARTs: a 9th data bit (not parity) flags whether a byte is an ADDRESS (bit=1) or DATA (bit=0), so slaves can filter in hardware without the CPU inspecting every byte. dataBits=9 was already a valid enum value but never actually exercised until now.
 

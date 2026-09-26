@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/j1708-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/j1708-uart-interface.html)
+
 ## Description
 Heavy-vehicle diagnostic multi-drop bus. Fixed 9600 8N1 -- no parity at all, unlike M-Bus's 8E1 or G460's default -- a third distinct combination across the protocols tried so far.
 

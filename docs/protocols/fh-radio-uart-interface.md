@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `crc_16_ccitt_false`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/fh-radio-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/fh-radio-uart-interface.html)
+
 ## Description
 NOT derived from, or a model of, any specific fielded system's published ICD -- no such document is publicly available. Built only from unclassified, widely-taught operator-level concepts (net ID, hopset/keyset selection by index, time-of-day sync, channel lockout, single-channel fallback) to exercise the schema against this domain without claiming to be real.
 

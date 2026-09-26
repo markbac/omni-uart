@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/mcu-normal-mode-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/mcu-normal-mode-uart-interface.html)
+
 ## Description
 Minimal stand-in application-mode protocol, existing only to demonstrate a fully-specified relatedInterfaces transition into the auto-baud bootloader above.
 

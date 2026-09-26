@@ -69,3 +69,7 @@ venv.bak/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Node modules & site build
+node_modules/
+_site/

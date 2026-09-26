@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `crc_16_dnp`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/dnp3-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/dnp3-uart-interface.html)
+
 ## Description
 SCADA/utility protocol. Its data-link CRC is exactly this schema's existing crc-16-dnp preset -- unused since it was first added several rounds ago. Its real structural novelty: data is chunked into 16-byte blocks, EACH with its own trailing CRC, not one check for the whole frame.
 

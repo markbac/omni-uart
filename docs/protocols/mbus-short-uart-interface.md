@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/mbus-short-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/mbus-short-uart-interface.html)
+
 ## Description
 Utility meter readout bus. 8E1 -- even parity, a format neither G460 nor any earlier test used -- at one of several fixed baud rates the spec enumerates (300/600/1200/2400/4800/9600).
 

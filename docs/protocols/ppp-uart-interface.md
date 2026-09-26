@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `crc_16_ccitt_false`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/ppp-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/ppp-uart-interface.html)
+
 ## Description
 Escapes any occurrence of the flag/escape bytes (and, by default, control chars <0x20) by transmitting escapeByte then (originalByte XOR 0x20) -- a general transform rule, not SLIP's fixed substitute-byte-pair table.
 

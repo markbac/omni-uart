@@ -6,6 +6,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `crc16_modbus`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/binary_sensor_node.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/binary_sensor_node.html)
+
 ## Description
 Binary UART protocol for multi-channel environmental sensor node with CRC16-Modbus
 

@@ -6,6 +6,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `none`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/ascii_device.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/ascii_device.html)
+
 ## Description
 Delimited ASCII command protocol (AT-command style)
 

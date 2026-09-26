@@ -5,6 +5,8 @@
 **Framing**: `delimited`  
 **Integrity Algorithm**: `checksum_8`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/modbus-ascii-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/modbus-ascii-uart-interface.html)
+
 ## Description
 Modbus over serial, ASCII transmission mode. Every logical byte is sent as 2 ASCII hex characters, framed between ':' and CRLF.
 

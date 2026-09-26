@@ -5,6 +5,8 @@
 **Framing**: `binary`  
 **Integrity Algorithm**: `none`  
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/dmx512-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/dmx512-uart-interface.html)
+
 ## Description
 Unidirectional lighting-control broadcast. Frame boundary is a UART break condition (an extended low period), not a byte value, not silence, and not an identifier lookup -- none of which this schema's framing styles model precisely.
 
