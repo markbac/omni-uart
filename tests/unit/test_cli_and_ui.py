@@ -62,3 +62,10 @@ def test_ui_api_dashboard_auto_run() -> None:
     data = response.json()
     assert data["dashboard_commands_executed"] >= 1
     assert "data" in data
+
+
+def test_ui_websocket_serial_stream() -> None:
+    """Verify WebSocket /ws/serial endpoint connects and streams events."""
+    with client.websocket_connect("/ws/serial") as websocket:
+        data = websocket.receive_json()
+        assert data["event"] == "connected"

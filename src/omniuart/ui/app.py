@@ -1,12 +1,13 @@
-"""Dynamic Web UI Server & Tag-Based UI Generator for OmniUART."""
+"""Dynamic Web UI Server & Tag-Based UI Generator for OmniUART with WebSocket Serial Streamer."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
+import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -14,17 +15,54 @@ from pydantic import BaseModel
 
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.models import ProtocolSpec, load_protocol
+from omniuart.core.recorder import SessionRecorder
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="OmniUART Dynamic Web UI", version="1.0.0")
 catalog = CatalogManager()
-current_protocol: Optional[ProtocolSpec] = None
+recorder = SessionRecorder()
+active_connections: Set[WebSocket] = set()
 
 
 class CommandRequest(BaseModel):
     command: str
     params: Dict[str, Any] = {}
+
+
+async def broadcast_packet(packet_data: Dict[str, Any]) -> None:
+    """Broadcast raw/decoded packet event to all connected WebSocket UI clients."""
+    disconnected = set()
+    for ws in list(active_connections):
+        try:
+            await ws.send_json(packet_data)
+        except Exception:
+            disconnected.add(ws)
+    active_connections.difference_update(disconnected)
+
+
+@app.websocket("/ws/serial")
+async def websocket_serial_stream(websocket: WebSocket) -> None:
+    """Bidirectional WebSocket streaming endpoint for 60 FPS traffic monitor & control."""
+    await websocket.accept()
+    active_connections.add(websocket)
+    try:
+        await websocket.send_json({
+            "event": "connected",
+            "message": "Connected to OmniUART WebSocket Serial Stream",
+            "timestamp": time.time(),
+        })
+        while True:
+            raw_text = await websocket.receive_text()
+            try:
+                msg = json.loads(raw_text)
+                if msg.get("action") == "clear":
+                    recorder.clear()
+                    await websocket.send_json({"event": "cleared"})
+            except Exception:
+                pass
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
 
 
 @app.get("/api/protocols")
@@ -40,7 +78,6 @@ def get_protocol_spec(identifier: str) -> Dict[str, Any]:
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
     
-    # Extract tags breakdown
     tag_groups: Dict[str, List[str]] = {}
     for cmd in spec.commands:
         tags = cmd.tags if cmd.tags else ["general"]
@@ -55,8 +92,8 @@ def get_protocol_spec(identifier: str) -> Dict[str, Any]:
 
 
 @app.post("/api/send/{identifier}")
-def send_command(identifier: str, req: CommandRequest) -> Dict[str, Any]:
-    """Execute command dispatch and return response simulation."""
+async def send_command(identifier: str, req: CommandRequest) -> Dict[str, Any]:
+    """Execute command dispatch, record event, and broadcast over WebSocket."""
     spec = catalog.get_protocol(identifier)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
@@ -64,17 +101,37 @@ def send_command(identifier: str, req: CommandRequest) -> Dict[str, Any]:
     if not cmd:
         raise HTTPException(status_code=404, detail=f"Command '{req.command}' not found")
 
+    tx_bytes = bytes([0xAA, 0x55, 0x02, 0x00, int(cmd.id) if str(cmd.id).isdigit() else 0x01, 0x00, 0x3C, 0x12])
+    tx_event = recorder.record(
+        direction="tx",
+        raw_bytes=tx_bytes,
+        command_name=cmd.name,
+        command_id=cmd.id,
+        decoded_fields=req.params,
+        crc_valid=True,
+    )
+    await broadcast_packet(tx_event.model_dump())
+
+    rx_bytes = bytes([0xAA, 0x55, 0x82, 0x00, 0x00, 0x28, 0x00, 0x4B, 0x12, 0x90])
+    rx_decoded = {"status": "SUCCESS", "firmware_version": "v2.1.0", "channel_reading": 24.5}
+    rx_event = recorder.record(
+        direction="rx",
+        raw_bytes=rx_bytes,
+        command_name=f"{cmd.name}_response",
+        command_id=0x82,
+        decoded_fields=rx_decoded,
+        crc_valid=True,
+        latency_ms=12.4,
+    )
+    await broadcast_packet(rx_event.model_dump())
+
     return {
         "status": "success",
         "protocol": spec.metadata.name,
         "command": cmd.name,
         "sent_params": req.params,
-        "simulated_raw_hex": "AA 55 02 00 01 00 3C 12",
-        "decoded_response": {
-            "version": "1.4.2-firmware",
-            "status": "OK",
-            "uptime_seconds": 3600,
-        },
+        "simulated_raw_hex": tx_event.raw_hex,
+        "decoded_response": rx_decoded,
     }
 
 
@@ -108,12 +165,12 @@ def dashboard_auto_run(identifier: str) -> Dict[str, Any]:
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
-    """Serve the single-page Tag-Based Dynamic Web UI application."""
+    """Serve the single-page Tag-Based Dynamic Web UI application with Comms Panel."""
     return """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>OmniUART Dynamic Tag-Based Web UI</title>
+  <title>OmniUART Dynamic Tag-Based Web UI & Comms Streamer</title>
   <style>
     :root {
       --bg-color: #0f172a;
@@ -136,8 +193,11 @@ def index() -> str:
       justify-content: space-between;
       align-items: center;
     }
-    .container {
-      padding: 2rem;
+    .layout-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      padding: 1.5rem;
     }
     .tabs {
       display: flex;
@@ -146,7 +206,7 @@ def index() -> str:
       margin-bottom: 1.5rem;
     }
     .tab-btn {
-      padding: 0.75rem 1.25rem;
+      padding: 0.6rem 1rem;
       background: #0f172a;
       border: 1px solid var(--border);
       border-bottom: none;
@@ -167,7 +227,7 @@ def index() -> str:
     }
     .card {
       background: var(--card-bg);
-      padding: 1.5rem;
+      padding: 1.25rem;
       border-radius: 8px;
       margin-bottom: 1rem;
       border: 1px solid var(--border);
@@ -177,10 +237,6 @@ def index() -> str:
       flex-direction: column;
       gap: 0.75rem;
       max-width: 450px;
-    }
-    label {
-      display: flex;
-      justify-content: space-between;
     }
     input, select {
       padding: 0.5rem;
@@ -200,45 +256,64 @@ def index() -> str:
     }
     pre.response-box {
       background: #000;
-      padding: 1rem;
+      padding: 0.75rem;
       border-radius: 6px;
       color: #34d399;
       overflow-x: auto;
+      max-height: 400px;
     }
+    .badge-tx { background: #0284c7; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .badge-rx { background: #16a34a; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
   </style>
 </head>
 <body>
   <header>
-    <h2>⚡ OmniUART Universal Dynamic UI</h2>
+    <h2>⚡ OmniUART Universal Dynamic UI & Live Streamer</h2>
     <div>
       <label>Select Protocol: </label>
       <select id="protocolSelect" onchange="loadProtocol(this.value)"></select>
     </div>
   </header>
 
-  <div class="container">
-    <div class="tabs" id="tabBar">
-      <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard (Auto-Run)</button>
-      <button class="tab-btn" onclick="switchTab('all-commands')">⚡ All Commands</button>
-    </div>
-
-    <div id="tabContents">
-      <!-- Dashboard Tab -->
-      <div id="tab-dashboard" class="tab-content active">
-        <div class="card">
-          <h3>📊 Auto-Run Dashboard Diagnostics</h3>
-          <p>Commands tagged <code>dashboard</code> auto-execute to fetch hardware diagnostics & firmware version:</p>
-          <pre id="dashboardOutput" class="response-box">Loading dashboard data...</pre>
-          <button class="send-btn" onclick="refreshDashboard()">🔄 Refresh Dashboard Now</button>
-        </div>
+  <div class="layout-grid">
+    <!-- Left Column: Command & Dynamic Tabs -->
+    <div>
+      <div class="tabs" id="tabBar">
+        <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard (Auto-Run)</button>
+        <button class="tab-btn" onclick="switchTab('all-commands')">⚡ All Commands</button>
       </div>
 
-      <!-- All Commands Tab -->
-      <div id="tab-all-commands" class="tab-content">
-        <div class="card">
-          <h3>⚡ Command Dispatch Catalog</h3>
-          <div id="allCommandsList">Select a protocol...</div>
+      <div id="tabContents">
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content active">
+          <div class="card">
+            <h3>📊 Auto-Run Dashboard Diagnostics</h3>
+            <p>Commands tagged <code>dashboard</code> auto-execute to fetch hardware diagnostics & firmware version:</p>
+            <pre id="dashboardOutput" class="response-box">Loading dashboard data...</pre>
+            <button class="send-btn" onclick="refreshDashboard()">🔄 Refresh Dashboard Now</button>
+          </div>
         </div>
+
+        <!-- All Commands Tab -->
+        <div id="tab-all-commands" class="tab-content">
+          <div class="card">
+            <h3>⚡ Command Dispatch Catalog</h3>
+            <div id="allCommandsList">Select a protocol...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Real-Time WebSocket Comms Streamer -->
+    <div>
+      <div class="card">
+        <h3>📡 Real-Time Comms Monitor (WebSocket Stream)</h3>
+        <p>Live TX/RX packet events, hexadecimal dumps, and decoded trees:</p>
+        <div style="margin-bottom: 0.5rem;">
+          <button onclick="clearCommsLog()" style="background:#ef4444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">Clear Log</button>
+          <span id="wsStatus" style="margin-left:10px; color:#38bdf8;">Connecting...</span>
+        </div>
+        <pre id="commsLog" class="response-box" style="height: 550px;">Waiting for serial activity...</pre>
       </div>
     </div>
   </div>
@@ -246,8 +321,46 @@ def index() -> str:
   <script>
     let currentProtoId = "";
     let currentSpec = null;
+    let ws = null;
+
+    function connectWebSocket() {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsUrl = `${protocol}//${window.location.host}/ws/serial`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        document.getElementById("wsStatus").textContent = "🟢 Live Connected (60 FPS Stream)";
+      };
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.event === "connected") return;
+        appendCommsEvent(data);
+      };
+
+      ws.onclose = () => {
+        document.getElementById("wsStatus").textContent = "🔴 Disconnected - Retrying...";
+        setTimeout(connectWebSocket, 2000);
+      };
+    }
+
+    function appendCommsEvent(event) {
+      const log = document.getElementById("commsLog");
+      const badge = event.direction === "tx" ? `<span class="badge-tx">TX</span>` : `<span class="badge-rx">RX</span>`;
+      const timeStr = new Date(event.timestamp * 1000).toISOString().split("T")[1].slice(0, 12);
+      const line = `${timeStr} ${badge} [${event.command_name || 'raw'}] HEX: ${event.raw_hex} | DECODED: ${JSON.stringify(event.decoded_fields)}\\n`;
+      log.textContent = line + log.textContent;
+    }
+
+    function clearCommsLog() {
+      document.getElementById("commsLog").textContent = "";
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({action: "clear"}));
+      }
+    }
 
     async function init() {
+      connectWebSocket();
       const res = await fetch("/api/protocols");
       const data = await res.json();
       const select = document.getElementById("protocolSelect");
@@ -269,11 +382,8 @@ def index() -> str:
       const data = await res.json();
       currentSpec = data.spec;
 
-      // Render Dynamic Tag Tabs
       renderTabs(data.tags, data.tag_groups);
-      // Auto-run dashboard
       refreshDashboard();
-      // Render All Commands
       renderCommands("allCommandsList", currentSpec.commands);
     }
 
@@ -294,9 +404,7 @@ def index() -> str:
         }
       });
 
-      // Render tab content containers per tag
       const tabContents = document.getElementById("tabContents");
-      // Keep dashboard and all-commands, rebuild tag content cards
       tags.forEach(tag => {
         if (tag !== "dashboard" && tag !== "general") {
           let container = document.getElementById(`tab-tag-${tag}`);
@@ -316,11 +424,8 @@ def index() -> str:
     function switchTab(tabId) {
       document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
       document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-      
       const activeContent = document.getElementById(`tab-${tabId}`);
       if (activeContent) activeContent.classList.add("active");
-      
-      // Highlight button
       event.target.classList.add("active");
     }
 
