@@ -306,8 +306,11 @@ def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bo
         import webbrowser
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
 
-    uvicorn.run("omniuart.ui.app:app", host=host, port=port, log_level="info")
+    from omniuart.ui.app import app
+    uvicorn.run(app, host=host, port=port, log_level="info")
     return 0
+
+
 
 
 

@@ -20,6 +20,21 @@ hiddenimports = [
     'uvicorn.protocols.http.auto',
     'uvicorn.protocols.websockets',
     'uvicorn.protocols.websockets.auto',
+    'omniuart',
+    'omniuart.ui',
+    'omniuart.ui.app',
+    'omniuart.ui.models',
+    'omniuart.ui.routes',
+    'omniuart.ui.views',
+    'omniuart.ui.desktop',
+    'omniuart.core',
+    'omniuart.core.models',
+    'omniuart.core.catalog',
+    'omniuart.core.recorder',
+    'omniuart.core.transport',
+    'omniuart.core.fuzzer',
+    'omniuart.core.replayer',
+    'omniuart.docs_generator',
     'pydantic',
     'pydantic_core',
     'serial',
@@ -30,6 +45,7 @@ hiddenimports = [
     'fastapi',
     'starlette',
 ]
+
 
 a = Analysis(
     ['src/omniuart/cli.py'],
