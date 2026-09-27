@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Union
 
@@ -26,13 +27,27 @@ class CatalogManager:
         self.protocol_dirs: List[Path] = []
         self.script_dirs: List[Path] = []
 
+        # Resolve binary directory if running as standalone frozen binary or script
+        exe_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path.cwd()
+
         # Default paths to check
         default_proto_dirs = [
+            exe_dir / "schemas",
+            exe_dir / "examples" / "protocols",
+            exe_dir / "protocols",
+            Path.cwd() / "schemas",
+            Path.cwd() / "examples" / "protocols",
+            Path.cwd() / "protocols",
+            Path("schemas"),
             Path("examples/protocols"),
             Path("../uart-interface-schema-kit/kit/examples"),
             Path("d:/Antigravity/omniUart/uart-interface-schema-kit/kit/examples"),
         ]
         default_script_dirs = [
+            exe_dir / "examples" / "scripts",
+            exe_dir / "scripts",
+            Path.cwd() / "examples" / "scripts",
+            Path.cwd() / "scripts",
             Path("examples/scripts"),
             Path("../uart-interface-schema-kit/kit/examples/sequences"),
             Path("d:/Antigravity/omniUart/uart-interface-schema-kit/kit/examples/sequences"),
