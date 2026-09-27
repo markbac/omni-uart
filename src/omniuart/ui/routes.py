@@ -236,6 +236,13 @@ def dashboard_auto_run(identifier: str) -> Dict[str, Any]:
     }
 
 
+@router.get("/api/ports")
+def get_available_serial_ports() -> Dict[str, Any]:
+    """Scan and return list of detected hardware serial ports."""
+    from omniuart.core.transport import list_available_ports
+    return {"ports": list_available_ports()}
+
+
 @router.get("/", response_class=HTMLResponse)
 def index() -> str:
     """Serve the single-page Tag-Based Dynamic Web UI application with Workspace Navigation."""
