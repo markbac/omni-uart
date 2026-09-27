@@ -739,9 +739,26 @@ class CommsStreamerView(ttk.Frame):
         self.console.tag_config("TIME", foreground="#64748b")
         self.console.tag_config("DECODED", foreground="#fbbf24")
 
+        # Macro shortcuts bar
+        macro_bar = ttk.Frame(self)
+        macro_bar.pack(fill=tk.X, pady=(6, 0))
+
+        ttk.Label(macro_bar, text="Quick IoT Macros:", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=4)
+
+        macros = [
+            ("⚡ AT Ping", b"AT\r\n"),
+            ("📶 Signal CSQ", b"AT+CSQ\r\n"),
+            ("🔋 Battery CBC", b"AT+CBC\r\n"),
+            ("🌐 Network CREG?", b"AT+CREG?\r\n"),
+            ("⚙️ Modbus Read", b"\x01\x03\x00\x00\x00\x02\xC4\x0B"),
+        ]
+
+        for label, raw_b in macros:
+            ttk.Button(macro_bar, text=label, command=lambda b=raw_b, l=label: self._send_macro(l, b)).pack(side=tk.LEFT, padx=2)
+
         # Raw transmit bar
         tx_bar = ttk.Frame(self)
-        tx_bar.pack(fill=tk.X, pady=(8, 0))
+        tx_bar.pack(fill=tk.X, pady=(4, 0))
 
         ttk.Label(tx_bar, text="Send Raw Hex/ASCII:").pack(side=tk.LEFT, padx=4)
         self.raw_input = ttk.Entry(tx_bar)
@@ -749,6 +766,11 @@ class CommsStreamerView(ttk.Frame):
         self.raw_input.bind("<Return>", lambda e: self._send_raw())
 
         ttk.Button(tx_bar, text="Send Packet", command=self._send_raw).pack(side=tk.RIGHT, padx=4)
+
+    def _send_macro(self, label: str, data: bytes) -> None:
+        """Transmit macro shortcut frame payload."""
+        self.log("TX", data, f"Macro: {label}")
+        self.on_transmit(f"Macro: {label}", data)
 
     def _decode_packet_fields(self, data: bytes) -> str:
         """Decode raw packet into structured semantic fields and framing breakdown."""

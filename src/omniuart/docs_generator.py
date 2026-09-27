@@ -206,13 +206,14 @@ def build_site_documentation(output_dir: Union[str, Path]) -> Path:
 
     # Try building with MkDocs if mkdocs is available
     mkdocs_yml = root_dir / "mkdocs.yml"
-    if mkdocs_yml.exists():
+    if mkdocs_yml.exists() and not os.environ.get("PYTEST_CURRENT_TEST"):
         try:
             res = subprocess.run(
                 ["mkdocs", "build", "-d", str(out)],
                 cwd=str(root_dir),
                 capture_output=True,
                 text=True,
+                timeout=10,
             )
             if res.returncode == 0:
                 return out

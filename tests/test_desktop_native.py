@@ -50,6 +50,7 @@ def test_desktop_app_initialization():
         assert comms_tab.is_recording is True
         comms_tab.log("TX", b"AT+CSQ\r\n", "AT Command")
         comms_tab.log("RX", b"\xAA\x01\x10\x20\xFF", "Binary Packet")
+        comms_tab._send_macro("⚡ AT Ping", b"AT\r\n")
         comms_tab._toggle_recording()
         assert comms_tab.is_recording is False
 
