@@ -268,3 +268,32 @@ telemetry:
         unit: "mV"
 ```
 [[CAPTION:Figure]] Example telemetry specification.
+
+---
+
+## 7. AsyncAPI 2.6.0 Specification Generation & Tooling
+
+OmniUART natively converts all protocol definitions into formal **AsyncAPI 2.6.0 Specification** documents. The `omniuart.core.asyncapi_exporter` module maps serial hardware characteristics and protocol command schemas directly into event-driven AsyncAPI primitives:
+
+### 7.1 Mapping Rules
+- **Server Bindings**: Protocol `serial_config` parameters (`baudrate`, `bytesize`, `parity`, `stopbits`, `framing`) map to custom `serial` server protocol bindings (`serial://tty/{baudrate}`).
+- **Channels & Operations**:
+  - Outbound commands map to AsyncAPI channels `omniuart/cmd/{command_name}` with `publish` operations (Client -> MCU).
+  - Inbound responses map to AsyncAPI channels `omniuart/resp/{command_name}` with `subscribe` operations (MCU -> Client).
+- **Message Schemas**: Parameter and response field types map to standard JSON Schema primitive types (`integer`, `number`, `string`, `boolean`) retaining range constraints (`minimum`, `maximum`) and unit metadata.
+
+### 7.2 AsyncAPI HTML Compilation via Official Tooling
+Documentation builds leverage official `@asyncapi/cli` and `@asyncapi/html-template` npm packages to synthesize interactive HTML documentation pages alongside raw YAML specifications:
+
+```bash
+# Generate standalone AsyncAPI HTML viewer using official AsyncAPI CLI
+npx @asyncapi/cli generate fromTemplate protocol.asyncapi.yaml @asyncapi/html-template -o ./asyncapi/ --param singleFile=true
+```
+
+---
+
+## 8. Schema Catalog & Reference Links
+
+- 📚 **Live Protocol AsyncAPI Catalog**: Explore auto-generated AsyncAPI specifications and interactive HTML documentation for all hardware protocols in the [Hardware Protocol Hub](../protocols/index.md).
+- ⚙️ **Declarative JSON Schema**: Inspect the raw schema definitions in [Protocol JSON Schema](../schemas/protocol.schema.json).
+
