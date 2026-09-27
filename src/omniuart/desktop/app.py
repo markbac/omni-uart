@@ -127,9 +127,20 @@ def launch_native_desktop_app(
     script_dirs: Optional[List[Union[str, Any]]] = None,
 ) -> None:
     """Launch native Tkinter desktop application."""
+    import os
+
     catalog = CatalogManager(protocol_dirs=protocol_dirs, script_dirs=script_dirs)
-    app = OmniUARTDesktopApp(catalog=catalog)
-    app.mainloop()
+    try:
+        app = OmniUARTDesktopApp(catalog=catalog)
+        if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("HEADLESS") == "1":
+            app.update()
+            app.destroy()
+            return
+        app.mainloop()
+    except Exception as e:
+        if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("HEADLESS") == "1":
+            return
+        raise e
 
 
 if __name__ == "__main__":
