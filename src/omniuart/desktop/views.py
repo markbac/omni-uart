@@ -7,7 +7,7 @@ import random
 import struct
 import time
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional
 
 from omniuart.core.catalog import CatalogManager
@@ -704,6 +704,7 @@ class CommsStreamerView(ttk.Frame):
     def __init__(self, parent: tk.Widget, on_transmit: Callable[[str, bytes], None]) -> None:
         super().__init__(parent, padding=12)
         self.on_transmit = on_transmit
+        self.is_recording = False
 
         toolbar = ttk.Frame(self)
         toolbar.pack(fill=tk.X, pady=(0, 8))
@@ -719,6 +720,12 @@ class CommsStreamerView(ttk.Frame):
 
         self.autoscroll_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(toolbar, text="Autoscroll", variable=self.autoscroll_var).pack(side=tk.LEFT, padx=8)
+
+        self.rec_btn = ttk.Button(toolbar, text="🔴 Record Stream", command=self._toggle_recording)
+        self.rec_btn.pack(side=tk.LEFT, padx=4)
+
+        self.export_btn = ttk.Button(toolbar, text="💾 Export Log", command=self._export_log)
+        self.export_btn.pack(side=tk.LEFT, padx=4)
 
         ttk.Button(toolbar, text="Clear Stream", command=self.clear).pack(side=tk.RIGHT, padx=4)
 
@@ -799,6 +806,36 @@ class CommsStreamerView(ttk.Frame):
 
         if self.autoscroll_var.get():
             self.console.see(tk.END)
+
+    def _toggle_recording(self) -> None:
+        """Toggle live stream recording session status."""
+        self.is_recording = not self.is_recording
+        if self.is_recording:
+            self.rec_btn.config(text="⏹ Stop Recording")
+            self.log("SYS", b"=== SESSION RECORDING STARTED ===", "Recorder")
+        else:
+            self.rec_btn.config(text="🔴 Record Stream")
+            self.log("SYS", b"=== SESSION RECORDING STOPPED ===", "Recorder")
+
+    def _export_log(self) -> None:
+        """Export live serial stream console buffer to file on disk."""
+        content = self.console.get("1.0", tk.END)
+        if not content.strip():
+            messagebox.showinfo("Export Stream Log", "Stream console buffer is empty.")
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".log",
+            filetypes=[("Log Files", "*.log"), ("Text Files", "*.txt"), ("All Files", "*.*")],
+            title="Export Serial Stream Log",
+        )
+        if file_path:
+            try:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                messagebox.showinfo("Export Stream Log", f"Saved stream log to:\n{file_path}")
+            except Exception as e:
+                messagebox.showerror("Export Error", f"Failed to save log file: {e}")
 
     def clear(self) -> None:
         self.console.delete("1.0", tk.END)
