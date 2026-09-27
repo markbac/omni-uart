@@ -49,6 +49,8 @@
       "sizeBytes": 1,
       "enumValues": {
         "8": "ATCommand",
+        "16": "TransmitRequest",
+        "23": "RemoteATCommand",
         "136": "ATCommandResponse"
       }
     }
@@ -56,6 +58,7 @@
   "commands": [
     {
       "name": "SetChannelATCommand",
+      "tags": ["xbee/at_command", "dashboard"],
       "description": "Frame type 0x08: local AT Command. The AT command here is 'CH' (RF channel/frequency), one of 16 channels in the 2.4GHz band.",
       "fields": [
         {
@@ -81,6 +84,86 @@
           "description": "New channel number, e.g. 0x0C."
         }
       ]
+    },
+    {
+      "name": "TransmitRequest",
+      "tags": ["xbee/transmit"],
+      "description": "Frame type 0x10: Transmit data packet to 64-bit destination address.",
+      "fields": [
+        {
+          "name": "frameType",
+          "type": "frameType",
+          "constValue": 16,
+          "role": "discriminator"
+        },
+        {
+          "name": "frameId",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "dest64",
+          "type": "bytes",
+          "sizeBytes": 8
+        },
+        {
+          "name": "dest16",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "broadcastRadius",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "options",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "payload",
+          "type": "bytes"
+        }
+      ]
+    },
+    {
+      "name": "RemoteATCommand",
+      "tags": ["xbee/remote_at"],
+      "description": "Frame type 0x17: Issue AT Command to remote node in mesh network.",
+      "fields": [
+        {
+          "name": "frameType",
+          "type": "frameType",
+          "constValue": 23,
+          "role": "discriminator"
+        },
+        {
+          "name": "frameId",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "dest64",
+          "type": "bytes",
+          "sizeBytes": 8
+        },
+        {
+          "name": "dest16",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "applyOptions",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "atCommand",
+          "type": "string",
+          "sizeBytes": 2
+        }
+      ]
     }
   ],
   "responses": [
@@ -100,18 +183,13 @@
         },
         {
           "name": "atCommand",
-          "type": "string"
+          "type": "string",
+          "sizeBytes": 2
         },
         {
           "name": "commandStatus",
-          "type": "enum",
+          "type": "uint",
           "sizeBytes": 1
-        },
-        {
-          "name": "commandData",
-          "type": "bytes",
-          "variableLength": "remainder",
-          "optional": true
         }
       ]
     }
