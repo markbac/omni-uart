@@ -1,13 +1,14 @@
-"""Native Desktop UI Window Binary Entry Point for OmniUART."""
+"""Native Desktop UI Application Binary Entry Point for OmniUART."""
 
 from __future__ import annotations
 
 import sys
-from omniuart.cli import launch_ui_server
+from omniuart.desktop.app import launch_native_desktop_app
 
 
 def run() -> int:
-    return launch_ui_server(host="127.0.0.1", port=8000, open_browser=True, mode="desktop")
+    launch_native_desktop_app()
+    return 0
 
 
 if __name__ == "__main__":

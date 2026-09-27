@@ -28,6 +28,9 @@ hiddenimports = [
     'omniuart.ui.routes',
     'omniuart.ui.views',
     'omniuart.ui.desktop',
+    'omniuart.desktop',
+    'omniuart.desktop.app',
+    'omniuart.desktop.views',
     'omniuart.entrypoints',
     'omniuart.entrypoints.cli_main',
     'omniuart.entrypoints.web_main',
@@ -49,6 +52,8 @@ hiddenimports = [
     'typer',
     'fastapi',
     'starlette',
+    'tkinter',
+    'tkinter.ttk',
 ]
 
 # 1. CLI Analysis & EXE
@@ -61,7 +66,7 @@ a_cli = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'scipy', 'numpy', 'IPython'],
+    excludes=['matplotlib', 'scipy', 'numpy', 'IPython'],
     cipher=block_cipher,
     noarchive=False,
 )
@@ -90,7 +95,7 @@ a_web = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'scipy', 'numpy', 'IPython'],
+    excludes=['matplotlib', 'scipy', 'numpy', 'IPython'],
     cipher=block_cipher,
     noarchive=False,
 )
@@ -109,7 +114,7 @@ exe_web = EXE(
     console=True,
 )
 
-# 3. Desktop UI Analysis & EXE
+# 3. Desktop UI Analysis & EXE (Native Tkinter Desktop App)
 a_desktop = Analysis(
     ['src/omniuart/entrypoints/desktop_main.py'],
     pathex=['src'],
@@ -119,7 +124,7 @@ a_desktop = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'scipy', 'numpy', 'IPython'],
+    excludes=['matplotlib', 'scipy', 'numpy', 'IPython'],
     cipher=block_cipher,
     noarchive=False,
 )

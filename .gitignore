@@ -73,3 +73,6 @@ desktop.ini
 # Node modules & site build
 node_modules/
 _site/
+site/
+docs/schemas/
+RELEASE_NOTES.md
