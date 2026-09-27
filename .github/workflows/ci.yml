@@ -95,6 +95,10 @@ jobs:
                   print(f'Validated script: {s.name}')
           "
 
+      - name: Run Vale & Documentation Style Checker
+        run: |
+          python scripts/check_docs.py || true
+
   test:
     name: Test Suite Matrix
     runs-on: ${{ matrix.os }}

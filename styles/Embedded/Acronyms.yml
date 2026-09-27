@@ -1,0 +1,78 @@
+extends: conditional
+message: "'%s' has no expansion nearby. Define it on first use, e.g. 'Interface Control Document (ICD)'."
+link: https://learn.microsoft.com/en-us/style-guide/acronyms
+level: suggestion
+ignorecase: false
+first: '\b([A-Z]{2,6}[0-9]?)\b'
+second: '(?:\b[A-Z][a-z]+ )+\(([A-Z]{2,6}[0-9]?)\)'
+exceptions:
+  - API
+  - ASP
+  - CLI
+  - CPU
+  - CSS
+  - CSV
+  - DEBUG
+  - DOM
+  - DPI
+  - FAQ
+  - GCC
+  - GDB
+  - GET
+  - GPU
+  - GTK
+  - GUI
+  - HTML
+  - HTTP
+  - HTTPS
+  - IDE
+  - JAR
+  - JSON
+  - JSX
+  - LESS
+  - LLDB
+  - NA
+  - NET
+  - NOTE
+  - NVDA
+  - OK
+  - OSS
+  - PATH
+  - PDF
+  - PHP
+  - POST
+  - RAM
+  - REPL
+  - RSA
+  - SCM
+  - SCSS
+  - SDK
+  - SQL
+  - SSH
+  - SSL
+  - SVG
+  - TBC
+  - TBD
+  - TCP
+  - TODO
+  - URI
+  - URL
+  - USB
+  - UTF
+  - XML
+  - XSS
+  - YAML
+  - ZIP
+  # RFC 2119 / generic tokens - not acronyms, false positives
+  - MAY
+  - MUST
+  - NOT
+  - SHALL
+  - SHOULD
+  - "TRUE"
+  - "FALSE"
+  - CODE
+  - UTC
+  - DST
+  - UC
+  - EC

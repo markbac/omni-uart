@@ -1,0 +1,10 @@
+extends: existence
+message: "Avoid the contraction '%s' in formal ICD/specification text; use the expanded form."
+level: warning
+ignorecase: true
+tokens:
+  - "\\b\\w+'(?:re|ve|ll|d|t)\\b"
+  # 's alone is ambiguous with a plain possessive 
+  # Only flag it after words where 's is almost
+  # always 'is'/'has', not possession.
+  - "\\b(?:it|that|what|there|here|who|he|she|let|where|how|one|this)'s\\b"

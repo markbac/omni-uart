@@ -1,0 +1,11 @@
+extends: existence
+message: "'%s' looks like a requirement keyword used in lowercase. If this is a normative statement, capitalise it (per RFC 2119: MUST, MUST NOT, SHALL, SHALL NOT, SHOULD, SHOULD NOT, MAY)."
+link: https://www.rfc-editor.org/rfc/rfc2119
+level: suggestion
+scope: paragraph
+ignorecase: false
+tokens:
+  - '\bmust\b'
+  - '\bshall\b'
+  - '\bshould\b'
+  - '\bmay\b'

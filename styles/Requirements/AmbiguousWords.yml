@@ -1,0 +1,29 @@
+extends: existence
+message: "Ambiguous word '%s' in a requirement sentence - state a concrete, testable value instead."
+link: https://www.incose.org/docs/default-source/working-groups/requirements-wg/gtwr/incose_rwg_gtwr_2022.pdf
+level: warning
+scope: sentence
+ignorecase: true
+tokens:
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(as appropriate)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(if possible)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(if practicable)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(and/or)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(etc\.)'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(generally)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(typically)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(usually)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(normally)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(adequate)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(sufficient)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(efficient)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(user-friendly)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(robust)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(reasonable)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(acceptable)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(several)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(many)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(a few)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(approximately)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(clearly)\b'
+  - '(?:(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)|(?<=(?:MUST|SHALL|SHOULD|MAY).{0,150}))\b(significant(?:ly)?)\b'

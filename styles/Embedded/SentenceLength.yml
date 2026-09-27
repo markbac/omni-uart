@@ -1,0 +1,7 @@
+extends: occurrence
+message: "Sentence is %v words long; consider splitting it (threshold: 30)."
+link: https://learn.microsoft.com/en-us/style-guide/word-choice/use-simple-short-sentences
+scope: sentence
+level: suggestion
+max: 30
+token: \b(\w+)\b
