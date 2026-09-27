@@ -45,6 +45,8 @@ jobs:
             release
             standards
             diagrams
+            ^#\d+$
+          allowRegexScope: true
           requireScope: false
 
   lint-and-validate:
