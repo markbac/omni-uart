@@ -1,5 +1,7 @@
 # OmniUART Protocol Schema Specification
 
+> 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML Spec](asyncapi/omniuart-protocol-schema.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/omniuart-protocol-schema.html)
+
 ## 1. Specification Scope
 This document formally defines the **OmniUART Protocol Specification Schema** (Version 1.0.0). Protocol definitions can be authored in either YAML or JSON and must conform to the structure documented herein.
 
@@ -295,5 +297,6 @@ npx @asyncapi/cli generate fromTemplate protocol.asyncapi.yaml @asyncapi/html-te
 ## 8. Schema Catalog & Reference Links
 
 - 📚 **Live Protocol AsyncAPI Catalog**: Explore auto-generated AsyncAPI specifications and interactive HTML documentation for all hardware protocols in the [Hardware Protocol Hub](../protocols/index.md).
+- 📄 **Schema AsyncAPI Specification Artifacts**: Download [AsyncAPI 2.6.0 YAML Spec](asyncapi/omniuart-protocol-schema.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/omniuart-protocol-schema.html).
 - ⚙️ **Declarative JSON Schema**: Inspect the raw schema definitions in [Protocol JSON Schema](../schemas/protocol.schema.json).
 
