@@ -14,4 +14,11 @@ def test_build_site_documentation_includes_schemas_and_manuals(tmp_path: Path) -
     assert (site_path / "index.html").exists()
 
     index_content = (site_path / "index.html").read_text(encoding="utf-8")
-    assert "OmniUART" in index_content
+    assert "About OmniUART" in index_content
+    assert "release/guidance.html" in index_content
+    assert "protocols/index.html" in index_content
+
+    assert (site_path / "protocols" / "index.html").exists()
+    proto_catalog_content = (site_path / "protocols" / "index.html").read_text(encoding="utf-8")
+    assert "Discovered Hardware Protocols" in proto_catalog_content
+
