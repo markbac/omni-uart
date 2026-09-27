@@ -1,7 +1,7 @@
 # OmniUART: Universal Schema-Driven UART Protocol Tool
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Release-v0.4.0-blue.svg" alt="Release">
+  <img src="https://img.shields.io/badge/Release-v1.9.0-blue.svg" alt="Release">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-orange.svg" alt="Platforms">
 </p>
@@ -11,6 +11,22 @@
 OmniUART decouples protocol definitions from custom tooling code by using declarative JSON or YAML specifications. It provides an ad-hoc CLI, an automated test runner with assertions, a boundary mutation fuzzer, a session replayer, and an auto-generated dynamic Web UI with real-time 60 FPS WebSocket packet streaming.
 
 Distributed as a **self-contained standalone executable** for Windows and Linux—no Python installation required.
+
+---
+
+## 📚 Complete System Documentation Hub
+
+Welcome to the **OmniUART System Documentation Hub**. Explore complete guides, system specifications, declarative JSON schemas, and auto-generated AsyncAPI protocol catalogs:
+
+| Documentation Section | Direct Link | Key Contents & Purpose |
+| :--- | :--- | :--- |
+| 📖 **User Manual & CLI Guide** | [Read User Manual](release/guidance.md) | Executable installation, interactive CLI subcommands, Web UI, Desktop UI, and persistent logging. |
+| 🏛️ **System Architecture** | [Explore Architecture](architecture/system-architecture.md) | High-level C4 architecture diagrams, subsystem breakdown, framing pipeline, and transport state machines. |
+| ⚙️ **Protocol Specification** | [View Protocol Spec](specs/protocol-schema-specification.md) | Formal specification for YAML/JSON protocol envelopes, baud rates, framing, CRCs, and command signatures. |
+| 📜 **Automation Script Spec** | [View Script Spec](specs/script-schema-specification.md) | Test runner step definitions, field assertions, step delays, and execution repeat loops. |
+| ⚙️ **Declarative JSON Schemas** | [Inspect JSON Schemas](schemas/index.md) | Official JSON Schema files for protocol definitions, test scripts, and AsyncAPI hardware interface kits. |
+| 📚 **Hardware Protocols & AsyncAPI** | [Browse Protocol Catalog](protocols/index.md) | 32+ auto-discovered UART hardware protocols with formal AsyncAPI 2.6.0 YAML and interactive HTML specs. |
+| 🧪 **Test Strategy & Quality** | [View Test Strategy](testing/test-strategy.md) | Automated unit testing, standalone binary smoke testing, and back-to-back hardware simulator testing. |
 
 ---
 
@@ -79,14 +95,3 @@ commands:
           type: "float32"
           unit: "%"
 ```
-
----
-
-## 🏛️ Documentation Sections
-
-- [User Manual & Quickstart Guide](release/guidance.md): Detailed CLI subcommands, Web UI usage, themes, and session recording.
-- [System Architecture](architecture/system-architecture.md): High-level system blocks, C4 diagrams, state machines, and subsystem contracts.
-- [Protocol Schema Specification](specs/protocol-schema-specification.md): Formal YAML/JSON protocol definition schema specification.
-- [Automation Script Specification](specs/script-schema-specification.md): Automation test script schema specification.
-- [JSON Schema Specifications](schemas/index.md): Declarative JSON Schema definitions (`protocol.schema.json`, `script.schema.json`, `uart-interface.schema.json`).
-- [Hardware Protocols & AsyncAPI Catalog](protocols/index.md): Catalog of 32+ hardware protocols with auto-generated AsyncAPI 2.6.0 specifications.
