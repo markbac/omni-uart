@@ -230,6 +230,7 @@ class PipeTransport(AsyncTransport):
     def __init__(self, port_name: str = "VIRTUAL_COM1") -> None:
         self.port_name = port_name
         self._rx_queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self._buffer = bytearray()
         self._peer: Optional[PipeTransport] = None
         self._is_open = False
 
@@ -257,17 +258,25 @@ class PipeTransport(AsyncTransport):
             raise RuntimeError("PipeTransport is not open.")
 
         timeout_sec = (timeout_ms / 1000.0) if timeout_ms else None
-        try:
-            buf = bytearray()
-            while len(buf) < size:
-                if timeout_sec is not None:
-                    chunk = await asyncio.wait_for(self._rx_queue.get(), timeout=timeout_sec)
-                else:
-                    chunk = await self._rx_queue.get()
-                buf.extend(chunk)
-            return bytes(buf[:size])
-        except asyncio.TimeoutError:
-            return bytes(buf)
+        end_time = (time.monotonic() + timeout_sec) if timeout_sec is not None else None
+
+        while len(self._buffer) < size:
+            if end_time is not None:
+                remaining = end_time - time.monotonic()
+                if remaining <= 0:
+                    break
+                try:
+                    chunk = await asyncio.wait_for(self._rx_queue.get(), timeout=remaining)
+                    self._buffer.extend(chunk)
+                except asyncio.TimeoutError:
+                    break
+            else:
+                chunk = await self._rx_queue.get()
+                self._buffer.extend(chunk)
+
+        result = bytes(self._buffer[:size])
+        self._buffer = self._buffer[size:]
+        return result
 
     async def set_pin_state(self, pin: str, state: bool) -> None:
         pass

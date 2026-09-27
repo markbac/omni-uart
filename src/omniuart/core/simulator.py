@@ -65,14 +65,15 @@ class BaseDeviceSimulator:
         buf = bytearray()
         while self._running:
             try:
-                chunk = await self.transport.read(size=1024, timeout_ms=100)
+                chunk = await self.transport.read(size=1, timeout_ms=50)
                 if not chunk:
-                    await asyncio.sleep(0.01)
+                    await asyncio.sleep(0.005)
                     continue
 
                 buf.extend(chunk)
                 resp = self.process_incoming_bytes(buf)
                 if resp:
+                    buf.clear()
                     if self.latency_ms > 0:
                         await asyncio.sleep(self.latency_ms / 1000.0)
                     if random.random() >= self.fault_drop_rate:
@@ -91,15 +92,20 @@ class BaseDeviceSimulator:
 
         self._state["rx_count"] += 1
         raw_text = buf.decode("utf-8", errors="ignore")
+        framing_type = getattr(self.spec.framing.type, "value", self.spec.framing.type)
 
         # Handle delimited ASCII protocols (e.g. AT commands)
-        if self.spec.framing.type.value == "delimited":
-            buf.clear()
-            return self.handle_delimited_command(raw_text.strip())
+        if str(framing_type).lower() == "delimited":
+            if "\n" in raw_text or "\r" in raw_text or len(buf) > 128:
+                cmd_str = raw_text.strip()
+                buf.clear()
+                return self.handle_delimited_command(cmd_str)
+            return None
 
         # Handle binary protocols
+        payload = bytes(buf)
         buf.clear()
-        return self.handle_binary_command(bytes(buf))
+        return self.handle_binary_command(payload)
 
     def handle_delimited_command(self, cmd_str: str) -> bytes:
         """Handle ASCII delimited text command string."""
