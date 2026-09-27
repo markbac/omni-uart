@@ -27,7 +27,7 @@ markdown_extensions:
       custom_fences:
         - name: mermaid
           class: mermaid
-          format: !!python/name:pymdownx.superfences.def_mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - tables
   - toc:
       permalink: true
@@ -38,4 +38,5 @@ nav:
   - System Architecture: architecture/system-architecture.md
   - Protocol Schema Specification: specs/protocol-schema-specification.md
   - Automation Script Specification: specs/script-schema-specification.md
+  - JSON Schemas: schemas/index.md
   - Hardware Protocols & AsyncAPI: protocols/index.md

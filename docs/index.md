@@ -88,4 +88,5 @@ commands:
 - [System Architecture](architecture/system-architecture.md): High-level system blocks, C4 diagrams, state machines, and subsystem contracts.
 - [Protocol Schema Specification](specs/protocol-schema-specification.md): Formal YAML/JSON protocol definition schema specification.
 - [Automation Script Specification](specs/script-schema-specification.md): Automation test script schema specification.
+- [JSON Schema Specifications](schemas/index.md): Declarative JSON Schema definitions (`protocol.schema.json`, `script.schema.json`, `uart-interface.schema.json`).
 - [Hardware Protocols & AsyncAPI Catalog](protocols/index.md): Catalog of 32+ hardware protocols with auto-generated AsyncAPI 2.6.0 specifications.

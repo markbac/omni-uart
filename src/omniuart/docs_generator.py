@@ -132,8 +132,26 @@ def build_site_documentation(output_dir: Union[str, Path]) -> Path:
     docs_dir = root_dir / "docs"
     protocols_docs_dir = docs_dir / "protocols"
     asyncapi_docs_dir = protocols_docs_dir / "asyncapi"
+    schemas_docs_dir = docs_dir / "schemas"
+
     protocols_docs_dir.mkdir(parents=True, exist_ok=True)
     asyncapi_docs_dir.mkdir(parents=True, exist_ok=True)
+    schemas_docs_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy raw schema JSON files into docs/schemas
+    root_schemas_dir = root_dir / "schemas"
+    if root_schemas_dir.exists():
+        for schema_file in root_schemas_dir.glob("*.json"):
+            shutil.copy2(schema_file, schemas_docs_dir / schema_file.name)
+
+    (schemas_docs_dir / "index.md").write_text(
+        "# OmniUART Declarative JSON Schemas\n\n"
+        "Official JSON Schema specifications for hardware UART protocol definitions and automated test scripts:\n\n"
+        "- ⚙️ **[Protocol JSON Schema](protocol.schema.json)**: Core protocol definition schema.\n"
+        "- ⚙️ **[UART Interface Schema Kit](uart-interface.schema.json)**: Standard AsyncAPI hardware interface schema.\n"
+        "- 📜 **[Automation Script JSON Schema](script.schema.json)**: Sequence runner script schema.\n",
+        encoding="utf-8",
+    )
 
     catalog = CatalogManager()
     summary = catalog.catalog_summary()
