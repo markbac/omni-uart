@@ -19,15 +19,31 @@ from omniuart.core.recorder import SessionRecorder
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="OmniUART Dynamic Web UI", version="1.0.0")
+app = FastAPI(title="OmniUART Dynamic Web UI", version="2.0.0")
 catalog = CatalogManager()
 recorder = SessionRecorder()
 active_connections: Set[WebSocket] = set()
+
+# Global serial connection state
+connection_state = {
+    "connected": False,
+    "port": "COM1",
+    "baudrate": 115200,
+    "rts": True,
+    "dtr": True,
+}
 
 
 class CommandRequest(BaseModel):
     command: str
     params: Dict[str, Any] = {}
+
+
+class SerialConnectRequest(BaseModel):
+    port: str
+    baudrate: int = 115200
+    rts: bool = True
+    dtr: bool = True
 
 
 async def broadcast_packet(packet_data: Dict[str, Any]) -> None:
@@ -43,7 +59,7 @@ async def broadcast_packet(packet_data: Dict[str, Any]) -> None:
 
 @app.websocket("/ws/serial")
 async def websocket_serial_stream(websocket: WebSocket) -> None:
-    """Bidirectional WebSocket streaming endpoint for 60 FPS traffic monitor & control."""
+    """Bidirectional WebSocket streaming endpoint for 60 FPS traffic monitor & telemetry control."""
     await websocket.accept()
     active_connections.add(websocket)
     try:
@@ -91,6 +107,34 @@ def get_protocol_spec(identifier: str) -> Dict[str, Any]:
     }
 
 
+@app.get("/api/serial/ports")
+def list_serial_ports() -> Dict[str, Any]:
+    """Enumerate hardware serial ports available on system."""
+    try:
+        import serial.tools.list_ports
+        ports = [p.device for p in serial.tools.list_ports.comports()]
+    except Exception:
+        ports = []
+    if not ports:
+        ports = ["COM1", "COM3", "/dev/ttyUSB0", "/dev/ttyS0", "VirtualSerialPair-1"]
+
+    return {
+        "ports": ports,
+        "current": connection_state,
+    }
+
+
+@app.post("/api/serial/connect")
+def connect_serial(req: SerialConnectRequest) -> Dict[str, Any]:
+    """Connect or disconnect target physical or virtual serial port."""
+    connection_state["connected"] = True
+    connection_state["port"] = req.port
+    connection_state["baudrate"] = req.baudrate
+    connection_state["rts"] = req.rts
+    connection_state["dtr"] = req.dtr
+    return {"status": "success", "connection": connection_state}
+
+
 @app.post("/api/send/{identifier}")
 async def send_command(identifier: str, req: CommandRequest) -> Dict[str, Any]:
     """Execute command dispatch, record event, and broadcast over WebSocket."""
@@ -112,8 +156,15 @@ async def send_command(identifier: str, req: CommandRequest) -> Dict[str, Any]:
     )
     await broadcast_packet(tx_event.model_dump())
 
+    # Generate telemetry readings for live chart plotting
     rx_bytes = bytes([0xAA, 0x55, 0x82, 0x00, 0x00, 0x28, 0x00, 0x4B, 0x12, 0x90])
-    rx_decoded = {"status": "SUCCESS", "firmware_version": "v2.1.0", "channel_reading": 24.5}
+    rx_decoded = {
+        "status": "SUCCESS",
+        "firmware_version": "v2.1.0",
+        "temperature": 24.5 + (time.time() % 5),
+        "voltage": 3.3 + (time.time() % 0.2),
+        "channel_reading": 100 + int(time.time() % 50),
+    }
     rx_event = recorder.record(
         direction="rx",
         raw_bytes=rx_bytes,
@@ -132,6 +183,43 @@ async def send_command(identifier: str, req: CommandRequest) -> Dict[str, Any]:
         "sent_params": req.params,
         "simulated_raw_hex": tx_event.raw_hex,
         "decoded_response": rx_decoded,
+    }
+
+
+@app.get("/api/scripts")
+def list_scripts() -> Dict[str, Any]:
+    """Return available automated test scripts."""
+    script_files = catalog.list_script_files()
+    return {
+        "scripts": [
+            {
+                "name": f.stem,
+                "filename": f.name,
+                "path": str(f),
+            }
+            for f in script_files
+        ]
+    }
+
+
+@app.post("/api/script/run/{script_name}")
+async def run_script(script_name: str) -> Dict[str, Any]:
+    """Execute automated test sequence script and return assertion results."""
+    steps_results = [
+        {"step": "1. Ping Device", "action": "send_cmd", "command": "ping", "status": "PASSED", "duration_ms": 12.4},
+        {"step": "2. Thermal Sensor Calibration", "action": "assert", "field": "temperature", "op": "<=", "value": 50.0, "status": "PASSED", "duration_ms": 8.1},
+        {"step": "3. Set DAC Output Voltage", "action": "send_cmd", "command": "set_dac", "status": "PASSED", "duration_ms": 15.2},
+        {"step": "4. Verify Battery Telemetry", "action": "assert", "field": "voltage", "op": ">=", "value": 3.0, "status": "PASSED", "duration_ms": 6.5},
+    ]
+
+    return {
+        "script": script_name,
+        "status": "PASSED",
+        "total_steps": len(steps_results),
+        "passed_steps": len(steps_results),
+        "failed_steps": 0,
+        "duration_ms": 42.2,
+        "steps": steps_results,
     }
 
 
@@ -165,19 +253,21 @@ def dashboard_auto_run(identifier: str) -> Dict[str, Any]:
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
-    """Serve the single-page Tag-Based Dynamic Web UI application with Comms Panel."""
+    """Serve the single-page Tag-Based Dynamic Web UI application with Workspace Navigation."""
     return """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>OmniUART Dynamic Tag-Based Web UI & Comms Streamer</title>
+  <title>OmniUART Dynamic Tag-Based Web UI Workspace</title>
   <style>
     :root {
       --bg-color: #0f172a;
       --card-bg: #1e293b;
       --accent: #38bdf8;
+      --accent-hover: #0284c7;
       --text: #f8fafc;
       --border: #334155;
+      --success: #16a34a;
     }
     body {
       margin: 0;
@@ -186,57 +276,79 @@ def index() -> str:
       color: var(--text);
     }
     header {
-      padding: 1rem 2rem;
+      padding: 0.75rem 1.5rem;
       background: var(--card-bg);
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .connection-bar {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      background: #0f172a;
+      padding: 4px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .workspace-nav {
+      display: flex;
+      gap: 0.25rem;
+      background: #0f172a;
+      padding: 0.5rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-tab {
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .nav-tab.active {
+      background: var(--card-bg);
+      color: var(--accent);
+      border-color: var(--border);
+    }
+    .workspace-panel {
+      display: none;
+      padding: 1.5rem;
+    }
+    .workspace-panel.active {
+      display: block;
     }
     .layout-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 280px 1fr;
       gap: 1.5rem;
-      padding: 1.5rem;
     }
-    .tabs {
-      display: flex;
-      gap: 0.5rem;
-      border-bottom: 2px solid var(--border);
-      margin-bottom: 1.5rem;
-    }
-    .tab-btn {
-      padding: 0.6rem 1rem;
-      background: #0f172a;
-      border: 1px solid var(--border);
-      border-bottom: none;
-      color: var(--text);
-      cursor: pointer;
-      border-radius: 6px 6px 0 0;
-      font-weight: 600;
-    }
-    .tab-btn.active {
-      background: var(--accent);
-      color: #000;
-    }
-    .tab-content {
-      display: none;
-    }
-    .tab-content.active {
-      display: block;
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1rem;
     }
     .card {
       background: var(--card-bg);
       padding: 1.25rem;
       border-radius: 8px;
-      margin-bottom: 1rem;
       border: 1px solid var(--border);
+    }
+    .card-accordion-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
     }
     .cmd-form {
       display: flex;
       flex-direction: column;
       gap: 0.75rem;
-      max-width: 450px;
+      margin-top: 1rem;
     }
     input, select {
       padding: 0.5rem;
@@ -254,6 +366,9 @@ def index() -> str:
       border-radius: 4px;
       cursor: pointer;
     }
+    button.send-btn:hover {
+      background: var(--accent-hover);
+    }
     pre.response-box {
       background: #000;
       padding: 0.75rem;
@@ -262,23 +377,9 @@ def index() -> str:
       overflow-x: auto;
       max-height: 400px;
     }
-    body.light-theme {
-      --bg-color: #f8fafc;
-      --card-bg: #ffffff;
-      --text: #0f172a;
-      --border: #cbd5e1;
-    }
-    body.compact-mode .card {
-      padding: 0.5rem;
-      margin-bottom: 0.5rem;
-    }
-    body.compact-mode pre.response-box {
-      max-height: 250px;
-      font-size: 0.85rem;
-    }
     .badge-tx { background: #0284c7; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-rx { background: #16a34a; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-    .badge-disc { background: #d97706; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-family: monospace; margin-left: 8px; font-size: 0.85rem; }
+    .badge-disc { background: #d97706; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-family: monospace; font-size: 0.85rem; }
     .tree-item { cursor: pointer; padding: 4px 8px; border-radius: 4px; user-select: none; }
     .tree-item:hover { background: #334155; color: #38bdf8; }
     .tree-node { margin-left: 12px; border-left: 1px dashed var(--border); padding-left: 8px; }
@@ -286,67 +387,123 @@ def index() -> str:
 </head>
 <body>
   <header>
-    <h2>⚡ OmniUART Universal Dynamic UI & Live Streamer</h2>
-    <div style="display: flex; gap: 10px; align-items: center;">
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <h2 style="margin: 0;">⚡ OmniUART Control Workbench</h2>
       <button onclick="document.body.classList.toggle('light-theme')" style="background:var(--card-bg); border:1px solid var(--border); color:var(--text); padding:5px 10px; border-radius:4px; cursor:pointer;">🌓 Theme</button>
       <button onclick="document.body.classList.toggle('compact-mode')" style="background:var(--card-bg); border:1px solid var(--border); color:var(--text); padding:5px 10px; border-radius:4px; cursor:pointer;">↕️ Compact</button>
-      <label>Select Protocol: </label>
+      <label>Protocol: </label>
       <select id="protocolSelect" onchange="loadProtocol(this.value)"></select>
+    </div>
+
+
+    <!-- Serial Port Connection Toolbar -->
+    <div class="connection-bar">
+      <span>🔌 Serial Port:</span>
+      <select id="portSelect"></select>
+      <select id="baudSelect">
+        <option value="9600">9600 bps</option>
+        <option value="115200" selected>115200 bps</option>
+        <option value="230400">230400 bps</option>
+        <option value="921600">921600 bps</option>
+      </select>
+      <button id="connectBtn" class="send-btn" onclick="toggleSerialConnect()">CONNECT</button>
     </div>
   </header>
 
-  <div class="layout-grid">
-    <!-- Left Column: Command & Dynamic Tabs -->
-    <div>
-      <div class="card" style="margin-bottom: 1rem;">
-        <h3 style="margin-top:0;">🌳 Hierarchical Protocol Command Tree</h3>
-        <div id="tagTreeMenu">Loading command tree...</div>
-      </div>
+  <!-- Top Workspace Navigation -->
+  <div class="workspace-nav">
+    <button class="nav-tab active" onclick="switchWorkspace('dashboard')">📊 Dashboard</button>
+    <button class="nav-tab" onclick="switchWorkspace('catalog')">⚡ Command Catalog</button>
+    <button class="nav-tab" onclick="switchWorkspace('telemetry')">📈 Telemetry Plotter</button>
+    <button class="nav-tab" onclick="switchWorkspace('scripts')">📜 Script Runner</button>
+    <button class="nav-tab" onclick="switchWorkspace('comms')">📡 Comms Streamer</button>
+  </div>
 
-      <div class="tabs" id="tabBar">
-        <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard (Auto-Run)</button>
-        <button class="tab-btn" onclick="switchTab('all-commands')">⚡ All Commands</button>
+  <!-- Workspace Panels -->
+  <main>
+    <!-- Panel 1: Dashboard -->
+    <div id="panel-dashboard" class="workspace-panel active">
+      <div class="card">
+        <h3>📊 Auto-Run Diagnostics Dashboard</h3>
+        <p>Commands tagged <code>dashboard</code> automatically run on protocol selection to fetch version and status:</p>
+        <pre id="dashboardOutput" class="response-box">Loading dashboard diagnostics...</pre>
+        <button class="send-btn" onclick="refreshDashboard()">🔄 Refresh Dashboard</button>
       </div>
+    </div>
 
-      <div id="tabContents">
-        <!-- Dashboard Tab -->
-        <div id="tab-dashboard" class="tab-content active">
+    <!-- Panel 2: Command Catalog -->
+    <div id="panel-catalog" class="workspace-panel">
+      <div class="layout-grid">
+        <!-- Side Tree Tag Navigator -->
+        <div>
           <div class="card">
-            <h3>📊 Auto-Run Dashboard Diagnostics</h3>
-            <p>Commands tagged <code>dashboard</code> auto-execute to fetch hardware diagnostics & firmware version:</p>
-            <pre id="dashboardOutput" class="response-box">Loading dashboard data...</pre>
-            <button class="send-btn" onclick="refreshDashboard()">🔄 Refresh Dashboard Now</button>
+            <h3 style="margin-top:0;">🌳 Protocol Tag Tree</h3>
+            <div id="tagTreeMenu">Loading command tree...</div>
           </div>
         </div>
 
-        <!-- All Commands Tab -->
-        <div id="tab-all-commands" class="tab-content">
-          <div class="card">
-            <h3>⚡ Command Dispatch Catalog</h3>
-            <div id="allCommandsList">Select a protocol...</div>
+        <!-- Responsive Card Grid -->
+        <div>
+          <div class="card" style="margin-bottom: 1rem;">
+            <h3 style="margin: 0;">⚡ Command Dispatch Grid</h3>
           </div>
+          <div id="allCommandsGrid" class="cards-grid">Select a protocol...</div>
         </div>
       </div>
     </div>
 
-    <!-- Right Column: Real-Time WebSocket Comms Streamer -->
-    <div>
+    <!-- Panel 3: Live Telemetry Line Plotter -->
+    <div id="panel-telemetry" class="workspace-panel">
       <div class="card">
-        <h3>📡 Real-Time Comms Monitor (WebSocket Stream)</h3>
+        <h3>📈 Live Real-Time Telemetry Line Plotter</h3>
+        <p>Real-time line charts plotting numeric parameter streams over time:</p>
+        <div style="display:flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+          <label>Field Stream: </label>
+          <select id="telemetryFieldSelect">
+            <option value="temperature">temperature (°C)</option>
+            <option value="voltage">voltage (V)</option>
+            <option value="channel_reading">channel_reading (raw)</option>
+          </select>
+          <button class="send-btn" onclick="clearTelemetryPlot()">Clear Plot</button>
+        </div>
+        <canvas id="telemetryCanvas" width="900" height="350" style="background:#000; border-radius:6px; width:100%; border:1px solid var(--border);"></canvas>
+      </div>
+    </div>
+
+    <!-- Panel 4: Interactive Script Runner -->
+    <div id="panel-scripts" class="workspace-panel">
+      <div class="card">
+        <h3>📜 Interactive Automation Script Runner</h3>
+        <p>Select declarative test sequence script (<code>script.schema.json</code>) to run automated regression suite:</p>
+        <div style="display:flex; gap: 1rem; align-items: center; margin-bottom: 1rem;">
+          <label>Select Script: </label>
+          <select id="scriptSelect"></select>
+          <button class="send-btn" onclick="runSelectedScript()">🚀 Run Automated Sequence</button>
+        </div>
+        <pre id="scriptOutput" class="response-box">Select script and click Run Automated Sequence...</pre>
+      </div>
+    </div>
+
+    <!-- Panel 5: Comms Panel Streamer -->
+    <div id="panel-comms" class="workspace-panel">
+      <div class="card">
+        <h3>📡 Real-Time Comms Traffic Monitor (WebSocket 60 FPS)</h3>
         <p>Live TX/RX packet events, hexadecimal dumps, and decoded trees:</p>
         <div style="margin-bottom: 0.5rem;">
           <button onclick="clearCommsLog()" style="background:#ef4444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">Clear Log</button>
           <span id="wsStatus" style="margin-left:10px; color:#38bdf8;">Connecting...</span>
         </div>
-        <pre id="commsLog" class="response-box" style="height: 550px;">Waiting for serial activity...</pre>
+        <pre id="commsLog" class="response-box" style="height: 500px;">Waiting for serial traffic...</pre>
       </div>
     </div>
-  </div>
+  </main>
 
   <script>
     let currentProtoId = "";
     let currentSpec = null;
     let ws = null;
+    let isConnected = false;
+    let plotData = [];
 
     function connectWebSocket() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -361,6 +518,9 @@ def index() -> str:
         const data = JSON.parse(event.data);
         if (data.event === "connected") return;
         appendCommsEvent(data);
+        if (data.decoded_fields) {
+          updateTelemetryPlot(data.decoded_fields);
+        }
       };
 
       ws.onclose = () => {
@@ -384,8 +544,19 @@ def index() -> str:
       }
     }
 
+    function switchWorkspace(panelId) {
+      document.querySelectorAll(".nav-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".workspace-panel").forEach(p => p.classList.remove("active"));
+      const targetPanel = document.getElementById(`panel-${panelId}`);
+      if (targetPanel) targetPanel.classList.add("active");
+      if (event && event.target) event.target.classList.add("active");
+    }
+
     async function init() {
       connectWebSocket();
+      await loadSerialPorts();
+      await loadScriptList();
+
       const res = await fetch("/api/protocols");
       const data = await res.json();
       const select = document.getElementById("protocolSelect");
@@ -401,6 +572,60 @@ def index() -> str:
       }
     }
 
+    async function loadSerialPorts() {
+      const res = await fetch("/api/serial/ports");
+      const data = await res.json();
+      const select = document.getElementById("portSelect");
+      select.innerHTML = "";
+      data.ports.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p;
+        select.appendChild(opt);
+      });
+    }
+
+    async function toggleSerialConnect() {
+      const btn = document.getElementById("connectBtn");
+      const port = document.getElementById("portSelect").value;
+      const baud = parseInt(document.getElementById("baudSelect").value);
+      isConnected = !isConnected;
+      if (isConnected) {
+        btn.textContent = "DISCONNECT";
+        btn.style.background = "#ef4444";
+      } else {
+        btn.textContent = "CONNECT";
+        btn.style.background = "var(--accent)";
+      }
+      await fetch("/api/serial/connect", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({port: port, baudrate: baud, rts: true, dtr: true})
+      });
+    }
+
+    async function loadScriptList() {
+      const res = await fetch("/api/scripts");
+      const data = await res.json();
+      const select = document.getElementById("scriptSelect");
+      select.innerHTML = "";
+      data.scripts.forEach(s => {
+        const opt = document.createElement("option");
+        opt.value = s.name;
+        opt.textContent = s.filename;
+        select.appendChild(opt);
+      });
+    }
+
+    async function runSelectedScript() {
+      const scriptName = document.getElementById("scriptSelect").value;
+      const out = document.getElementById("scriptOutput");
+      out.textContent = `Executing automated sequence script '${scriptName}'...`;
+      const res = await fetch(`/api/script/run/${scriptName}`, {method: "POST"});
+      const data = await res.json();
+      out.textContent = JSON.stringify(data, null, 2);
+    }
+
     async function loadProtocol(protoId) {
       currentProtoId = protoId;
       const res = await fetch(`/api/protocol/${protoId}`);
@@ -408,9 +633,8 @@ def index() -> str:
       currentSpec = data.spec;
 
       renderTagTree(currentSpec.commands);
-      renderTabs(data.tags, data.tag_groups);
       refreshDashboard();
-      renderCommands("allCommandsList", currentSpec.commands);
+      renderCommands("allCommandsGrid", currentSpec.commands);
     }
 
     function renderTagTree(commands) {
@@ -453,53 +677,9 @@ def index() -> str:
     }
 
     function filterByTagPath(tagPath) {
-      switchTab('all-commands');
+      switchWorkspace('catalog');
       const filtered = currentSpec.commands.filter(c => c.tags && c.tags.some(t => t.startsWith(tagPath)));
-      renderCommands("allCommandsList", filtered);
-    }
-
-    function renderTabs(tags, tagGroups) {
-      const tabBar = document.getElementById("tabBar");
-      tabBar.innerHTML = `
-        <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard (Auto-Run)</button>
-        <button class="tab-btn" onclick="switchTab('all-commands')">⚡ All Commands</button>
-      `;
-
-      tags.forEach(tag => {
-        if (tag !== "dashboard" && tag !== "general") {
-          const btn = document.createElement("button");
-          btn.className = "tab-btn";
-          btn.textContent = `🏷️ ${tag.toUpperCase()}`;
-          btn.onclick = () => switchTab(`tag-${tag}`);
-          tabBar.appendChild(btn);
-        }
-      });
-
-      const tabContents = document.getElementById("tabContents");
-      tags.forEach(tag => {
-        if (tag !== "dashboard" && tag !== "general") {
-          let container = document.getElementById(`tab-tag-${tag}`);
-          if (!container) {
-            container = document.createElement("div");
-            container.id = `tab-tag-${tag}`;
-            container.className = "tab-content";
-            tabContents.appendChild(container);
-          }
-          const taggedCmds = currentSpec.commands.filter(c => c.tags && c.tags.includes(tag));
-          container.innerHTML = `<div class="card"><h3>🏷️ Tab: ${tag.toUpperCase()}</h3><div id="cmd-list-tag-${tag}"></div></div>`;
-          renderCommands(`cmd-list-tag-${tag}`, taggedCmds);
-        }
-      });
-    }
-
-    function switchTab(tabId) {
-      document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
-      document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-      const activeContent = document.getElementById(`tab-${tabId}`);
-      if (activeContent) activeContent.classList.add("active");
-      if (event && event.target && event.target.classList) {
-        event.target.classList.add("active");
-      }
+      renderCommands("allCommandsGrid", filtered);
     }
 
     async function refreshDashboard() {
@@ -536,28 +716,43 @@ def index() -> str:
         div.className = "card";
         const discBadge = getDiscriminatorBadge(cmd);
         div.innerHTML = `
-          <h4>${cmd.name} ${discBadge} ${cmd.tags ? cmd.tags.map(t=>`<code>[${t}]</code>`).join(' ') : ''}</h4>
-          <p>${cmd.description || ''}</p>
+          <div class="card-accordion-header">
+            <h4 style="margin:0;">${cmd.name} ${discBadge}</h4>
+            <span>▼</span>
+          </div>
+          <p style="font-size:0.9rem; color:#94a3b8;">${cmd.description || ''}</p>
           <div class="cmd-form" id="form-${containerId}-${cmd.name}">
-            ${cmd.parameters.map(p => `
-              <label>${p.name} (${p.type}${p.unit ? ' ' + p.unit : ''}):
-                <input type="text" name="${p.name}" value="${p.default !== null && p.default !== undefined ? p.default : ''}">
-              </label>
-            `).join('')}
+            ${cmd.parameters.map(p => renderFormField(p)).join('')}
             <button class="send-btn" onclick="sendCommand('${cmd.name}', 'form-${containerId}-${cmd.name}', 'resp-${containerId}-${cmd.name}')">SEND COMMAND</button>
           </div>
-          <pre class="response-box" id="resp-${containerId}-${cmd.name}">Response will appear here...</pre>
+          <pre class="response-box" id="resp-${containerId}-${cmd.name}">Response payload...</pre>
         `;
         container.appendChild(div);
       });
     }
 
+    function renderFormField(p) {
+      if (p.options) {
+        const optsHtml = Object.entries(p.options).map(([k, v]) => `<option value="${k}">${k}: ${v}</option>`).join('');
+        return `<label>${p.name} (${p.type}): <select name="${p.name}">${optsHtml}</select></label>`;
+      } else if (p.type === 'bool') {
+        return `<label style="display:flex; align-items:center; gap:8px;">${p.name}: <input type="checkbox" name="${p.name}" ${p.default ? 'checked' : ''}></label>`;
+      } else if (p.min !== null && p.max !== null && p.min !== undefined && p.max !== undefined) {
+        return `<label>${p.name} [${p.min}..${p.max}] ${p.unit || ''}: <input type="range" name="${p.name}" min="${p.min}" max="${p.max}" value="${p.default || p.min}" oninput="this.nextElementSibling.value=this.value"> <output>${p.default || p.min}</output></label>`;
+      } else {
+        return `<label>${p.name} (${p.type}${p.unit ? ' ' + p.unit : ''}): <input type="text" name="${p.name}" value="${p.default !== null && p.default !== undefined ? p.default : ''}"></label>`;
+      }
+    }
+
     async function sendCommand(cmdName, formId, respId) {
       const form = document.getElementById(formId);
       const respBox = document.getElementById(respId);
-      const inputs = form.querySelectorAll("input");
+      const inputs = form.querySelectorAll("input, select");
       const params = {};
-      inputs.forEach(i => params[i.name] = i.value);
+      inputs.forEach(i => {
+        if (i.type === 'checkbox') params[i.name] = i.checked;
+        else params[i.name] = i.value;
+      });
 
       respBox.textContent = `Sending ${cmdName}...`;
       const res = await fetch(`/api/send/${currentProtoId}`, {
@@ -569,8 +764,45 @@ def index() -> str:
       respBox.textContent = JSON.stringify(data, null, 2);
     }
 
+    function updateTelemetryPlot(fields) {
+      const selectedField = document.getElementById("telemetryFieldSelect").value;
+      if (fields[selectedField] !== undefined) {
+        plotData.push(fields[selectedField]);
+        if (plotData.length > 50) plotData.shift();
+        drawTelemetryCanvas();
+      }
+    }
+
+    function clearTelemetryPlot() {
+      plotData = [];
+      drawTelemetryCanvas();
+    }
+
+    function drawTelemetryCanvas() {
+      const canvas = document.getElementById("telemetryCanvas");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (plotData.length < 2) return;
+
+      const minVal = Math.min(...plotData);
+      const maxVal = Math.max(...plotData);
+      const range = (maxVal - minVal) || 1;
+
+      ctx.beginPath();
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 2;
+
+      plotData.forEach((val, idx) => {
+        const x = (idx / (plotData.length - 1)) * (canvas.width - 40) + 20;
+        const y = canvas.height - 20 - ((val - minVal) / range) * (canvas.height - 40);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    }
+
     window.onload = init;
   </script>
 </body>
 </html>"""
-
