@@ -102,33 +102,64 @@ def generate_html_docs(spec: ProtocolSpec) -> str:
 </html>"""
 
 
-def _compile_asyncapi_html(yaml_path: Path, html_path: Path, root_dir: Path, asyncapi_docs_dir: Path, safe_stem: str) -> None:
-    """Helper to compile standalone AsyncAPI HTML page via @asyncapi/cli."""
-    if os.environ.get("PYTEST_CURRENT_TEST"):
-        return
+def _generate_asyncapi_fallback_html(spec: ProtocolSpec, yaml_content: str) -> str:
+    """Generate clean fallback AsyncAPI HTML page if @asyncapi/cli build is unavailable."""
+    meta = spec.metadata
+    yaml_escaped = html.escape(yaml_content)
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{html.escape(meta.name)} AsyncAPI 2.6.0 Specification</title>
+  <style>
+    body {{ font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem; max-width: 1000px; margin: 0 auto; line-height: 1.6; }}
+    h1, h2 {{ color: #38bdf8; }}
+    .badge {{ background: #0284c7; color: #fff; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85rem; }}
+    pre {{ background: #1e293b; padding: 1.25rem; border-radius: 8px; border: 1px solid #334155; overflow-x: auto; color: #34d399; font-family: monospace; font-size: 0.9rem; }}
+    a {{ color: #38bdf8; text-decoration: none; font-weight: bold; }}
+    a:hover {{ text-decoration: underline; }}
+    .meta-box {{ background: #1e293b; padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid #334155; margin: 1rem 0; }}
+  </style>
+</head>
+<body>
+  <p><a href="../index.html">← Back to Hardware Protocol Catalog</a></p>
+  <h1>⚡ {html.escape(meta.name)} AsyncAPI 2.6.0 Specification</h1>
+  <div class="meta-box">
+    <p><span class="badge">ASYNCAPI 2.6.0</span> <strong>Version:</strong> {html.escape(meta.version)} | <strong>Framing:</strong> {html.escape(spec.framing.type.value.upper())} | <strong>Baudrate:</strong> {spec.serial_config.baudrate} bps</p>
+    <p>{html.escape(meta.description or 'No description provided.')}</p>
+  </div>
+  <h2>📄 AsyncAPI 2.6.0 YAML Definition</h2>
+  <pre><code>{yaml_escaped}</code></pre>
+</body>
+</html>"""
 
-    npx_bin = shutil.which("npx.cmd") if os.name == "nt" else shutil.which("npx")
-    if not npx_bin:
-        return
 
-    try:
-        tmp_out_dir = asyncapi_docs_dir / f"tmp_{safe_stem}"
-        tmp_out_dir.mkdir(exist_ok=True)
-        env = {**os.environ, "CI": "true", "RPM_INTERACTIVE": "false"}
-        res = subprocess.run(
-            [npx_bin, "--yes", "asyncapi", "generate", "fromTemplate", str(yaml_path), "@asyncapi/html-template", "-o", str(tmp_out_dir), "--param", "singleFile=true", "--force-write"],
-            cwd=str(root_dir),
-            capture_output=True,
-            text=True,
-            timeout=5,
-            env=env,
-        )
-        generated_index = tmp_out_dir / "index.html"
-        if generated_index.exists():
-            shutil.copy2(generated_index, html_path)
-        shutil.rmtree(tmp_out_dir, ignore_errors=True)
-    except Exception:
-        pass
+def _compile_asyncapi_html(yaml_path: Path, html_path: Path, root_dir: Path, asyncapi_docs_dir: Path, safe_stem: str, spec: ProtocolSpec, yaml_content: str) -> None:
+    """Helper to compile standalone AsyncAPI HTML page via @asyncapi/cli with automatic fallback."""
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        npx_bin = shutil.which("npx.cmd") if os.name == "nt" else shutil.which("npx")
+        if npx_bin:
+            try:
+                tmp_out_dir = asyncapi_docs_dir / f"tmp_{safe_stem}"
+                tmp_out_dir.mkdir(exist_ok=True)
+                env = {**os.environ, "CI": "true", "RPM_INTERACTIVE": "false"}
+                res = subprocess.run(
+                    [npx_bin, "--yes", "asyncapi", "generate", "fromTemplate", str(yaml_path), "@asyncapi/html-template", "-o", str(tmp_out_dir), "--param", "singleFile=true", "--force-write"],
+                    cwd=str(root_dir),
+                    capture_output=True,
+                    text=True,
+                    timeout=25,
+                    env=env,
+                )
+                generated_index = tmp_out_dir / "index.html"
+                if generated_index.exists():
+                    shutil.copy2(generated_index, html_path)
+                shutil.rmtree(tmp_out_dir, ignore_errors=True)
+            except Exception:
+                pass
+
+    if not html_path.exists():
+        html_path.write_text(_generate_asyncapi_fallback_html(spec, yaml_content), encoding="utf-8")
 
 
 def build_site_documentation(output_dir: Union[str, Path]) -> Path:
@@ -187,7 +218,7 @@ def build_site_documentation(output_dir: Union[str, Path]) -> Path:
         yaml_path.write_text(yaml_content, encoding="utf-8")
         md_path.write_text(generate_markdown_docs(spec, safe_stem=safe_stem), encoding="utf-8")
 
-        html_tasks.append((yaml_path, html_path, root_dir, asyncapi_docs_dir, safe_stem))
+        html_tasks.append((yaml_path, html_path, root_dir, asyncapi_docs_dir, safe_stem, spec, yaml_content))
 
         protocol_nav_index.append(
             f"### [{spec.metadata.name}]({safe_stem}.md) (v{spec.metadata.version})\n"
