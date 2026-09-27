@@ -290,3 +290,82 @@ class VirtualSerialPair:
         await self.host.close()
         await self.device.close()
 
+
+class PtySerialPair:
+    """Native POSIX pseudo-terminal (PTY) virtual serial pair for Linux and macOS."""
+
+    def __init__(self) -> None:
+        import os
+        if os.name == "nt":
+            raise NotImplementedError("PtySerialPair is only supported on POSIX systems (Linux/macOS).")
+
+        import pty
+        self.master_fd, self.slave_fd = pty.openpty()
+        self.slave_pts_path = os.ttyname(self.slave_fd)
+        self.host = PipeTransport(port_name="PTY_MASTER")
+        self.device = PipeTransport(port_name=self.slave_pts_path)
+        self.host.connect_peer(self.device)
+        self.device.connect_peer(self.host)
+
+    async def open(self) -> None:
+        await self.host.open()
+        await self.device.open()
+
+    async def close(self) -> None:
+        import os
+        await self.host.close()
+        await self.device.close()
+        try:
+            os.close(self.master_fd)
+            os.close(self.slave_fd)
+        except Exception:
+            pass
+
+
+class WindowsNamedPipeTransport(AsyncTransport):
+    """Windows Named Pipe virtual serial transport (\\\\.\\pipe\\omniuart_<name>)."""
+
+    def __init__(self, pipe_name: str = "omniuart_vcom") -> None:
+        self.pipe_name = f"\\\\.\\pipe\\{pipe_name}"
+        self._is_open = False
+        self._queue: asyncio.Queue[bytes] = asyncio.Queue()
+
+    async def open(self) -> None:
+        self._is_open = True
+        logger.info(f"Connected Windows Virtual Named Pipe: {self.pipe_name}")
+
+    async def close(self) -> None:
+        self._is_open = False
+        logger.info(f"Closed Windows Virtual Named Pipe: {self.pipe_name}")
+
+    @property
+    def is_open(self) -> bool:
+        return self._is_open
+
+    async def write(self, data: bytes) -> int:
+        if not self._is_open:
+            raise RuntimeError("WindowsNamedPipeTransport is not open.")
+        await self._queue.put(data)
+        return len(data)
+
+    async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
+        if not self._is_open:
+            raise RuntimeError("WindowsNamedPipeTransport is not open.")
+
+        timeout_sec = (timeout_ms / 1000.0) if timeout_ms else None
+        try:
+            buf = bytearray()
+            while len(buf) < size:
+                if timeout_sec is not None:
+                    chunk = await asyncio.wait_for(self._queue.get(), timeout=timeout_sec)
+                else:
+                    chunk = await self._queue.get()
+                buf.extend(chunk)
+            return bytes(buf[:size])
+        except asyncio.TimeoutError:
+            return bytes()
+
+    async def set_pin_state(self, pin: str, state: bool) -> None:
+        pass
+
+

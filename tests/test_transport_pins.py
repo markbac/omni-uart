@@ -30,3 +30,34 @@ async def test_virtual_transport_pin_toggling() -> None:
     assert transport.pin_states["rts"] is False
 
     await transport.close()
+
+
+@pytest.mark.asyncio
+async def test_windows_named_pipe_transport() -> None:
+    from omniuart.core.transport import WindowsNamedPipeTransport
+    pipe = WindowsNamedPipeTransport("test_vcom")
+    await pipe.open()
+    assert pipe.is_open is True
+
+    await pipe.write(b"HELLO PIPE\r\n")
+    read_back = await pipe.read(size=12, timeout_ms=500)
+    assert read_back == b"HELLO PIPE\r\n"
+
+    await pipe.close()
+    assert pipe.is_open is False
+
+
+@pytest.mark.asyncio
+async def test_pty_serial_pair_raises_on_windows_or_works_posix() -> None:
+    import os
+    from omniuart.core.transport import PtySerialPair
+
+    if os.name == "nt":
+        with pytest.raises(NotImplementedError):
+            PtySerialPair()
+    else:
+        pty_pair = PtySerialPair()
+        await pty_pair.open()
+        assert pty_pair.slave_pts_path.startswith("/dev/pts")
+        await pty_pair.close()
+
