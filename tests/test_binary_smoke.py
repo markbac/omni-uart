@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 import pytest
 
-from omniuart.entrypoints import cli_main, web_main, desktop_main
+from omniuart.entrypoints import cli_main, desktop_main, simulator_main, web_main
 
 
 def test_cli_entrypoint_module():
@@ -30,6 +30,11 @@ def test_desktop_entrypoint_module():
     assert hasattr(desktop_main, "run")
 
 
+def test_simulator_entrypoint_module():
+    """Verify Simulator entrypoint module imports and helper functions work."""
+    assert hasattr(simulator_main, "run")
+
+
 @pytest.mark.skipif(os.environ.get("SKIP_BINARY_BUILD_TEST") == "1", reason="Skipping slow binary build test")
 def test_compiled_binaries_smoke_execution(tmp_path):
     """Smoke test compiled standalone executables for startup errors."""
@@ -40,8 +45,9 @@ def test_compiled_binaries_smoke_execution(tmp_path):
     cli_binary = dist_dir / ("omni-uart-cli.exe" if os.name == "nt" else "omni-uart-cli")
     web_binary = dist_dir / ("omni-uart-web.exe" if os.name == "nt" else "omni-uart-web")
     desktop_binary = dist_dir / ("omni-uart-desktop.exe" if os.name == "nt" else "omni-uart-desktop")
+    simulator_binary = dist_dir / ("omni-uart-simulator.exe" if os.name == "nt" else "omni-uart-simulator")
 
-    if not cli_binary.exists():
+    if not cli_binary.exists() or not simulator_binary.exists():
         # Build binaries for smoke testing
         res = subprocess.run(["pyinstaller", "omniuart.spec"], cwd=str(repo_root), capture_output=True, text=True)
         assert res.returncode == 0, f"PyInstaller build failed: {res.stderr}"
@@ -57,3 +63,6 @@ def test_compiled_binaries_smoke_execution(tmp_path):
 
     # 3. Verify omni-uart-desktop executable exists
     assert desktop_binary.exists(), f"Binary {desktop_binary} not found"
+
+    # 4. Verify omni-uart-simulator executable exists
+    assert simulator_binary.exists(), f"Binary {simulator_binary} not found"
