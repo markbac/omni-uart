@@ -11,18 +11,14 @@ permissions:
 
 jobs:
   build-binaries:
-    name: Build Standalone Binary (${{ matrix.os }})
+    name: Build Standalone Binaries (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: windows-latest
-            artifact_name: omni-uart-windows-amd64.exe
-            binary_path: dist/omni-uart.exe
             archive_name: omni-uart-windows-amd64.zip
           - os: ubuntu-latest
-            artifact_name: omni-uart-linux-amd64
-            binary_path: dist/omni-uart
             archive_name: omni-uart-linux-amd64.tar.gz
     steps:
       - name: Checkout repository
@@ -38,23 +34,27 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[dev] pyinstaller
 
-      - name: Compile Standalone Executable via PyInstaller
+      - name: Compile Standalone Executables (CLI, Web UI, Desktop UI) via PyInstaller
         run: |
           pyinstaller omniuart.spec
 
-      - name: Package Binary (Windows)
+      - name: Verify Binary Startup Execution
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m pytest tests/test_binary_smoke.py
+
+      - name: Package Binaries (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Copy-Item "${{ matrix.binary_path }}" "${{ matrix.artifact_name }}"
-          Compress-Archive -Path "${{ matrix.artifact_name }}", "docs/release/guidance.md", "README.md", "LICENSE" -DestinationPath "${{ matrix.archive_name }}"
+          Compress-Archive -Path "dist/omni-uart-cli.exe", "dist/omni-uart-web.exe", "dist/omni-uart-desktop.exe", "docs/release/guidance.md", "README.md", "LICENSE" -DestinationPath "${{ matrix.archive_name }}"
 
-      - name: Package Binary (Linux/macOS)
+      - name: Package Binaries (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          cp ${{ matrix.binary_path }} ${{ matrix.artifact_name }}
-          chmod +x ${{ matrix.artifact_name }}
-          tar -czvf ${{ matrix.archive_name }} ${{ matrix.artifact_name }} docs/release/guidance.md README.md LICENSE
+          chmod +x dist/omni-uart-cli dist/omni-uart-web dist/omni-uart-desktop
+          tar -czvf ${{ matrix.archive_name }} -C dist omni-uart-cli omni-uart-web omni-uart-desktop -C .. docs/release/guidance.md README.md LICENSE
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
@@ -95,13 +95,11 @@ jobs:
           prerelease: false
           generate_release_notes: true
           body: |
-            ## OmniUART Standalone Release
+            ## OmniUART Standalone Binary Suite Release
             
-            This release contains standalone single-file executables for Windows and Linux.
-            **No Python installation is required to run this tool.**
+            This release contains three dedicated standalone single-file executables for Windows and Linux:
+            - **`omni-uart-cli`**: Dedicated Command Line Interface binary.
+            - **`omni-uart-web`**: Dynamic Web UI server & browser launcher binary.
+            - **`omni-uart-desktop`**: Native Desktop Application Window binary.
             
-            ### Quickstart
-            - **Windows**: Download `omni-uart-windows-amd64.zip`, extract, and execute `.\omni-uart-windows-amd64.exe`.
-            - **Linux**: Download `omni-uart-linux-amd64.tar.gz`, extract, and execute `./omni-uart-linux-amd64`.
-            
-            Refer to the included `RELEASE_GUIDANCE.md` for complete user instructions and protocol schema documentation.
+            All binaries are verified in CI before release publication.

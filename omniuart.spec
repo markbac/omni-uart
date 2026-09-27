@@ -21,12 +21,17 @@ hiddenimports = [
     'uvicorn.protocols.websockets',
     'uvicorn.protocols.websockets.auto',
     'omniuart',
+    'omniuart.cli',
     'omniuart.ui',
     'omniuart.ui.app',
     'omniuart.ui.models',
     'omniuart.ui.routes',
     'omniuart.ui.views',
     'omniuart.ui.desktop',
+    'omniuart.entrypoints',
+    'omniuart.entrypoints.cli_main',
+    'omniuart.entrypoints.web_main',
+    'omniuart.entrypoints.desktop_main',
     'omniuart.core',
     'omniuart.core.models',
     'omniuart.core.catalog',
@@ -46,9 +51,9 @@ hiddenimports = [
     'starlette',
 ]
 
-
-a = Analysis(
-    ['src/omniuart/cli.py'],
+# 1. CLI Analysis & EXE
+a_cli = Analysis(
+    ['src/omniuart/entrypoints/cli_main.py'],
     pathex=['src'],
     binaries=[],
     datas=datas,
@@ -57,31 +62,78 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=['tkinter', 'matplotlib', 'scipy', 'numpy', 'IPython'],
-    win_no_prefer_redirects=False,
-    win_private_assemblies=False,
     cipher=block_cipher,
     noarchive=False,
 )
-
-pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
+pyz_cli = PYZ(a_cli.pure, a_cli.zipped_data, cipher=block_cipher)
+exe_cli = EXE(
+    pyz_cli,
+    a_cli.scripts,
+    a_cli.binaries,
+    a_cli.zipfiles,
+    a_cli.datas,
     [],
-    name='omni-uart',
+    name='omni-uart-cli',
     debug=False,
-    bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=True,
-    disable_windowed_traceback=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
+)
+
+# 2. Web UI Analysis & EXE
+a_web = Analysis(
+    ['src/omniuart/entrypoints/web_main.py'],
+    pathex=['src'],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=['tkinter', 'matplotlib', 'scipy', 'numpy', 'IPython'],
+    cipher=block_cipher,
+    noarchive=False,
+)
+pyz_web = PYZ(a_web.pure, a_web.zipped_data, cipher=block_cipher)
+exe_web = EXE(
+    pyz_web,
+    a_web.scripts,
+    a_web.binaries,
+    a_web.zipfiles,
+    a_web.datas,
+    [],
+    name='omni-uart-web',
+    debug=False,
+    strip=False,
+    upx=True,
+    console=True,
+)
+
+# 3. Desktop UI Analysis & EXE
+a_desktop = Analysis(
+    ['src/omniuart/entrypoints/desktop_main.py'],
+    pathex=['src'],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=['tkinter', 'matplotlib', 'scipy', 'numpy', 'IPython'],
+    cipher=block_cipher,
+    noarchive=False,
+)
+pyz_desktop = PYZ(a_desktop.pure, a_desktop.zipped_data, cipher=block_cipher)
+exe_desktop = EXE(
+    pyz_desktop,
+    a_desktop.scripts,
+    a_desktop.binaries,
+    a_desktop.zipfiles,
+    a_desktop.datas,
+    [],
+    name='omni-uart-desktop',
+    debug=False,
+    strip=False,
+    upx=True,
+    console=True,
 )

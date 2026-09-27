@@ -115,10 +115,41 @@ jobs:
       - name: Install package and test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[dev]
+          pip install -e .[dev] pyinstaller
 
       - name: Run pytest test suite
         env:
           PYTHONPATH: src
         run: |
           python -m pytest
+
+  verify-standalone-binaries:
+    name: Build & Verify PyInstaller Standalone Binaries (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev] pyinstaller
+
+      - name: Compile Standalone Binaries (CLI, Web UI, Desktop UI)
+        run: |
+          pyinstaller omniuart.spec
+
+      - name: Execute Binary Smoke Verification Test Suite
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m pytest tests/test_binary_smoke.py
