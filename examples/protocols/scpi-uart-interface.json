@@ -34,7 +34,8 @@
   "commands": [
     {
       "name": "Identify",
-      "description": "*IDN?",
+      "tags": ["scpi/system", "dashboard"],
+      "description": "*IDN? System identification query.",
       "fields": [
         {
           "name": "text",
@@ -46,7 +47,8 @@
     },
     {
       "name": "Reset",
-      "description": "*RST",
+      "tags": ["scpi/system"],
+      "description": "*RST System reset command.",
       "fields": [
         {
           "name": "text",
@@ -58,7 +60,8 @@
     },
     {
       "name": "ClearStatus",
-      "description": "*CLS",
+      "tags": ["scpi/system"],
+      "description": "*CLS Clear status registers.",
       "fields": [
         {
           "name": "text",
@@ -70,13 +73,45 @@
     },
     {
       "name": "MeasureVoltageDC",
-      "description": "MEAS:VOLT:DC? -- often chained after *RST;*CLS via compoundMessageDelimiter, e.g. one line reading '*RST;*CLS;MEAS:VOLT:DC?'.",
+      "tags": ["scpi/measure", "dashboard"],
+      "description": "MEAS:VOLT:DC? Measure DC voltage in Volts.",
       "fields": [
         {
           "name": "text",
           "type": "string",
           "constValue": "MEAS:VOLT:DC?",
           "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "MeasureCurrentDC",
+      "tags": ["scpi/measure"],
+      "description": "MEAS:CURR:DC? Measure DC current in Amperes.",
+      "fields": [
+        {
+          "name": "text",
+          "type": "string",
+          "constValue": "MEAS:CURR:DC?",
+          "role": "discriminator"
+        }
+      ]
+    },
+    {
+      "name": "SetVoltageOutput",
+      "tags": ["scpi/source"],
+      "description": "SOUR:VOLT <val> Set programmable power supply output voltage.",
+      "fields": [
+        {
+          "name": "prefix",
+          "type": "string",
+          "constValue": "SOUR:VOLT ",
+          "role": "discriminator"
+        },
+        {
+          "name": "voltage",
+          "type": "float",
+          "unit": "V"
         }
       ]
     }
@@ -103,15 +138,6 @@
         },
         {
           "name": "firmware",
-          "type": "string"
-        }
-      ]
-    },
-    {
-      "name": "MeasurementResult",
-      "fields": [
-        {
-          "name": "value",
           "type": "string"
         }
       ]

@@ -39,7 +39,10 @@
       "baseType": "enum",
       "sizeBytes": 1,
       "enumValues": {
+        "1": "ReadCoils",
+        "2": "ReadDiscreteInputs",
         "3": "ReadHoldingRegisters",
+        "4": "ReadInputRegisters",
         "6": "WriteSingleRegister",
         "16": "WriteMultipleRegisters"
       }
@@ -52,8 +55,61 @@
   },
   "commands": [
     {
+      "name": "ReadCoilsRequest",
+      "tags": ["modbus/coils"],
+      "description": "Function 0x01: Read boolean coils status.",
+      "fields": [
+        {
+          "name": "slaveAddress",
+          "type": "slaveAddress"
+        },
+        {
+          "name": "functionCode",
+          "type": "functionCode",
+          "constValue": 1,
+          "role": "discriminator"
+        },
+        {
+          "name": "startAddress",
+          "type": "register"
+        },
+        {
+          "name": "quantity",
+          "type": "register",
+          "units": "coils"
+        }
+      ]
+    },
+    {
+      "name": "ReadDiscreteInputsRequest",
+      "tags": ["modbus/inputs"],
+      "description": "Function 0x02: Read discrete inputs status.",
+      "fields": [
+        {
+          "name": "slaveAddress",
+          "type": "slaveAddress"
+        },
+        {
+          "name": "functionCode",
+          "type": "functionCode",
+          "constValue": 2,
+          "role": "discriminator"
+        },
+        {
+          "name": "startAddress",
+          "type": "register"
+        },
+        {
+          "name": "quantity",
+          "type": "register",
+          "units": "inputs"
+        }
+      ]
+    },
+    {
       "name": "ReadHoldingRegistersRequest",
-      "description": "Function 0x03: read a block of holding registers.",
+      "tags": ["modbus/registers", "dashboard"],
+      "description": "Function 0x03: Read a block of holding registers.",
       "fields": [
         {
           "name": "slaveAddress",
@@ -77,8 +133,35 @@
       ]
     },
     {
+      "name": "ReadInputRegistersRequest",
+      "tags": ["modbus/input_registers"],
+      "description": "Function 0x04: Read a block of input registers.",
+      "fields": [
+        {
+          "name": "slaveAddress",
+          "type": "slaveAddress"
+        },
+        {
+          "name": "functionCode",
+          "type": "functionCode",
+          "constValue": 4,
+          "role": "discriminator"
+        },
+        {
+          "name": "startAddress",
+          "type": "register"
+        },
+        {
+          "name": "quantity",
+          "type": "register",
+          "units": "registers"
+        }
+      ]
+    },
+    {
       "name": "WriteSingleRegisterRequest",
-      "description": "Function 0x06: write one holding register.",
+      "tags": ["modbus/write"],
+      "description": "Function 0x06: Write one holding register.",
       "fields": [
         {
           "name": "slaveAddress",
@@ -99,11 +182,11 @@
           "type": "register"
         }
       ]
-    }
-  ],
-  "responses": [
+    },
     {
-      "name": "ReadHoldingRegistersResponse",
+      "name": "WriteMultipleRegistersRequest",
+      "tags": ["modbus/write_multiple"],
+      "description": "Function 0x10: Write multiple holding registers.",
       "fields": [
         {
           "name": "slaveAddress",
@@ -112,38 +195,21 @@
         {
           "name": "functionCode",
           "type": "functionCode",
-          "constValue": 3,
+          "constValue": 16,
           "role": "discriminator"
         },
         {
+          "name": "startAddress",
+          "type": "register"
+        },
+        {
+          "name": "quantity",
+          "type": "register",
+          "units": "registers"
+        },
+        {
           "name": "byteCount",
-          "type": "uint",
-          "sizeBytes": 1
-        },
-        {
-          "name": "registerValues",
-          "type": "bytes",
-          "variableLength": "remainder"
-        }
-      ]
-    },
-    {
-      "name": "ExceptionResponse",
-      "description": "functionCode returned with its top bit set (i.e. original code + 0x80) -- a RANGE-based discriminator (\"top bit set\"), which this schema can't express as a constValue; no role=discriminator marking possible here, a genuine minor gap.",
-      "fields": [
-        {
-          "name": "slaveAddress",
           "type": "slaveAddress"
-        },
-        {
-          "name": "functionCode",
-          "type": "uint",
-          "sizeBytes": 1
-        },
-        {
-          "name": "exceptionCode",
-          "type": "uint",
-          "sizeBytes": 1
         }
       ]
     }
