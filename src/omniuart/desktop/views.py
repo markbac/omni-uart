@@ -27,6 +27,12 @@ def build_frame_payload(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, 
     for param in cmd.parameters:
         val = params.get(param.name, param.default if param.default is not None else 0)
         try:
+            # Enforce range bounds if defined (#132)
+            if param.min is not None and isinstance(val, (int, float)) and val < param.min:
+                val = param.min
+            if param.max is not None and isinstance(val, (int, float)) and val > param.max:
+                val = param.max
+
             if param.type.value in ("uint8", "int8", "enum"):
                 int_val = int(val)
                 fmt = ">B" if param.endian == "big" else "<B"
