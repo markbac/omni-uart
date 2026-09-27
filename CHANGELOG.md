@@ -5,6 +5,15 @@ All notable changes to the OmniUART project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-09-27
+
+### Added
+- Integrated Vale, Markdownlint, `.vale.ini`, `.markdownlint.yaml`, and `Embedded` style rules from `docs-check` into `scripts/check_docs.py` and CI pipeline (#133).
+
+### Fixed
+- Fixed FastAPI Web UI server launcher to enforce strict `127.0.0.1` loopback binding (#131).
+- Fixed desktop frame payload builder with parameter min/max range bounds checking and numeric type casting safety (#132).
+
 ## [1.5.0] - 2026-09-27
 
 ### Added
@@ -57,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release of OmniUART schema-driven protocol engine with interactive CLI, batch runner, and FastAPI Web UI.
 
+[1.6.0]: https://github.com/markbac/omni-uart/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/markbac/omni-uart/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/markbac/omni-uart/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/markbac/omni-uart/compare/v1.2.0...v1.3.0
