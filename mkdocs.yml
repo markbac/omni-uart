@@ -2,6 +2,7 @@ site_name: OmniUART Protocol Engineering & Telemetry Tool
 site_description: Universal schema-driven UART protocol tool for embedded systems, IoT devices, and hardware test engineering.
 site_author: Mark Bacon
 site_url: https://markbac.github.io/omni-uart/
+use_directory_urls: false
 
 theme:
   name: material
@@ -33,10 +34,11 @@ markdown_extensions:
       permalink: true
 
 nav:
-  - Home: index.md
+  - Overview & Hub: index.md
   - User Manual & Quickstart: release/guidance.md
   - System Architecture: architecture/system-architecture.md
   - Protocol Schema Specification: specs/protocol-schema-specification.md
   - Automation Script Specification: specs/script-schema-specification.md
-  - JSON Schemas: schemas/index.md
+  - Declarative JSON Schemas: schemas/index.md
   - Hardware Protocols & AsyncAPI: protocols/index.md
+  - Test Strategy: testing/test-strategy.md
