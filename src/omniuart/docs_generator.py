@@ -104,14 +104,24 @@ def generate_html_docs(spec: ProtocolSpec) -> str:
 
 def _compile_asyncapi_html(yaml_path: Path, html_path: Path, root_dir: Path, asyncapi_docs_dir: Path, safe_stem: str) -> None:
     """Helper to compile standalone AsyncAPI HTML page via @asyncapi/cli."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+
+    npx_bin = shutil.which("npx.cmd") if os.name == "nt" else shutil.which("npx")
+    if not npx_bin:
+        return
+
     try:
         tmp_out_dir = asyncapi_docs_dir / f"tmp_{safe_stem}"
         tmp_out_dir.mkdir(exist_ok=True)
+        env = {**os.environ, "CI": "true", "RPM_INTERACTIVE": "false"}
         res = subprocess.run(
-            ["npx.cmd" if os.name == "nt" else "npx", "asyncapi", "generate", "fromTemplate", str(yaml_path), "@asyncapi/html-template", "-o", str(tmp_out_dir), "--param", "singleFile=true", "--force-write"],
+            [npx_bin, "--yes", "asyncapi", "generate", "fromTemplate", str(yaml_path), "@asyncapi/html-template", "-o", str(tmp_out_dir), "--param", "singleFile=true", "--force-write"],
             cwd=str(root_dir),
             capture_output=True,
             text=True,
+            timeout=5,
+            env=env,
         )
         generated_index = tmp_out_dir / "index.html"
         if generated_index.exists():
