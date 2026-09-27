@@ -686,7 +686,7 @@ class AutomationScriptRunnerView(ttk.Frame):
 
 
 class CommsStreamerView(ttk.Frame):
-    """Raw Hex/ASCII Comms Streamer Console Tab."""
+    """Raw Hex/ASCII Comms Streamer Console Tab with Dual Decoded Packet Field Breakdown."""
 
     def __init__(self, parent: tk.Widget, on_transmit: Callable[[str, bytes], None]) -> None:
         super().__init__(parent, padding=12)
@@ -696,10 +696,13 @@ class CommsStreamerView(ttk.Frame):
         toolbar.pack(fill=tk.X, pady=(0, 8))
 
         ttk.Label(toolbar, text="Display Mode:").pack(side=tk.LEFT, padx=4)
-        self.mode_var = tk.StringVar(value="Hex + ASCII")
-        ttk.Combobox(toolbar, textvariable=self.mode_var, values=["Hex + ASCII", "Hex Only", "ASCII Only"], width=12).pack(
-            side=tk.LEFT, padx=4
-        )
+        self.mode_var = tk.StringVar(value="Dual (Raw Hex + Decoded Fields)")
+        ttk.Combobox(
+            toolbar,
+            textvariable=self.mode_var,
+            values=["Dual (Raw Hex + Decoded Fields)", "Hex + ASCII", "Hex Only", "ASCII Only", "Decoded Fields Only"],
+            width=30,
+        ).pack(side=tk.LEFT, padx=4)
 
         self.autoscroll_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(toolbar, text="Autoscroll", variable=self.autoscroll_var).pack(side=tk.LEFT, padx=8)
@@ -714,6 +717,7 @@ class CommsStreamerView(ttk.Frame):
         self.console.tag_config("RX", foreground="#4ade80")
         self.console.tag_config("ERR", foreground="#f87171")
         self.console.tag_config("TIME", foreground="#64748b")
+        self.console.tag_config("DECODED", foreground="#fbbf24")
 
         # Raw transmit bar
         tx_bar = ttk.Frame(self)
@@ -726,26 +730,59 @@ class CommsStreamerView(ttk.Frame):
 
         ttk.Button(tx_bar, text="Send Packet", command=self._send_raw).pack(side=tk.RIGHT, padx=4)
 
+    def _decode_packet_fields(self, data: bytes) -> str:
+        """Decode raw packet into structured semantic fields and framing breakdown."""
+        if not data:
+            return "Empty packet"
+
+        fields = [f"Length: {len(data)}B"]
+        is_ascii = all(32 <= b <= 126 or b in (10, 13) for b in data)
+
+        if is_ascii:
+            fields.append("Type: ASCII")
+            fields.append(f'Data: "{data.decode("utf-8", errors="replace").strip()}"')
+        else:
+            fields.append("Type: Binary")
+            if len(data) >= 1:
+                fields.append(f"Header: 0x{data[0]:02X}")
+            if len(data) >= 2:
+                fields.append(f"Opcode/ID: 0x{data[1]:02X}")
+            if len(data) > 3:
+                payload_hex = data[2:-1].hex().upper()
+                fields.append(f"Payload ({len(data)-3}B): 0x{payload_hex}")
+                fields.append(f"CRC/Check: 0x{data[-1]:02X}")
+            elif len(data) == 3:
+                fields.append(f"Payload: 0x{data[2]:02X}")
+
+        return " | ".join(fields)
+
     def log(self, direction: str, data: bytes, label: str = "") -> None:
-        """Append RX/TX packet event to console."""
-        ts = time.strftime("[%H:%M:%S.%3d]")
+        """Append RX/TX packet event to console with dual raw/decoded formatting."""
+        now = time.time()
+        ts = f"[{time.strftime('%H:%M:%S', time.localtime(now))}.{int((now % 1) * 1000):03d}]"
         hex_str = " ".join(f"{b:02X}" for b in data)
         ascii_str = "".join(chr(b) if 32 <= b <= 126 else "." for b in data)
+        decoded_fields = self._decode_packet_fields(data)
 
         mode = self.mode_var.get()
-        if mode == "Hex Only":
-            payload = hex_str
-        elif mode == "ASCII Only":
-            payload = ascii_str
-        else:
-            payload = f"{hex_str} | '{ascii_str}'"
-
         dir_tag = "TX" if direction.upper() == "TX" else "RX"
         tag_str = f"[{dir_tag}] {label}: " if label else f"[{dir_tag}]: "
 
         self.console.insert(tk.END, f"{ts} ", "TIME")
         self.console.insert(tk.END, tag_str, dir_tag)
-        self.console.insert(tk.END, f"{payload}\n")
+
+        if mode == "Hex Only":
+            self.console.insert(tk.END, f"{hex_str}\n")
+        elif mode == "ASCII Only":
+            self.console.insert(tk.END, f"{ascii_str}\n")
+        elif mode == "Decoded Fields Only":
+            self.console.insert(tk.END, f"{decoded_fields}\n", "DECODED")
+        elif mode == "Hex + ASCII":
+            self.console.insert(tk.END, f"{hex_str} | '{ascii_str}'\n")
+        else:
+            # Dual (Raw Hex + Decoded Fields)
+            self.console.insert(tk.END, f"{hex_str} | '{ascii_str}'\n")
+            self.console.insert(tk.END, f"    └─ Decoded: {decoded_fields}\n", "DECODED")
 
         if self.autoscroll_var.get():
             self.console.see(tk.END)
@@ -759,7 +796,6 @@ class CommsStreamerView(ttk.Frame):
             return
 
         try:
-            # Parse hex or ASCII
             cleaned = raw_text.replace(" ", "")
             raw_bytes = bytes.fromhex(cleaned)
         except ValueError:
