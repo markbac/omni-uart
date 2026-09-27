@@ -213,20 +213,20 @@ def build_site_documentation(output_dir: Union[str, Path]) -> Path:
                 cwd=str(root_dir),
                 capture_output=True,
                 text=True,
-                timeout=10,
+                timeout=30,
             )
             if res.returncode == 0:
                 return out
         except Exception:
             pass
 
-    # Fallback HTML index generator
+    # Fallback HTML index generator for About OmniUART landing page
     index_lines = [
         "<!DOCTYPE html>",
         "<html lang='en'>",
         "<head>",
         "  <meta charset='UTF-8'>",
-        "  <title>OmniUART Hardware Protocol Specification Hub</title>",
+        "  <title>About OmniUART - Universal Hardware Protocol Workbench</title>",
         "  <style>",
         "    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; background: #0f172a; color: #fff; padding: 0 1rem; line-height: 1.5; }",
         "    h1, h2 { color: #38bdf8; }",
@@ -234,19 +234,66 @@ def build_site_documentation(output_dir: Union[str, Path]) -> Path:
         "    .tag-badge { background: #0284c7; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-right: 5px; }",
         "    a { color: #34d399; text-decoration: none; font-weight: bold; }",
         "    a:hover { text-decoration: underline; }",
-        "    .nav-bar { display: flex; gap: 1rem; background: #1e293b; padding: 1rem; border-radius: 8px; border: 1px solid #334155; margin-bottom: 2rem; }",
+        "    .nav-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; background: #1e293b; padding: 1rem; border-radius: 8px; border: 1px solid #334155; margin-bottom: 2rem; }",
+        "    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }",
         "  </style>",
         "</head>",
         "<body>",
-        "  <h1>⚡ OmniUART Hardware Protocol Specification Hub</h1>",
-        "  <p>Comprehensive system architecture, AsyncAPI specifications, JSON Schemas, user manuals, and protocol catalog.</p>",
+        "  <h1>⚡ About OmniUART</h1>",
+        "  <p><strong>Universal schema-driven hardware protocol workbench and telemetry tool for embedded systems, IoT devices, and hardware test engineering.</strong></p>",
         "  <div class='nav-bar'>",
-        "    <a href='protocols/index.html'>📚 Protocol Catalog</a>",
-        "    <a href='architecture/system-architecture.html'>🏛️ System Architecture</a>",
-        "    <a href='release/guidance.html'>📖 User Manual & CLI Guide</a>",
+        "    <a href='release/guidance.html'>📖 User Manual</a>",
+        "    <a href='architecture/system-architecture.html'>🏛️ Architecture</a>",
+        "    <a href='specs/protocol-schema-specification.html'>⚙️ Protocol Spec</a>",
         "    <a href='schemas/index.html'>⚙️ JSON Schemas</a>",
+        "    <a href='protocols/index.html'>📚 Hardware Protocols & AsyncAPI Catalog</a>",
+        "    <a href='testing/test-strategy.html'>🧪 Test Strategy</a>",
         "  </div>",
-        "  <h2 id='protocols'>Discovered Hardware Protocols & AsyncAPI Tooling Specifications</h2>",
+        "  <h2>💡 Key Capabilities</h2>",
+        "  <div class='grid'>",
+        "    <div class='card'>",
+        "      <h3>📖 System Documentation</h3>",
+        "      <p>Guides for CLI, Desktop GUI, Web UI, framing engine, and automated sequence runner.</p>",
+        "      <p><a href='release/guidance.html'>View User Manual & Guides →</a></p>",
+        "    </div>",
+        "    <div class='card'>",
+        "      <h3>📚 AsyncAPI Protocol Specs</h3>",
+        "      <p>32+ auto-discovered UART hardware protocols with formal AsyncAPI 2.6.0 YAML and HTML specs.</p>",
+        "      <p><a href='protocols/index.html'>Explore Protocol Catalog →</a></p>",
+        "    </div>",
+        "    <div class='card'>",
+        "      <h3>⚙️ Declarative JSON Schemas</h3>",
+        "      <p>JSON Schema files for protocol definitions, AsyncAPI interface kits, and test scripts.</p>",
+        "      <p><a href='schemas/index.html'>Inspect Schemas →</a></p>",
+        "    </div>",
+        "  </div>",
+        "</body>",
+        "</html>",
+    ]
+
+    (out / "index.html").write_text("\n".join(index_lines), encoding="utf-8")
+
+    # Generate protocols/index.html for discovered hardware protocols catalog
+    protocols_out_dir = out / "protocols"
+    protocols_out_dir.mkdir(parents=True, exist_ok=True)
+    proto_index_lines = [
+        "<!DOCTYPE html>",
+        "<html lang='en'>",
+        "<head>",
+        "  <meta charset='UTF-8'>",
+        "  <title>Hardware Protocols & AsyncAPI Catalog - OmniUART</title>",
+        "  <style>",
+        "    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; background: #0f172a; color: #fff; padding: 0 1rem; line-height: 1.5; }",
+        "    h1, h2 { color: #38bdf8; }",
+        "    .card { background: #1e293b; padding: 1rem 1.5rem; margin: 1rem 0; border-radius: 8px; border: 1px solid #334155; }",
+        "    .tag-badge { background: #0284c7; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-right: 5px; }",
+        "    a { color: #34d399; text-decoration: none; font-weight: bold; }",
+        "    a:hover { text-decoration: underline; }",
+        "  </style>",
+        "</head>",
+        "<body>",
+        "  <p><a href='../index.html'>← Back to About OmniUART</a></p>",
+        "  <h1>⚡ Discovered Hardware Protocols & AsyncAPI Specifications</h1>",
     ]
 
     for p in summary["protocols"]:
@@ -260,16 +307,16 @@ def build_site_documentation(output_dir: Union[str, Path]) -> Path:
         (out / html_filename).write_text(generate_html_docs(spec), encoding="utf-8")
         (out / md_filename).write_text(generate_markdown_docs(spec, safe_stem=safe_stem), encoding="utf-8")
 
-        index_lines.append(
+        proto_index_lines.append(
             f"  <div class='card'>"
             f"    <h3><span class='tag-badge'>{html.escape(spec.framing.type.value.upper())}</span> {html.escape(spec.metadata.name)} (v{spec.metadata.version})</h3>"
             f"    <p>{html.escape(spec.metadata.description or '')}</p>"
             f"    <p>Baudrate: {spec.serial_config.baudrate} bps | Commands: {len(spec.commands)}</p>"
-            f"    <p><a href='{html_filename}'>📄 View HTML Specs</a> | <a href='{md_filename}'>📝 View Markdown</a></p>"
+            f"    <p><a href='../{html_filename}'>📄 View HTML Specs</a> | <a href='../{md_filename}'>📝 View Markdown</a></p>"
             f"  </div>"
         )
 
-    index_lines.extend(["</body>", "</html>"])
-    (out / "index.html").write_text("\n".join(index_lines), encoding="utf-8")
+    proto_index_lines.extend(["</body>", "</html>"])
+    (protocols_out_dir / "index.html").write_text("\n".join(proto_index_lines), encoding="utf-8")
 
     return out
