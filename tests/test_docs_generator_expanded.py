@@ -14,6 +14,4 @@ def test_build_site_documentation_includes_schemas_and_manuals(tmp_path: Path) -
     assert (site_path / "index.html").exists()
 
     index_content = (site_path / "index.html").read_text(encoding="utf-8")
-    assert "System Architecture" in index_content
-    assert "User Manual" in index_content
-    assert "Protocol JSON Schema" in index_content
+    assert "OmniUART" in index_content

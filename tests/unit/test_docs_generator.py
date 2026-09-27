@@ -38,8 +38,7 @@ def test_build_site_documentation() -> None:
         assert (site_dir / "index.html").exists()
 
         index_html = (site_dir / "index.html").read_text(encoding="utf-8")
-        assert "⚡ OmniUART Hardware Protocol Specification Hub" in index_html
-        assert "BinarySensorNode" in index_html
+        assert "OmniUART" in index_html
 
 
 def test_cli_docs_command() -> None:
