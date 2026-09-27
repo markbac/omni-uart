@@ -294,6 +294,10 @@ def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bo
     import uvicorn
     from omniuart.ui.desktop import launch_desktop_window
 
+    # Enforce loopback host safety for security (#131)
+    if not host or host in ("0.0.0.0", "::"):
+        host = "127.0.0.1"
+
     url = f"http://{host}:{port}"
     print(f"\n========================================================")
     print(f"  ⚡ OmniUART Interactive Control Workbench ({mode.upper()} Mode)")
