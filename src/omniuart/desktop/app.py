@@ -39,7 +39,12 @@ class OmniUARTDesktopApp(tk.Tk):
         self.rx_bytes_count = 0
 
         # Physical serial connection header bar
-        self.toolbar = ConnectionToolbar(self, on_connect_toggle=self._on_connection_change)
+        self.toolbar = ConnectionToolbar(
+            self,
+            on_connect_toggle=self._on_connection_change,
+            catalog=self.catalog,
+            on_protocol_change=self._on_global_protocol_change,
+        )
         self.toolbar.pack(fill=tk.X, side=tk.TOP)
 
         # Separator line
@@ -115,6 +120,14 @@ class OmniUARTDesktopApp(tk.Tk):
         state_str = "Connected to " + config["port"] if config["connected"] else "Disconnected"
         self.status_text_var.set(f"Physical Serial Status: {state_str}")
         logger.info("Serial connection updated: %s", config)
+
+    def _on_global_protocol_change(self, proto_name: str) -> None:
+        """Propagate active protocol selection across all workspace tabs."""
+        self.dashboard_view.proto_var.set(proto_name)
+        self.dashboard_view.refresh_data()
+        self.catalog_view.proto_filter_var.set(proto_name)
+        self.catalog_view._populate_tree()
+        self.status_text_var.set(f"Global active protocol set to: '{proto_name}'")
 
     def _handle_transmit(self, label: str, raw_bytes: bytes) -> None:
         self.tx_bytes_count += len(raw_bytes)
