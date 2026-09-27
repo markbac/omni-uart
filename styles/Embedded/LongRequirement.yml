@@ -1,0 +1,7 @@
+extends: existence
+message: "Requirement sentence looks long (~20+ words) - one clear, testable statement per requirement reads better than a compound one."
+level: warning
+scope: sentence
+ignorecase: true
+tokens:
+  - '(?=.*\b(?:MUST|SHALL|SHOULD|MAY)\b)(?:\S+\s+){20,}\S*\b(?:MUST|SHALL|SHOULD|MAY)\b|\b(?:MUST|SHALL|SHOULD|MAY)\b(?=(?:\s+\S+){19,})'

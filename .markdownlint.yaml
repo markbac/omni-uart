@@ -1,0 +1,33 @@
+# markdownlint config matching this project's house style.
+default: true
+
+MD003:
+  style: atx            # ATX headings only, no setext
+MD004:
+  style: dash            # '-' for unordered lists
+MD007:
+  indent: 2               # nested list indent
+MD009:
+  br_spaces: 0            # no trailing-space hard breaks; use '\' instead
+MD024:
+  siblings_only: true     # allow repeated subsection titles (Approach, Properties,
+                           # Drawbacks, ...) under different parent headings, e.g.
+                           # Option A / Option B
+MD013: false               # no enforced line-length limit
+MD025: false                # multiple H1s are allowed
+MD029:
+  style: one               # '1.' throughout, not incrementing
+MD041: false                 # files are assembled fragments, not standalone docs
+MD046:
+  style: fenced              # fenced code blocks, not indented
+MD011: false                 # false positives on our own [[CAPTION:...]] syntax
+                              # immediately after a parenthesised label, e.g.
+                              # "(6000-6999)[[CAPTION:Table]]" reads as a
+                              # reversed markdown link
+MD060: false                  # table pipe-alignment/spacing - purely cosmetic,
+                               # and noisy on data-heavy ICD tables
+MD051: false                   # in-file link-fragment checker - only sees one
+                                # file at a time, so it misreads legitimate
+                                # cross-file anchors as broken. Replaced by
+                                # structure/cross-file-anchor, which checks
+                                # anchors against the whole manifest.

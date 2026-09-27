@@ -1,0 +1,12 @@
+extends: existence
+message: "Don't use all uppercase for emphasis."
+link: https://learn.microsoft.com/en-us/style-guide/capitalization
+level: suggestion
+nonword: true
+# Three or more consecutive all-caps words. Microsoft's original rule
+# flags two or more, but this project's prose regularly has two adjacent
+# acronyms (FW FOTA) or RFC 2119 pairs (MUST NOT) that aren't emphasis-
+# shouting; three genuinely-capitalised words in a row essentially only
+# happens for real emphasis ('DO NOT PROCEED').
+tokens:
+  - '\b[A-Z]{2,}(?: [A-Z]{2,}){2,}\b'

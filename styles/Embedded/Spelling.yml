@@ -1,0 +1,9 @@
+extends: spelling
+message: "'%s' - possible misspelling, or not British English. Check spelling; add domain terms to styles/config/vocabularies/ProjectTerms/accept.txt instead of ignoring here."
+level: suggestion
+dicpath: styles/config/dictionaries
+dictionaries:
+  - en_GB
+filters:
+  - '[A-Z]{2,}'          # ignore ALL-CAPS acronyms (LwM2M-style mixed case still checked)
+  - '\d'                  # ignore tokens containing digits (G460, 40001, 0xAAAA, ...)

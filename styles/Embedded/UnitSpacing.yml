@@ -1,0 +1,9 @@
+extends: existence
+message: "Put a space between the number and the unit in '%s' (SI convention)."
+link: https://physics.nist.gov/cuu/Units/checklist.html
+level: warning
+nonword: true
+tokens:
+  - '\b\d+(?:mV|mA|kHz|MHz|dBm|dB|mW|mAh|Ah|Hz|V|A|W|F)\b'
+  - '\b\d+°C\b'
+  - '\b\d+(?:bit|byte)s?\b'

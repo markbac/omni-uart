@@ -1,0 +1,36 @@
+extends: substitution
+message: "Use the project's canonical form '%s' instead of '%s'."
+link: https://www.omg.org/lwm2m
+level: error
+ignorecase: false
+action:
+  name: replace
+swap:
+  # LwM2M
+  '\bLWM2M\b': LwM2M
+  '\bLwm2m\b': LwM2M
+  '\blwm2m\b': LwM2M
+  # NB-IoT
+  '\bNBIoT\b': NB-IoT
+  '\bNB IoT\b': NB-IoT
+  '\bnb-iot\b': NB-IoT
+  '\bNb-IoT\b': NB-IoT
+  # Other project acronyms - canonical casing
+  '\bCbor\b': CBOR
+  '\bcbor\b': CBOR
+  '\bPayg\b': PAYG
+  '\bpayg\b': PAYG
+  '\bFota\b': FOTA
+  '\bfota\b': FOTA
+  '\bCddl\b': CDDL
+  '\bcddl\b': CDDL
+  '\bImei\b': IMEI
+  '\bimei\b': IMEI
+  '\bIccid\b': ICCID
+  '\biccid\b': ICCID
+  '\bImsi\b': IMSI
+  '\bimsi\b': IMSI
+  '\bWifi\b': Wi-Fi
+  '\bWiFi\b': Wi-Fi
+  '\bwifi\b': Wi-Fi
+  'gas-meter\b': gas meter

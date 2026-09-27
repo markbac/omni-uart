@@ -1,0 +1,9 @@
+extends: substitution
+message: "Remove double hyphen '--'."
+link: "https://developers.google.com/style/dashes"
+level: error
+nonword: true
+action:
+  name: replace
+swap:
+  '\s--\s': '—'

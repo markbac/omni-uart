@@ -1,0 +1,6 @@
+extends: consistency
+message: "Inconsistent normative keyword '%s' - this document uses both MUST and SHALL; RFC 2119 treats them as equivalent, so pick one as the house keyword."
+level: warning
+ignorecase: false
+either:
+  MUST: SHALL

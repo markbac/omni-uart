@@ -1,0 +1,6 @@
+extends: existence
+message: "Use a lowercase '0x' prefix for hex literals (found '%s'); e.g. 0xAAAA, not 0Xaaaa."
+level: warning
+ignorecase: false
+tokens:
+  - '\b0X[0-9A-Fa-f]+\b'

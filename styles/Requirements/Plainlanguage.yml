@@ -1,0 +1,32 @@
+extends: substitution
+message: "Prefer '%s' over '%s' - tighter, plainer language."
+link: https://www.plainlanguage.gov/guidelines/words/
+level: suggestion
+ignorecase: true
+action:
+  name: replace
+swap:
+  'utili[sz]e[sd]?': use
+  'in order to': to
+  'prior to': before
+  'subsequent to': after
+  'in the event that': if
+  'in the event of': if
+  'for the purpose of': to
+  'with regard to': about
+  'with respect to': about
+  'due to the fact that': because
+  'in the vicinity of': near
+  'in close proximity to': near
+  'at this point in time': now
+  'at the present time': now
+  'terminate[sd]?': end
+  'commence[sd]?': start
+  'endeavou?r(?:s|ed|ing)?': try
+  'facilitate[sd]?': help
+  'notwithstanding': despite
+  'on a regular basis': regularly
+  'is able to': can
+  'are able to': can
+  'is required to': must
+  'has the capability to': can

@@ -1,0 +1,199 @@
+# Structural rules that neither markdownlint nor Vale cover natively.
+# The engine that runs these (check_docs.py: check_structure) is generic -
+# it only knows how to run six rule *types*. Everything about what to
+# flag, how severely, and what to say lives here, not in the script.
+#
+# Rule types:
+#   manifest-file-exists  - a manifest entry doesn't exist on disk.
+#                            No extra fields.
+#   regex-line             - flag any (non-fenced-code) line matching
+#                            `pattern`. Optional `scope_prefix` restricts
+#                            it to lines starting with that string (e.g.
+#                            blockquotes). Optional `exclude_pattern`
+#                            suppresses a match that's already correct.
+#   blank-line-between    - flag the first blank line of a run that sits
+#                            between two lines both matching `pattern`.
+#   path-exists            - `pattern` must have one capturing group: a
+#                            file path (not a URL, not an in-file
+#                            #anchor) that must resolve relative to the
+#                            current file. `message` may use `{target}`.
+#   balanced-markers       - every `open_pattern` match needs a later
+#                            `close_pattern` match before end of file,
+#                            and vice versa (a simple stack, not nesting-
+#                            aware beyond that). `unmatched_open_message`
+#                            / `unmatched_close_message` may use
+#                            `{marker}`; `message` is the fallback for
+#                            either if the specific one isn't set.
+#   requires-caption       - `block` is `table`, `image`, `fence`, or
+#                            `line`; the line immediately after that
+#                            block (skipping blank lines) must match
+#                            `required_pattern`. For `block: fence`,
+#                            `languages` lists which fence/div info-
+#                            strings count (others are skipped, not
+#                            flagged) - e.g. mermaid, plantuml. For
+#                            `block: line`, `trigger_pattern` matches the
+#                            single line that needs a caption after it
+#                            (e.g. an [[INCLUDE-CODE:]] directive).
+#                            Content inside any fence is never mistaken
+#                            for a live table, image, or trigger line.
+#   cross-file-anchors     - runs once across the whole manifest, not
+#                            per-file. Builds every heading's resolved
+#                            anchor across all files in document order
+#                            (replicating pandoc's '-1'/'-2' suffixing
+#                            for repeated headings), then checks every
+#                            in-file '#anchor' link anywhere against
+#                            that combined set. If `collision_message`
+#                            is set, also flags every heading whose
+#                            anchor collided with an earlier one (its
+#                            own link, or anyone else's, could silently
+#                            resolve to the wrong place). Both messages
+#                            may use `{target}`; `collision_message` may
+#                            also use `{other_file}`.
+#
+# Disable a rule without deleting it: set `enabled: false`.
+
+rules:
+  - id: structure/missing-file
+    type: manifest-file-exists
+    enabled: true
+    severity: error
+    message: "File is listed in the manifest but does not exist."
+
+  - id: structure/horizontal-rule
+    type: regex-line
+    enabled: true
+    severity: warning
+    pattern: '^(---|\*\*\*)\s*$'
+    message: "Horizontal rule in body text; restructure with headings instead."
+
+  - id: structure/admonition-legacy-format
+    type: regex-line
+    enabled: true
+    severity: warning
+    scope_prefix: ">"
+    pattern: '(?i)\*\*(Note|Tip|Important|Warning|Caution):?\*\*'
+    message: "createdocs.py's admonitions.lua only recognises GitHub-alert syntax; use '> [!NOTE]' on its own line, not a bold label."
+
+  - id: structure/admonition-unsupported-type
+    type: regex-line
+    enabled: true
+    severity: error
+    scope_prefix: ">"
+    pattern: '^>\s*\[!(?!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\])[A-Za-z]+\]\s*$'
+    message: "Not one of the five admonition types admonitions.lua converts: NOTE, TIP, IMPORTANT, WARNING, CAUTION (exact case)."
+
+  - id: structure/pagebreak-directive
+    type: regex-line
+    enabled: false                 # [[PAGEBREAK]] is confirmed valid in this
+                                    # project's actual createdocs.py - this rule
+                                    # was built off a generic reference doc that
+                                    # only documented ::: {.pagebreak}, which
+                                    # turned out not to match actual usage
+    severity: error
+    pattern: '(?i)(?<!\\)\[\[\s*PAGEBREAK\s*\]\]'
+    message: "There's no [[PAGEBREAK]] directive; use the fenced div pagebreak.lua expects: '::: {.pagebreak}' then ':::' on the next line."
+
+  - id: structure/caption-unsupported-kind
+    type: regex-line
+    enabled: true
+    severity: error
+    pattern: '(?<!\\)\[\[CAPTION:(?!Figure\]\]|Table\]\])[A-Za-z]*\]\]'
+    message: "Only 'Figure' and 'Table' are recognised caption kinds; anything else just prints a console warning at build time."
+
+  - id: structure/variable-name-format
+    type: regex-line
+    enabled: true
+    severity: error
+    pattern: '\{\{(?!\s*[A-Za-z_][A-Za-z0-9_]*\s*\}\})[^{}]*\}\}'
+    message: "Variable name must match [A-Za-z_][A-Za-z0-9_]*; anything else is left unchanged in the build with a console warning."
+
+  - id: structure/loose-list
+    type: blank-line-between
+    enabled: true
+    severity: warning
+    pattern: '^\s*(?:[-*+]|\d+[.)])\s+\S'
+    message: "Blank line between list items; use a tight list (no blank line between items)."
+
+  - id: structure/broken-link
+    type: path-exists
+    enabled: true
+    severity: error
+    pattern: '!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)'
+    message: "Link target '{target}' does not exist."
+
+  - id: structure/broken-include
+    type: path-exists
+    enabled: true
+    severity: error
+    pattern: '(?<!\\)\[\[INCLUDE:\s*([^\]]+?)\s*\]\]'
+    message: "Include target '{target}' does not exist."
+
+  - id: structure/broken-include-code
+    type: path-exists
+    enabled: true
+    severity: error
+    pattern: '(?<!\\)\[\[INCLUDE-CODE:\s*([^\]]+?)\s*\]\]'
+    message: "Include-code target '{target}' does not exist."
+
+  - id: structure/if-endif-unbalanced
+    type: balanced-markers
+    enabled: true
+    severity: error
+    open_pattern: '(?<!\\)\[\[(?:IF|NOT):[^\]]*\]\]'
+    close_pattern: '(?<!\\)\[\[ENDIF\]\]'
+    unmatched_open_message: "'{marker}' has no matching [[ENDIF]] before end of file."
+    unmatched_close_message: "[[ENDIF]] with no preceding [[IF:]] or [[NOT:]] to close."
+
+  - id: structure/landscape-portrait-unbalanced
+    type: balanced-markers
+    enabled: true
+    severity: warning
+    open_pattern: '(?<!\\)\[\[LANDSCAPE\]\]'
+    close_pattern: '(?<!\\)\[\[PORTRAIT\]\]'
+    unmatched_open_message: "[[LANDSCAPE]] with no later [[PORTRAIT]]; the rest of the document stays landscape."
+    unmatched_close_message: "[[PORTRAIT]] with no preceding [[LANDSCAPE]] - already portrait, this marker has no effect."
+
+  - id: structure/table-missing-caption
+    type: requires-caption
+    enabled: true
+    severity: warning
+    block: table
+    required_pattern: '(?<!\\)\[\[CAPTION:Table\]\]'
+    message: "Table has no [[CAPTION:Table]] marker on the line right after it."
+
+  - id: structure/image-missing-caption
+    type: requires-caption
+    enabled: true
+    severity: warning
+    block: image
+    required_pattern: '(?<!\\)\[\[CAPTION:Figure\]\]'
+    message: "Image has no [[CAPTION:Figure]] marker on the line right after it."
+
+  - id: structure/diagram-missing-caption
+    type: requires-caption
+    enabled: true
+    severity: warning
+    block: fence
+    languages: []                # empty = every ``` / ~~~ code block, any language
+    div_languages: [mermaid]     # ::: fenced divs - only these classes need a
+                                  # caption (::: {.pagebreak} etc. must not)
+    required_pattern: '(?<!\\)\[\[CAPTION:Figure\]\]'
+    message: "Code block has no [[CAPTION:Figure]] marker on the line right after it."
+
+  - id: structure/include-code-missing-caption
+    type: requires-caption
+    enabled: true
+    severity: warning
+    block: line
+    trigger_pattern: '(?<!\\)\[\[INCLUDE-CODE:'
+    required_pattern: '(?<!\\)\[\[CAPTION:Figure\]\]'
+    message: "[[INCLUDE-CODE: ...]] has no [[CAPTION:Figure]] marker on the line right after it."
+
+  - id: structure/cross-file-anchor
+    type: cross-file-anchors
+    enabled: true
+    severity: error
+    message: "Link target '#{target}' does not match any heading anchor across the whole document set."
+    collision_severity: warning
+    collision_message: "This heading's anchor collides with an earlier '#{target}' heading in {other_file}; a link to the plain '#{target}' resolves there, not here. Give this heading distinct wording, or always link with its actual suffixed id."
+    
