@@ -77,13 +77,15 @@ def build_parser() -> argparse.ArgumentParser:
     replay_parser.add_argument("session_file", help="Path to recorded .jsonl session file")
     replay_parser.add_argument("--speed", type=float, default=1.0, help="Playback speed multiplier (default: 1.0)")
 
-    # 10. ui (Interactive Web UI Launcher)
-    ui_parser = subparsers.add_parser("ui", help="Launch interactive dynamic Web UI server in default browser")
-    ui_parser.add_argument("--host", default="127.0.0.1", help="Web UI server bind host (default: 127.0.0.1)")
-    ui_parser.add_argument("--port", type=int, default=8000, help="Web UI server bind port (default: 8000)")
-    ui_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open default browser")
+    # 10. ui (Interactive Dynamic UI Launcher)
+    ui_parser = subparsers.add_parser("ui", help="Launch interactive UI application")
+    ui_parser.add_argument("--host", default="127.0.0.1", help="UI server bind host (default: 127.0.0.1)")
+    ui_parser.add_argument("--port", type=int, default=8000, help="UI server bind port (default: 8000)")
+    ui_parser.add_argument("--mode", choices=["desktop", "web"], default="desktop", help="UI display mode: 'desktop' (native window) or 'web' (browser tab)")
+    ui_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open browser in web mode")
 
     return parser
+
 
 
 def format_protocol_help(spec: ProtocolSpec) -> str:
@@ -278,31 +280,35 @@ def main(argv: Optional[List[str]] = None) -> int:
         replayer = SessionReplayer(transport, speed_multiplier=args.speed)
         count = asyncio.run(replayer.replay_file(args.session_file))
     elif args.subcommand == "ui":
-        return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser)
+        return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode)
 
     else:
         # Default behavior when launched with no subcommand (e.g. double-clicking standalone EXE)
-        print("No subcommand specified. Launching OmniUART Web UI...")
-        return launch_ui_server(host="127.0.0.1", port=8000, open_browser=True)
+        print("No subcommand specified. Launching OmniUART Desktop App Window...")
+        return launch_ui_server(host="127.0.0.1", port=8000, open_browser=True, mode="desktop")
 
 
-def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True) -> int:
-    """Launch local Uvicorn FastAPI Web UI server and open browser."""
+def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True, mode: str = "desktop") -> int:
+    """Launch local Uvicorn FastAPI server and open Desktop App window or browser tab."""
     import threading
-    import webbrowser
     import uvicorn
+    from omniuart.ui.desktop import launch_desktop_window
 
     url = f"http://{host}:{port}"
     print(f"\n========================================================")
-    print(f"  ⚡ OmniUART Interactive Web UI Server Running")
+    print(f"  ⚡ OmniUART Interactive Control Workbench ({mode.upper()} Mode)")
     print(f"  URL: {url}")
     print(f"========================================================\n")
 
-    if open_browser:
+    if mode == "desktop":
+        threading.Timer(1.2, lambda: launch_desktop_window(url)).start()
+    elif open_browser:
+        import webbrowser
         threading.Timer(1.2, lambda: webbrowser.open(url)).start()
 
     uvicorn.run("omniuart.ui.app:app", host=host, port=port, log_level="info")
     return 0
+
 
 
 if __name__ == "__main__":
