@@ -5,6 +5,13 @@ All notable changes to the OmniUART project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-09-27
+
+### Added
+- Added dynamic serial port refresh button `🔄` to native desktop `ConnectionToolbar` and REST API `/api/ports` endpoint (#159).
+- Added live stream session recording (`🔴 Record Stream`) and text log export (`💾 Export Log`) controls to `CommsStreamerView` (#160).
+- Added IoT quick action macro shortcut buttons (`⚡ AT Ping`, `📶 Signal CSQ`, `🔋 Battery CBC`, `🌐 Network CREG?`, `⚙️ Modbus Read`) to `CommsStreamerView` (#161).
+
 ## [1.8.0] - 2026-09-27
 
 ### Added
