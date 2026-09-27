@@ -44,6 +44,14 @@ def test_desktop_app_initialization():
         app.toolbar._toggle_connection()
         assert app.toolbar.is_connected is True
 
+        # Test CommsStreamerView dual decoded formatting
+        comms_tab = app.comms_view
+        comms_tab.log("TX", b"AT+CSQ\r\n", "AT Command")
+        comms_tab.log("RX", b"\xAA\x01\x10\x20\xFF", "Binary Packet")
+        console_text = comms_tab.console.get("1.0", "end-1c")
+        assert "Decoded:" in console_text
+        assert "Length:" in console_text
+
         app.destroy()
     except Exception as e:
         # If running in no-display environment, handle gracefully
