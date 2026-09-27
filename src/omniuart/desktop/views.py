@@ -580,22 +580,41 @@ class CommandCatalogView(ttk.Frame):
 
 
 class TelemetryPlotterView(ttk.Frame):
-    """Real-time Canvas Telemetry Line Chart Plotter driven strictly by real UART packet data."""
+    """Real-time Canvas Telemetry Line Chart Plotter supporting multi-line signals, periodic command polling, and frequency control."""
 
-    def __init__(self, parent: tk.Widget) -> None:
+    def __init__(
+        self,
+        parent: tk.Widget,
+        catalog: Optional[CatalogManager] = None,
+        on_transmit: Optional[Callable[[str, bytes], None]] = None,
+    ) -> None:
         super().__init__(parent, padding=12)
+        self.catalog = catalog
+        self.on_transmit = on_transmit
+        self.channel_1_points: List[float] = []
+        self.channel_2_points: List[float] = []
         self.data_points: List[float] = []
         self.is_running = True
+        self.is_polling = False
+        self.poll_timer_id: Optional[str] = None
+        self.poll_payload_map: Dict[str, bytes] = {
+            "⚡ AT Ping": b"AT\r\n",
+            "📶 Signal CSQ": b"AT+CSQ\r\n",
+            "🔋 Battery CBC": b"AT+CBC\r\n",
+            "🌐 Network CREG?": b"AT+CREG?\r\n",
+            "⚙️ Modbus Read": b"\x01\x03\x00\x00\x00\x02\xC4\x0B",
+        }
 
-        toolbar = ttk.Frame(self)
-        toolbar.pack(fill=tk.X, pady=(0, 4))
+        # Header toolbar 1: Channel & Controls
+        toolbar1 = ttk.Frame(self)
+        toolbar1.pack(fill=tk.X, pady=(0, 4))
 
-        ttk.Label(toolbar, text="📈 Real-Time Telemetry Line Chart Plotter", font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+        ttk.Label(toolbar1, text="📈 Real-Time Telemetry Plotter", font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
 
-        ttk.Label(toolbar, text="  Signal Channel:").pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Label(toolbar1, text="  Signal Channel:").pack(side=tk.LEFT, padx=(8, 2))
         self.metric_var = tk.StringVar(value="Analog Sensor Voltage (mV)")
         self.metric_combo = ttk.Combobox(
-            toolbar,
+            toolbar1,
             textvariable=self.metric_var,
             values=[
                 "Analog Sensor Voltage (mV)",
@@ -604,18 +623,41 @@ class TelemetryPlotterView(ttk.Frame):
                 "Battery Supply Voltage (V)",
             ],
             state="readonly",
-            width=28,
+            width=26,
         )
-        self.metric_combo.pack(side=tk.LEFT, padx=4)
+        self.metric_combo.pack(side=tk.LEFT, padx=2)
 
-        self.pause_btn = ttk.Button(toolbar, text="Pause Plotter", command=self._toggle_plotter)
+        self.pause_btn = ttk.Button(toolbar1, text="Pause Plotter", command=self._toggle_plotter)
         self.pause_btn.pack(side=tk.RIGHT, padx=4)
-        ttk.Button(toolbar, text="Clear Data", command=self._clear_plotter).pack(side=tk.RIGHT, padx=4)
+        ttk.Button(toolbar1, text="Clear Data", command=self._clear_plotter).pack(side=tk.RIGHT, padx=4)
+
+        # Header toolbar 2: Telemetry Polling Command & Frequency Interval
+        toolbar2 = ttk.Frame(self)
+        toolbar2.pack(fill=tk.X, pady=(0, 6))
+
+        ttk.Label(toolbar2, text="Poll Command:", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
+        self.cmd_var = tk.StringVar(value="⚡ AT Ping")
+        self.cmd_combo = ttk.Combobox(toolbar2, textvariable=self.cmd_var, values=list(self.poll_payload_map.keys()), width=24)
+        self.cmd_combo.pack(side=tk.LEFT, padx=2)
+
+        ttk.Label(toolbar2, text="Frequency:", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(10, 4))
+        self.interval_var = tk.StringVar(value="500 ms")
+        self.interval_combo = ttk.Combobox(
+            toolbar2,
+            textvariable=self.interval_var,
+            values=["100 ms", "200 ms", "500 ms", "1.0 s", "2.0 s", "5.0 s"],
+            state="readonly",
+            width=8,
+        )
+        self.interval_combo.pack(side=tk.LEFT, padx=2)
+
+        self.poll_btn = ttk.Button(toolbar2, text="▶ Start Auto-Poll", command=self._toggle_auto_poll)
+        self.poll_btn.pack(side=tk.LEFT, padx=8)
 
         # Signal description label
         desc_label = ttk.Label(
             self,
-            text="Visualizing actual serial telemetry payload readings, ADC voltage samples, and response data parsed from real incoming UART RX frames.",
+            text="Visualizing real-time multi-channel UART telemetry waveforms (Line 1 Cyan = Primary payload, Line 2 Green = Secondary payload).",
             foreground="#64748b",
             font=("Segoe UI", 9, "italic"),
         )
@@ -625,74 +667,147 @@ class TelemetryPlotterView(ttk.Frame):
         stats_frame = ttk.Frame(self)
         stats_frame.pack(fill=tk.X, pady=(0, 8))
 
-        self.cur_val_var = tk.StringVar(value="Current: --")
+        self.cur_val_var = tk.StringVar(value="Ch1 (Cyan): --")
+        self.ch2_val_var = tk.StringVar(value="Ch2 (Green): --")
         self.min_val_var = tk.StringVar(value="Min: --")
         self.max_val_var = tk.StringVar(value="Max: --")
         self.avg_val_var = tk.StringVar(value="Avg: --")
 
         ttk.Label(stats_frame, textvariable=self.cur_val_var, font=("Consolas", 10, "bold"), foreground="#38bdf8").pack(
-            side=tk.LEFT, padx=(0, 15)
+            side=tk.LEFT, padx=(0, 12)
+        )
+        ttk.Label(stats_frame, textvariable=self.ch2_val_var, font=("Consolas", 10, "bold"), foreground="#4ade80").pack(
+            side=tk.LEFT, padx=12
         )
         ttk.Label(stats_frame, textvariable=self.min_val_var, font=("Consolas", 10), foreground="#94a3b8").pack(
-            side=tk.LEFT, padx=15
+            side=tk.LEFT, padx=12
         )
         ttk.Label(stats_frame, textvariable=self.max_val_var, font=("Consolas", 10), foreground="#94a3b8").pack(
-            side=tk.LEFT, padx=15
+            side=tk.LEFT, padx=12
         )
         ttk.Label(stats_frame, textvariable=self.avg_val_var, font=("Consolas", 10), foreground="#94a3b8").pack(
-            side=tk.LEFT, padx=15
+            side=tk.LEFT, padx=12
         )
 
         # Plotter canvas
         self.canvas = tk.Canvas(self, bg="#0f172a", highlightthickness=1, highlightbackground="#334155")
         self.canvas.pack(fill=tk.BOTH, expand=True)
+
+        self._refresh_poll_commands()
         self._draw_chart()
+
+    def _refresh_poll_commands(self) -> None:
+        """Populate poll command options from active protocol catalog."""
+        if not self.catalog:
+            return
+        summary = self.catalog.catalog_summary()
+        for p in summary.get("protocols", []):
+            spec = self.catalog.get_protocol(p.get("filename", ""))
+            if not spec:
+                continue
+            for cmd in spec.commands:
+                cmd_label = f"⚡ {spec.metadata.name}: {cmd.name}"
+                if cmd_label not in self.poll_payload_map:
+                    try:
+                        raw_b = build_frame_payload(spec, cmd, {})
+                        self.poll_payload_map[cmd_label] = raw_b
+                    except Exception:
+                        pass
+
+        self.cmd_combo["values"] = list(self.poll_payload_map.keys())
+
+    def _toggle_auto_poll(self) -> None:
+        """Start or stop periodic telemetry command polling timer."""
+        self.is_polling = not self.is_polling
+        if self.is_polling:
+            self.poll_btn.config(text="⏹ Stop Polling")
+            self._trigger_poll()
+        else:
+            self.poll_btn.config(text="▶ Start Auto-Poll")
+            if self.poll_timer_id:
+                self.after_cancel(self.poll_timer_id)
+                self.poll_timer_id = None
+
+    def _trigger_poll(self) -> None:
+        if not self.is_polling:
+            return
+        cmd_text = self.cmd_var.get()
+        payload = self.poll_payload_map.get(cmd_text, b"AT\r\n")
+        if self.on_transmit:
+            self.on_transmit(f"Poll: {cmd_text}", payload)
+
+        interval_raw = self.interval_var.get()
+        if "s" in interval_raw and "ms" not in interval_raw:
+            interval_ms = int(float(interval_raw.replace(" s", "").strip()) * 1000)
+        else:
+            interval_ms = int(interval_raw.replace(" ms", "").strip())
+
+        self.poll_timer_id = self.after(max(100, interval_ms), self._trigger_poll)
 
     def _toggle_plotter(self) -> None:
         self.is_running = not self.is_running
         self.pause_btn.config(text="Resume Plotter" if not self.is_running else "Pause Plotter")
 
     def _clear_plotter(self) -> None:
+        self.channel_1_points = []
+        self.channel_2_points = []
         self.data_points = []
         self._draw_chart()
 
     def push_value(self, val: float) -> None:
-        """Push real telemetry value into chart dataset."""
-        self.data_points.append(val)
-        if len(self.data_points) > 100:
-            self.data_points.pop(0)
+        """Push single real telemetry reading into Channel 1 dataset."""
+        self.channel_1_points.append(val)
+        if len(self.channel_1_points) > 100:
+            self.channel_1_points.pop(0)
+        self.data_points = self.channel_1_points
         self._draw_chart()
 
     def push_telemetry_bytes(self, data: bytes) -> None:
-        """Parse incoming real serial payload bytes and push numerical reading to chart."""
+        """Parse incoming real serial payload bytes and push multi-channel numerical readings to chart."""
         if not data or not self.is_running:
             return
 
-        val: Optional[float] = None
+        vals: List[float] = []
         try:
             text = data.decode("utf-8", errors="ignore").strip()
             numbers = re.findall(r"[-+]?\d*\.\d+|\d+", text)
-            if numbers:
-                parsed_val = float(numbers[0])
+            for n_str in numbers:
+                parsed_val = float(n_str)
                 if parsed_val > 100.0 and parsed_val <= 4096.0:
-                    val = (parsed_val / 4095.0) * 100.0
+                    scaled = (parsed_val / 4095.0) * 100.0
                 elif parsed_val > 100.0:
-                    val = parsed_val % 100.0
+                    scaled = parsed_val % 100.0
                 else:
-                    val = parsed_val
+                    scaled = parsed_val
+                vals.append(max(0.0, min(100.0, scaled)))
         except Exception:
             pass
 
-        if val is None and len(data) >= 1:
-            if len(data) >= 2:
-                raw_int = (data[-2] << 8) | data[-1]
-                val = (raw_int / 65535.0) * 100.0
+        if not vals and len(data) >= 1:
+            if len(data) >= 4:
+                raw1 = (data[0] << 8) | data[1]
+                raw2 = (data[2] << 8) | data[3]
+                vals = [(raw1 / 65535.0) * 100.0, (raw2 / 65535.0) * 100.0]
+            elif len(data) >= 2:
+                raw1 = (data[-2] << 8) | data[-1]
+                vals = [(raw1 / 65535.0) * 100.0]
             else:
-                val = (data[0] / 255.0) * 100.0
+                vals = [(data[0] / 255.0) * 100.0]
 
-        if val is not None:
-            val = max(0.0, min(100.0, float(val)))
-            self.push_value(val)
+        if vals:
+            self.channel_1_points.append(vals[0])
+            if len(self.channel_1_points) > 100:
+                self.channel_1_points.pop(0)
+
+            if len(vals) > 1:
+                self.channel_2_points.append(vals[1])
+            elif self.channel_2_points:
+                self.channel_2_points.append(self.channel_2_points[-1])
+            if len(self.channel_2_points) > 100:
+                self.channel_2_points.pop(0)
+
+            self.data_points = self.channel_1_points
+            self._draw_chart()
 
     def _draw_chart(self) -> None:
         self.canvas.delete("all")
@@ -722,46 +837,68 @@ class TelemetryPlotterView(ttk.Frame):
         metric_name = self.metric_var.get()
         unit = "%" if "%" in metric_name else ("mV" if "mV" in metric_name else ("°C" if "°C" in metric_name else "V"))
 
-        if not self.data_points:
+        if not self.channel_1_points:
             self.canvas.create_text(
                 w / 2 + margin_left / 2,
                 h / 2,
-                text="📡 Waiting for real UART serial telemetry packets...\n(No fabricated data generated)",
+                text="📡 Waiting for real UART serial telemetry packets...\n(Use '▶ Start Auto-Poll' to query device at selected frequency)",
                 fill="#64748b",
                 font=("Segoe UI", 10, "italic"),
                 justify="center",
             )
-            self.cur_val_var.set(f"Current: -- {unit}")
+            self.cur_val_var.set(f"Ch1 (Cyan): -- {unit}")
+            self.ch2_val_var.set(f"Ch2 (Green): -- {unit}")
             self.min_val_var.set(f"Min: -- {unit}")
             self.max_val_var.set(f"Max: -- {unit}")
             self.avg_val_var.set(f"Avg: -- {unit}")
             return
 
-        step = plot_w / max(1, len(self.data_points) - 1)
-        coords = []
-        for i, val in enumerate(self.data_points):
+        # Plot Channel 1 Waveform (Cyan)
+        step = plot_w / max(1, len(self.channel_1_points) - 1)
+        coords1 = []
+        for i, val in enumerate(self.channel_1_points):
             x = margin_left + i * step
             y = (20 + plot_h) - (val / 100.0 * plot_h)
-            coords.extend([x, y])
+            coords1.extend([x, y])
 
-        if len(coords) >= 4:
-            self.canvas.create_line(*coords, fill="#38bdf8", width=2, smooth=True)
+        if len(coords1) >= 4:
+            self.canvas.create_line(*coords1, fill="#38bdf8", width=2, smooth=True)
 
-        # Legend box top-right
-        self.canvas.create_rectangle(w - 240, 25, w - 20, 55, fill="#1e293b", outline="#334155")
-        self.canvas.create_line(w - 230, 40, w - 200, 40, fill="#38bdf8", width=2)
-        self.canvas.create_text(w - 195, 40, text=metric_name[:24], fill="#f8fafc", font=("Segoe UI", 8, "bold"), anchor="w")
+        # Plot Channel 2 Waveform (Green) if present
+        if self.channel_2_points:
+            step2 = plot_w / max(1, len(self.channel_2_points) - 1)
+            coords2 = []
+            for i, val in enumerate(self.channel_2_points):
+                x = margin_left + i * step2
+                y = (20 + plot_h) - (val / 100.0 * plot_h)
+                coords2.extend([x, y])
+
+            if len(coords2) >= 4:
+                self.canvas.create_line(*coords2, fill="#4ade80", width=2, smooth=True)
+
+        # Multi-Channel Legend box top-right
+        self.canvas.create_rectangle(w - 270, 20, w - 20, 65, fill="#1e293b", outline="#334155")
+        self.canvas.create_line(w - 260, 32, w - 230, 32, fill="#38bdf8", width=2)
+        self.canvas.create_text(w - 225, 32, text="Line 1 (Cyan): Primary", fill="#f8fafc", font=("Segoe UI", 8, "bold"), anchor="w")
+
+        self.canvas.create_line(w - 260, 52, w - 230, 52, fill="#4ade80", width=2)
+        self.canvas.create_text(w - 225, 52, text="Line 2 (Green): Secondary", fill="#f8fafc", font=("Segoe UI", 8, "bold"), anchor="w")
 
         # Update stats banners
-        curr = self.data_points[-1]
-        mn = min(self.data_points)
-        mx = max(self.data_points)
-        avg = sum(self.data_points) / len(self.data_points)
+        curr1 = self.channel_1_points[-1]
+        mn1 = min(self.channel_1_points)
+        mx1 = max(self.channel_1_points)
+        avg1 = sum(self.channel_1_points) / len(self.channel_1_points)
 
-        self.cur_val_var.set(f"Current: {curr:.1f} {unit}")
-        self.min_val_var.set(f"Min: {mn:.1f} {unit}")
-        self.max_val_var.set(f"Max: {mx:.1f} {unit}")
-        self.avg_val_var.set(f"Avg: {avg:.1f} {unit}")
+        self.cur_val_var.set(f"Ch1 (Cyan): {curr1:.1f} {unit}")
+        if self.channel_2_points:
+            self.ch2_val_var.set(f"Ch2 (Green): {self.channel_2_points[-1]:.1f} {unit}")
+        else:
+            self.ch2_val_var.set(f"Ch2 (Green): N/A")
+
+        self.min_val_var.set(f"Min: {mn1:.1f} {unit}")
+        self.max_val_var.set(f"Max: {mx1:.1f} {unit}")
+        self.avg_val_var.set(f"Avg: {avg1:.1f} {unit}")
 
 
 class AutomationScriptRunnerView(ttk.Frame):

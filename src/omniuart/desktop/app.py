@@ -63,7 +63,7 @@ class OmniUARTDesktopApp(tk.Tk):
         self.notebook.add(self.catalog_view, text=" 📜 Command Catalog ")
 
         # 3. Live Telemetry Plotter Tab
-        self.plotter_view = TelemetryPlotterView(self.notebook)
+        self.plotter_view = TelemetryPlotterView(self.notebook, catalog=self.catalog, on_transmit=self._handle_transmit)
         self.notebook.add(self.plotter_view, text=" 📈 Telemetry Plotter ")
 
         # 4. Automation Script Runner Tab
