@@ -48,6 +48,7 @@
   "commands": [
     {
       "name": "CFG-PRT-Poll",
+      "tags": ["gnss/config", "dashboard"],
       "description": "Poll vs SetBaud share identical class/id, so they don't disambiguate by value at all -- this schema's dispatch algorithm correctly falls back to resolved length instead (0 payload bytes here vs SetBaud's fixed 12), which is genuinely unambiguous, so no role=discriminator is needed on class/id.",
       "fields": [
         {
@@ -68,6 +69,7 @@
     },
     {
       "name": "CFG-PRT-SetBaud",
+      "tags": ["gnss/config"],
       "description": "Same class=0x06, id=0x00 as CFG-PRT-Poll, but with a payload requesting a new port baud rate. The module's own ack is sent at the OLD rate; the host must reconfigure its own UART to the new rate immediately afterwards, per baudRateNegotiation.",
       "fields": [
         {
@@ -104,7 +106,222 @@
           "name": "baudRate",
           "type": "uint",
           "sizeBytes": 4,
+          "unit": "bps",
           "description": "Requested new baud rate, e.g. 115200."
+        }
+      ]
+    },
+    {
+      "name": "NAV-POSLLH",
+      "tags": ["gnss/nav", "telemetry"],
+      "description": "Geodetic Position Solution returning latitude, longitude, and height above ellipsoid/MSL.",
+      "fields": [
+        {
+          "name": "class",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 1,
+          "position": "before-length-field"
+        },
+        {
+          "name": "id",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 2,
+          "position": "before-length-field"
+        },
+        {
+          "name": "iTOW",
+          "type": "uint",
+          "sizeBytes": 4,
+          "unit": "ms",
+          "description": "GPS Time of Week"
+        },
+        {
+          "name": "lon",
+          "type": "int",
+          "sizeBytes": 4,
+          "unit": "deg",
+          "scale": 1e-7,
+          "description": "Longitude"
+        },
+        {
+          "name": "lat",
+          "type": "int",
+          "sizeBytes": 4,
+          "unit": "deg",
+          "scale": 1e-7,
+          "description": "Latitude"
+        },
+        {
+          "name": "height",
+          "type": "int",
+          "sizeBytes": 4,
+          "unit": "mm",
+          "description": "Height above ellipsoid"
+        },
+        {
+          "name": "hMSL",
+          "type": "int",
+          "sizeBytes": 4,
+          "unit": "mm",
+          "description": "Height above mean sea level"
+        },
+        {
+          "name": "hAcc",
+          "type": "uint",
+          "sizeBytes": 4,
+          "unit": "mm",
+          "description": "Horizontal accuracy estimate"
+        },
+        {
+          "name": "vAcc",
+          "type": "uint",
+          "sizeBytes": 4,
+          "unit": "mm",
+          "description": "Vertical accuracy estimate"
+        }
+      ]
+    },
+    {
+      "name": "NAV-PVT",
+      "tags": ["gnss/nav", "dashboard"],
+      "description": "Navigation Position Velocity Time Solution returning fix status, time accuracy, and 3D velocity.",
+      "fields": [
+        {
+          "name": "class",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 1,
+          "position": "before-length-field"
+        },
+        {
+          "name": "id",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 7,
+          "position": "before-length-field"
+        },
+        {
+          "name": "iTOW",
+          "type": "uint",
+          "sizeBytes": 4,
+          "unit": "ms"
+        },
+        {
+          "name": "year",
+          "type": "uint",
+          "sizeBytes": 2,
+          "unit": "y"
+        },
+        {
+          "name": "month",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "day",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "hour",
+          "type": "uint",
+          "sizeBytes": 1,
+          "unit": "h"
+        },
+        {
+          "name": "min",
+          "type": "uint",
+          "sizeBytes": 1,
+          "unit": "min"
+        },
+        {
+          "name": "sec",
+          "type": "uint",
+          "sizeBytes": 1,
+          "unit": "s"
+        },
+        {
+          "name": "valid",
+          "type": "uint",
+          "sizeBytes": 1,
+          "description": "Validity flags (validDate, validTime, fullyResolved)"
+        },
+        {
+          "name": "tAcc",
+          "type": "uint",
+          "sizeBytes": 4,
+          "unit": "ns"
+        },
+        {
+          "name": "fixType",
+          "type": "uint",
+          "sizeBytes": 1,
+          "description": "GNSS fix type: 0=NoFix, 2=2D, 3=3D, 4=GNSS+DeadReckoning"
+        },
+        {
+          "name": "numSV",
+          "type": "uint",
+          "sizeBytes": 1,
+          "description": "Number of satellites used in navigation solution"
+        },
+        {
+          "name": "gSpeed",
+          "type": "int",
+          "sizeBytes": 4,
+          "unit": "mm/s",
+          "description": "Ground speed 2D"
+        },
+        {
+          "name": "heading",
+          "type": "int",
+          "sizeBytes": 4,
+          "unit": "deg",
+          "scale": 1e-5,
+          "description": "Heading of motion"
+        }
+      ]
+    },
+    {
+      "name": "MON-VER",
+      "tags": ["gnss/mon", "dashboard"],
+      "description": "Receiver Software and Hardware Version Poll.",
+      "fields": [
+        {
+          "name": "class",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 10,
+          "position": "before-length-field"
+        },
+        {
+          "name": "id",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 4,
+          "position": "before-length-field"
+        }
+      ]
+    },
+    {
+      "name": "NAV-STATUS",
+      "tags": ["gnss/nav"],
+      "description": "Receiver Navigation Status Poll.",
+      "fields": [
+        {
+          "name": "class",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 1,
+          "position": "before-length-field"
+        },
+        {
+          "name": "id",
+          "type": "uint",
+          "sizeBytes": 1,
+          "constValue": 3,
+          "position": "before-length-field"
         }
       ]
     }
