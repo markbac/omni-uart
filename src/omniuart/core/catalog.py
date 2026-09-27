@@ -82,7 +82,7 @@ class CatalogManager:
             self.script_dirs.append(s)
 
     def list_protocol_files(self) -> List[Path]:
-        """Scan all registered protocol directories and return valid protocol file paths (excluding G460)."""
+        """Scan all registered protocol directories and return valid protocol file paths (excluding G460 and meta-schemas)."""
         files: List[Path] = []
         seen_names: Set[str] = set()
 
@@ -92,7 +92,7 @@ class CatalogManager:
             for file_path in p_dir.glob("*.*"):
                 if file_path.suffix.lower() not in (".json", ".yaml", ".yml"):
                     continue
-                if "g460" in file_path.name.lower():
+                if "g460" in file_path.name.lower() or "schema.json" in file_path.name.lower():
                     continue
                 if file_path.name not in seen_names:
                     seen_names.add(file_path.name)

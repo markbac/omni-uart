@@ -88,3 +88,43 @@ async def test_modbus_rtu_simulator_back_to_back_sequence() -> None:
     finally:
         await sim.stop()
         await pair.close()
+
+
+@pytest.mark.asyncio
+async def test_desktop_and_cli_against_simulator() -> None:
+    """Smoke test CLI / Desktop payload builder sending AT commands directly to simulator."""
+    from omniuart.core.catalog import CatalogManager
+    from omniuart.desktop.views import build_frame_payload
+
+    catalog = CatalogManager()
+    at_spec = catalog.get_protocol("at-commands-uart-interface.json") or catalog.get_protocol("at-commands-uart-interface.yaml")
+    if not at_spec:
+        all_files = catalog.list_protocol_files()
+        at_file = next((f for f in all_files if "at" in f.name.lower()), all_files[0])
+        at_spec = catalog.get_protocol(at_file.name)
+    assert at_spec is not None
+
+    cmd = next((c for c in at_spec.commands if c.name == "AT+CGMI"), at_spec.commands[0])
+
+    pair = VirtualSerialPair()
+    await pair.open()
+
+    sim = ATModemSimulator(spec=at_spec, transport=pair.device)
+    await sim.start()
+
+    try:
+        # Build payload using Desktop/CLI builder
+        payload = build_frame_payload(at_spec, cmd, {})
+        assert isinstance(payload, bytes)
+        assert len(payload) > 0
+
+        # Transmit to simulator
+        await pair.host.write(payload)
+
+        # Receive simulator response
+        res = await pair.host.read(size=64, timeout_ms=1000)
+        assert len(res) > 0
+        assert b"OK" in res or b"OmniUART" in res
+    finally:
+        await sim.stop()
+        await pair.close()
