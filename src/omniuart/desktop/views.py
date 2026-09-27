@@ -580,11 +580,11 @@ class CommandCatalogView(ttk.Frame):
 
 
 class TelemetryPlotterView(ttk.Frame):
-    """Real-time Canvas Telemetry Line Chart Plotter with explicit signal metrics, axis labels, and statistics."""
+    """Real-time Canvas Telemetry Line Chart Plotter driven strictly by real UART packet data."""
 
     def __init__(self, parent: tk.Widget) -> None:
         super().__init__(parent, padding=12)
-        self.data_points: List[float] = [50.0] * 50
+        self.data_points: List[float] = []
         self.is_running = True
 
         toolbar = ttk.Frame(self)
@@ -615,7 +615,7 @@ class TelemetryPlotterView(ttk.Frame):
         # Signal description label
         desc_label = ttk.Label(
             self,
-            text="Visualizing dynamic serial response payloads, ADC voltage samples, and hardware sensor telemetry over time (Sampling rate: 200 ms).",
+            text="Visualizing actual serial telemetry payload readings, ADC voltage samples, and response data parsed from real incoming UART RX frames.",
             foreground="#64748b",
             font=("Segoe UI", 9, "italic"),
         )
@@ -625,10 +625,10 @@ class TelemetryPlotterView(ttk.Frame):
         stats_frame = ttk.Frame(self)
         stats_frame.pack(fill=tk.X, pady=(0, 8))
 
-        self.cur_val_var = tk.StringVar(value="Current: 50.0 mV")
-        self.min_val_var = tk.StringVar(value="Min: 50.0 mV")
-        self.max_val_var = tk.StringVar(value="Max: 50.0 mV")
-        self.avg_val_var = tk.StringVar(value="Avg: 50.0 mV")
+        self.cur_val_var = tk.StringVar(value="Current: --")
+        self.min_val_var = tk.StringVar(value="Min: --")
+        self.max_val_var = tk.StringVar(value="Max: --")
+        self.avg_val_var = tk.StringVar(value="Avg: --")
 
         ttk.Label(stats_frame, textvariable=self.cur_val_var, font=("Consolas", 10, "bold"), foreground="#38bdf8").pack(
             side=tk.LEFT, padx=(0, 15)
@@ -646,15 +646,14 @@ class TelemetryPlotterView(ttk.Frame):
         # Plotter canvas
         self.canvas = tk.Canvas(self, bg="#0f172a", highlightthickness=1, highlightbackground="#334155")
         self.canvas.pack(fill=tk.BOTH, expand=True)
-
-        self._schedule_update()
+        self._draw_chart()
 
     def _toggle_plotter(self) -> None:
         self.is_running = not self.is_running
         self.pause_btn.config(text="Resume Plotter" if not self.is_running else "Pause Plotter")
 
     def _clear_plotter(self) -> None:
-        self.data_points = [50.0] * 50
+        self.data_points = []
         self._draw_chart()
 
     def push_value(self, val: float) -> None:
@@ -664,13 +663,36 @@ class TelemetryPlotterView(ttk.Frame):
             self.data_points.pop(0)
         self._draw_chart()
 
-    def _schedule_update(self) -> None:
-        if self.is_running:
-            # Simulate real-time signal variation
-            last = self.data_points[-1]
-            new_val = max(10.0, min(90.0, last + random.uniform(-4.0, 4.0)))
-            self.push_value(new_val)
-        self.after(200, self._schedule_update)
+    def push_telemetry_bytes(self, data: bytes) -> None:
+        """Parse incoming real serial payload bytes and push numerical reading to chart."""
+        if not data or not self.is_running:
+            return
+
+        val: Optional[float] = None
+        try:
+            text = data.decode("utf-8", errors="ignore").strip()
+            numbers = re.findall(r"[-+]?\d*\.\d+|\d+", text)
+            if numbers:
+                parsed_val = float(numbers[0])
+                if parsed_val > 100.0 and parsed_val <= 4096.0:
+                    val = (parsed_val / 4095.0) * 100.0
+                elif parsed_val > 100.0:
+                    val = parsed_val % 100.0
+                else:
+                    val = parsed_val
+        except Exception:
+            pass
+
+        if val is None and len(data) >= 1:
+            if len(data) >= 2:
+                raw_int = (data[-2] << 8) | data[-1]
+                val = (raw_int / 65535.0) * 100.0
+            else:
+                val = (data[0] / 255.0) * 100.0
+
+        if val is not None:
+            val = max(0.0, min(100.0, float(val)))
+            self.push_value(val)
 
     def _draw_chart(self) -> None:
         self.canvas.delete("all")
@@ -694,11 +716,25 @@ class TelemetryPlotterView(ttk.Frame):
         # Draw X-axis line and label
         self.canvas.create_line(margin_left, 20 + plot_h, w - 15, 20 + plot_h, fill="#334155")
         self.canvas.create_text(
-            w / 2 + margin_left / 2, h - 10, text="Time Samples (200ms Ticks)", fill="#64748b", font=("Segoe UI", 8, "italic")
+            w / 2 + margin_left / 2, h - 10, text="Incoming Serial RX Samples", fill="#64748b", font=("Segoe UI", 8, "italic")
         )
 
-        # Plot waveform
+        metric_name = self.metric_var.get()
+        unit = "%" if "%" in metric_name else ("mV" if "mV" in metric_name else ("°C" if "°C" in metric_name else "V"))
+
         if not self.data_points:
+            self.canvas.create_text(
+                w / 2 + margin_left / 2,
+                h / 2,
+                text="📡 Waiting for real UART serial telemetry packets...\n(No fabricated data generated)",
+                fill="#64748b",
+                font=("Segoe UI", 10, "italic"),
+                justify="center",
+            )
+            self.cur_val_var.set(f"Current: -- {unit}")
+            self.min_val_var.set(f"Min: -- {unit}")
+            self.max_val_var.set(f"Max: -- {unit}")
+            self.avg_val_var.set(f"Avg: -- {unit}")
             return
 
         step = plot_w / max(1, len(self.data_points) - 1)
@@ -714,7 +750,6 @@ class TelemetryPlotterView(ttk.Frame):
         # Legend box top-right
         self.canvas.create_rectangle(w - 240, 25, w - 20, 55, fill="#1e293b", outline="#334155")
         self.canvas.create_line(w - 230, 40, w - 200, 40, fill="#38bdf8", width=2)
-        metric_name = self.metric_var.get()
         self.canvas.create_text(w - 195, 40, text=metric_name[:24], fill="#f8fafc", font=("Segoe UI", 8, "bold"), anchor="w")
 
         # Update stats banners
@@ -722,7 +757,6 @@ class TelemetryPlotterView(ttk.Frame):
         mn = min(self.data_points)
         mx = max(self.data_points)
         avg = sum(self.data_points) / len(self.data_points)
-        unit = "%" if "%" in metric_name else ("mV" if "mV" in metric_name else ("°C" if "°C" in metric_name else "V"))
 
         self.cur_val_var.set(f"Current: {curr:.1f} {unit}")
         self.min_val_var.set(f"Min: {mn:.1f} {unit}")
