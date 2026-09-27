@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.models import CommandSpec, ProtocolSpec
+from omniuart.core.transport import list_available_ports
 
 
 def build_frame_payload(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any]) -> bytes:
@@ -134,7 +135,11 @@ class ConnectionToolbar(ttk.Frame):
         self.port_combo = ttk.Combobox(
             self, textvariable=self.port_var, values=["COM1", "COM2", "COM3", "/dev/ttyUSB0", "/dev/ttyACM0"], width=12
         )
-        self.port_combo.pack(side=tk.LEFT, padx=4)
+        self.port_combo.pack(side=tk.LEFT, padx=2)
+
+        self.refresh_btn = ttk.Button(self, text="🔄", width=3, command=self._refresh_ports)
+        self.refresh_btn.pack(side=tk.LEFT, padx=(0, 4))
+        self._refresh_ports()
 
         ttk.Label(self, text="Baud Rate:", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=4)
         self.baud_var = tk.StringVar(value="115200")
@@ -178,6 +183,14 @@ class ConnectionToolbar(ttk.Frame):
             self, text="● Disconnected", font=("Segoe UI", 9, "bold"), foreground="#dc2626"
         )
         self.status_label.pack(side=tk.LEFT, padx=10)
+
+    def _refresh_ports(self) -> None:
+        """Scan available physical COM / serial ports and update combobox values."""
+        detected = list_available_ports()
+        port_names = [p["device"] for p in detected] if detected else ["COM1", "COM2", "COM3", "/dev/ttyUSB0", "/dev/ttyACM0"]
+        self.port_combo["values"] = port_names
+        if port_names and self.port_var.get() not in port_names:
+            self.port_var.set(port_names[0])
 
     def _toggle_connection(self) -> None:
         self.is_connected = not self.is_connected
