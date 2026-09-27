@@ -124,16 +124,32 @@ def build_frame_payload(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, 
 class ConnectionToolbar(ttk.Frame):
     """Header toolbar for physical serial connection configuration and status."""
 
-    def __init__(self, parent: tk.Widget, on_connect_toggle: Callable[[Dict[str, Any]], None]) -> None:
+    def __init__(
+        self,
+        parent: tk.Widget,
+        on_connect_toggle: Callable[[Dict[str, Any]], None],
+        catalog: Optional[CatalogManager] = None,
+        on_protocol_change: Optional[Callable[[str], None]] = None,
+    ) -> None:
         super().__init__(parent, padding=(10, 8, 10, 8))
         self.on_connect_toggle = on_connect_toggle
+        self.catalog = catalog
+        self.on_protocol_change = on_protocol_change
         self.is_connected = False
+
+        # Global Active Protocol selector
+        ttk.Label(self, text="Protocol:", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(4, 2))
+        self.proto_var = tk.StringVar(value="None")
+        self.proto_combo = ttk.Combobox(self, textvariable=self.proto_var, state="readonly", width=18)
+        self.proto_combo.pack(side=tk.LEFT, padx=(0, 6))
+        self.proto_combo.bind("<<ComboboxSelected>>", lambda e: self._on_proto_select())
+        self._refresh_protocols()
 
         # Physical serial settings widgets
         ttk.Label(self, text="Serial Port:", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=4)
         self.port_var = tk.StringVar(value="COM1")
         self.port_combo = ttk.Combobox(
-            self, textvariable=self.port_var, values=["COM1", "COM2", "COM3", "/dev/ttyUSB0", "/dev/ttyACM0"], width=12
+            self, textvariable=self.port_var, values=["COM1", "COM2", "COM3", "/dev/ttyUSB0", "/dev/ttyACM0"], width=10
         )
         self.port_combo.pack(side=tk.LEFT, padx=2)
 
@@ -184,6 +200,35 @@ class ConnectionToolbar(ttk.Frame):
         )
         self.status_label.pack(side=tk.LEFT, padx=10)
 
+    def _refresh_protocols(self) -> None:
+        """Populate global active protocol selector from catalog manager."""
+        if self.catalog:
+            summary = self.catalog.catalog_summary()
+            names = ["None"] + [p.get("name", "") for p in summary.get("protocols", [])]
+            self.proto_combo["values"] = names
+        else:
+            self.proto_combo["values"] = ["None"]
+
+    def _on_proto_select(self) -> None:
+        """Auto-configure physical serial connection parameters when active protocol changes."""
+        selected_name = self.proto_var.get()
+        if self.catalog and selected_name != "None":
+            summary = self.catalog.catalog_summary()
+            for p in summary.get("protocols", []):
+                if p.get("name") == selected_name:
+                    spec = self.catalog.get_protocol(p.get("filename", ""))
+                    if spec and hasattr(spec, "serial_config"):
+                        sc = spec.serial_config
+                        self.baud_var.set(str(sc.baudrate))
+                        self.databits_var.set(str(sc.bytesize))
+                        parity_str = str(sc.parity).capitalize()
+                        if parity_str in ["None", "Even", "Odd", "Mark", "Space"]:
+                            self.parity_var.set(parity_str)
+                        self.stopbits_var.set(str(sc.stopbits))
+                    break
+        if self.on_protocol_change:
+            self.on_protocol_change(selected_name)
+
     def _refresh_ports(self) -> None:
         """Scan available physical COM / serial ports and update combobox values."""
         detected = list_available_ports()
@@ -228,7 +273,7 @@ class DashboardView(ttk.Frame):
         proto_bar.pack(fill=tk.X, pady=(0, 10))
 
         ttk.Label(proto_bar, text="Active Protocol View:", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=(0, 8))
-        self.proto_var = tk.StringVar(value="All Protocols")
+        self.proto_var = tk.StringVar(value="None")
         self.proto_combo = ttk.Combobox(proto_bar, textvariable=self.proto_var, state="readonly", width=35)
         self.proto_combo.pack(side=tk.LEFT)
         self.proto_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_data())
@@ -278,12 +323,17 @@ class DashboardView(ttk.Frame):
         protocols = summary.get("protocols", [])
 
         # Update combo options
-        proto_names = ["All Protocols"] + [p.get("name", "") for p in protocols]
+        proto_names = ["None", "All Protocols"] + [p.get("name", "") for p in protocols]
         self.proto_combo["values"] = proto_names
 
         selected = self.proto_var.get()
 
-        if selected == "All Protocols":
+        if selected == "None":
+            self._create_card(self.cards_frame, "Active Protocol", "None", "#64748b", 0)
+            self._create_card(self.cards_frame, "Available Commands", "0", "#64748b", 1)
+            self._create_card(self.cards_frame, "Baud Rate", "N/A", "#64748b", 2)
+            self._create_card(self.cards_frame, "Schema Version", "N/A", "#64748b", 3)
+        elif selected == "All Protocols":
             protocols_count = summary.get("protocols_found", 0)
             scripts_count = summary.get("scripts_found", 0)
             self._create_card(self.cards_frame, "Loaded Protocols", str(protocols_count), "#2563eb", 0)
@@ -329,7 +379,7 @@ class CommandCatalogView(ttk.Frame):
 
         # Protocol Filter Combo
         ttk.Label(left_frame, text="Active Protocol Filter:").pack(anchor="w")
-        self.proto_filter_var = tk.StringVar(value="All Protocols")
+        self.proto_filter_var = tk.StringVar(value="None")
         self.proto_filter_combo = ttk.Combobox(left_frame, textvariable=self.proto_filter_var, state="readonly")
         self.proto_filter_combo.pack(fill=tk.X, pady=(0, 6))
         self.proto_filter_combo.bind("<<ComboboxSelected>>", lambda e: self._populate_tree())
@@ -347,10 +397,10 @@ class CommandCatalogView(ttk.Frame):
         right_frame = ttk.LabelFrame(paned, text=" Command Builder & Form Parameters ", padding=12)
         paned.add(right_frame, weight=2)
 
-        self.cmd_title_label = ttk.Label(right_frame, text="Select a command from the tree", font=("Segoe UI", 11, "bold"))
+        self.cmd_title_label = ttk.Label(right_frame, text="No Active Protocol Selected", font=("Segoe UI", 11, "bold"))
         self.cmd_title_label.pack(anchor="w", pady=(0, 4))
 
-        self.cmd_desc_label = ttk.Label(right_frame, text="", wraplength=450, foreground="#64748b")
+        self.cmd_desc_label = ttk.Label(right_frame, text="Select an active protocol from top header to view available commands.", wraplength=450, foreground="#64748b")
         self.cmd_desc_label.pack(anchor="w", pady=(0, 8))
 
         # Dynamic params container
@@ -383,8 +433,13 @@ class CommandCatalogView(ttk.Frame):
         protocols = summary.get("protocols", [])
 
         # Update protocol combo values
-        proto_names = ["All Protocols"] + [p.get("name", "") for p in protocols]
+        proto_names = ["None", "All Protocols"] + [p.get("name", "") for p in protocols]
         self.proto_filter_combo["values"] = proto_names
+
+        if selected_proto_name == "None":
+            self.cmd_title_label.config(text="No Active Protocol Selected")
+            self.cmd_desc_label.config(text="Select an active protocol from top header to view available commands.")
+            return
 
         for p in protocols:
             p_name = p.get("name", "")

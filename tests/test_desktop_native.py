@@ -59,6 +59,16 @@ def test_desktop_app_initialization():
         assert "Length:" in console_text
         assert "SESSION RECORDING" in console_text
 
+        # Test Global Active Protocol selection & auto serial port config
+        assert app.toolbar.proto_var.get() == "None"
+        protocols = app.catalog.catalog_summary().get("protocols", [])
+        if protocols:
+            p_name = protocols[0]["name"]
+            app.toolbar.proto_var.set(p_name)
+            app.toolbar._on_proto_select()
+            assert app.dashboard_view.proto_var.get() == p_name
+            assert app.catalog_view.proto_filter_var.get() == p_name
+
         app.destroy()
     except Exception as e:
         # If running in no-display environment, handle gracefully
