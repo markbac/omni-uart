@@ -580,7 +580,7 @@ class CommandCatalogView(ttk.Frame):
 
 
 class TelemetryPlotterView(ttk.Frame):
-    """Real-time Canvas Telemetry Line Chart Plotter."""
+    """Real-time Canvas Telemetry Line Chart Plotter with explicit signal metrics, axis labels, and statistics."""
 
     def __init__(self, parent: tk.Widget) -> None:
         super().__init__(parent, padding=12)
@@ -588,12 +588,60 @@ class TelemetryPlotterView(ttk.Frame):
         self.is_running = True
 
         toolbar = ttk.Frame(self)
-        toolbar.pack(fill=tk.X, pady=(0, 8))
+        toolbar.pack(fill=tk.X, pady=(0, 4))
 
-        ttk.Label(toolbar, text="Real-Time Telemetry Line Chart Plotter", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        ttk.Label(toolbar, text="📈 Real-Time Telemetry Line Chart Plotter", font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
+
+        ttk.Label(toolbar, text="  Signal Channel:").pack(side=tk.LEFT, padx=(10, 2))
+        self.metric_var = tk.StringVar(value="Analog Sensor Voltage (mV)")
+        self.metric_combo = ttk.Combobox(
+            toolbar,
+            textvariable=self.metric_var,
+            values=[
+                "Analog Sensor Voltage (mV)",
+                "Device Signal Strength (CSQ %)",
+                "MCU Internal Temperature (°C)",
+                "Battery Supply Voltage (V)",
+            ],
+            state="readonly",
+            width=28,
+        )
+        self.metric_combo.pack(side=tk.LEFT, padx=4)
+
         self.pause_btn = ttk.Button(toolbar, text="Pause Plotter", command=self._toggle_plotter)
         self.pause_btn.pack(side=tk.RIGHT, padx=4)
         ttk.Button(toolbar, text="Clear Data", command=self._clear_plotter).pack(side=tk.RIGHT, padx=4)
+
+        # Signal description label
+        desc_label = ttk.Label(
+            self,
+            text="Visualizing dynamic serial response payloads, ADC voltage samples, and hardware sensor telemetry over time (Sampling rate: 200 ms).",
+            foreground="#64748b",
+            font=("Segoe UI", 9, "italic"),
+        )
+        desc_label.pack(anchor="w", pady=(0, 6))
+
+        # Real-time statistics banner
+        stats_frame = ttk.Frame(self)
+        stats_frame.pack(fill=tk.X, pady=(0, 8))
+
+        self.cur_val_var = tk.StringVar(value="Current: 50.0 mV")
+        self.min_val_var = tk.StringVar(value="Min: 50.0 mV")
+        self.max_val_var = tk.StringVar(value="Max: 50.0 mV")
+        self.avg_val_var = tk.StringVar(value="Avg: 50.0 mV")
+
+        ttk.Label(stats_frame, textvariable=self.cur_val_var, font=("Consolas", 10, "bold"), foreground="#38bdf8").pack(
+            side=tk.LEFT, padx=(0, 15)
+        )
+        ttk.Label(stats_frame, textvariable=self.min_val_var, font=("Consolas", 10), foreground="#94a3b8").pack(
+            side=tk.LEFT, padx=15
+        )
+        ttk.Label(stats_frame, textvariable=self.max_val_var, font=("Consolas", 10), foreground="#94a3b8").pack(
+            side=tk.LEFT, padx=15
+        )
+        ttk.Label(stats_frame, textvariable=self.avg_val_var, font=("Consolas", 10), foreground="#94a3b8").pack(
+            side=tk.LEFT, padx=15
+        )
 
         # Plotter canvas
         self.canvas = tk.Canvas(self, bg="#0f172a", highlightthickness=1, highlightbackground="#334155")
@@ -628,28 +676,58 @@ class TelemetryPlotterView(ttk.Frame):
         self.canvas.delete("all")
         w = self.canvas.winfo_width()
         h = self.canvas.winfo_height()
-        if w < 50 or h < 50:
+        if w < 100 or h < 100:
             return
 
-        # Draw grid lines
-        for y in range(0, h, 40):
-            self.canvas.create_line(0, y, w, y, fill="#1e293b", dash=(2, 4))
-        for x in range(0, w, 50):
-            self.canvas.create_line(x, 0, x, h, fill="#1e293b", dash=(2, 4))
+        margin_left = 55
+        margin_bottom = 30
+        plot_w = w - margin_left - 15
+        plot_h = h - margin_bottom - 20
+
+        # Draw grid lines & Y-axis scale labels (0% to 100%)
+        for i in range(5):
+            pct = 100 - i * 25
+            y = 20 + i * (plot_h / 4.0)
+            self.canvas.create_line(margin_left, y, w - 15, y, fill="#1e293b", dash=(2, 4))
+            self.canvas.create_text(margin_left - 8, y, text=f"{pct}%", fill="#64748b", font=("Consolas", 8), anchor="e")
+
+        # Draw X-axis line and label
+        self.canvas.create_line(margin_left, 20 + plot_h, w - 15, 20 + plot_h, fill="#334155")
+        self.canvas.create_text(
+            w / 2 + margin_left / 2, h - 10, text="Time Samples (200ms Ticks)", fill="#64748b", font=("Segoe UI", 8, "italic")
+        )
 
         # Plot waveform
         if not self.data_points:
             return
 
-        step = w / max(1, len(self.data_points) - 1)
+        step = plot_w / max(1, len(self.data_points) - 1)
         coords = []
         for i, val in enumerate(self.data_points):
-            x = i * step
-            y = h - (val / 100.0 * (h - 20) + 10)
+            x = margin_left + i * step
+            y = (20 + plot_h) - (val / 100.0 * plot_h)
             coords.extend([x, y])
 
         if len(coords) >= 4:
             self.canvas.create_line(*coords, fill="#38bdf8", width=2, smooth=True)
+
+        # Legend box top-right
+        self.canvas.create_rectangle(w - 240, 25, w - 20, 55, fill="#1e293b", outline="#334155")
+        self.canvas.create_line(w - 230, 40, w - 200, 40, fill="#38bdf8", width=2)
+        metric_name = self.metric_var.get()
+        self.canvas.create_text(w - 195, 40, text=metric_name[:24], fill="#f8fafc", font=("Segoe UI", 8, "bold"), anchor="w")
+
+        # Update stats banners
+        curr = self.data_points[-1]
+        mn = min(self.data_points)
+        mx = max(self.data_points)
+        avg = sum(self.data_points) / len(self.data_points)
+        unit = "%" if "%" in metric_name else ("mV" if "mV" in metric_name else ("°C" if "°C" in metric_name else "V"))
+
+        self.cur_val_var.set(f"Current: {curr:.1f} {unit}")
+        self.min_val_var.set(f"Min: {mn:.1f} {unit}")
+        self.max_val_var.set(f"Max: {mx:.1f} {unit}")
+        self.avg_val_var.set(f"Avg: {avg:.1f} {unit}")
 
 
 class AutomationScriptRunnerView(ttk.Frame):
