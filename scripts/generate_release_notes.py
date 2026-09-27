@@ -30,7 +30,7 @@ def get_git_commits_since_last_tag() -> list[str]:
         return []
 
 
-def generate_issue_release_notes(commits: list[str]) -> str:
+def generate_issue_release_notes(commits: list[str], version: str = "") -> str:
     """Categorize commits and resolved issue references into Keep a Changelog 1.1.0 sections."""
     added = []
     changed = []
@@ -64,7 +64,8 @@ def generate_issue_release_notes(commits: list[str]) -> str:
         else:
             changed.append(f"- {clean_line}{issue_str}")
 
-    md_lines = ["## Release Notes (Keep a Changelog 1.1.0 Format)\n"]
+    header = f"## [{version}]" if version else "## Release Notes"
+    md_lines = [f"{header}\n"]
 
     if added:
         md_lines.append("### Added")
