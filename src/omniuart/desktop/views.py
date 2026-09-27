@@ -389,7 +389,10 @@ class CommandCatalogView(ttk.Frame):
 
         # Update labels
         disc_val = getattr(cmd, "discriminator", None)
-        disc_text = f" | Discriminator: 0x{int(disc_val):02X}" if disc_val is not None else ""
+        if disc_val is not None:
+            disc_text = f" | Discriminator: 0x{disc_val:02X}" if isinstance(disc_val, int) else f" | Discriminator: {disc_val}"
+        else:
+            disc_text = ""
         cmd_id_str = f"0x{cmd.id:02X}" if isinstance(cmd.id, int) else str(cmd.id)
         self.cmd_title_label.config(text=f"{cmd.name} (ID: {cmd_id_str}{disc_text})")
         self.cmd_desc_label.config(text=cmd.description or "No description provided.")
