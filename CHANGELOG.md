@@ -5,6 +5,15 @@ All notable changes to the OmniUART project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-09-27
+
+### Added
+- Added external protocol schema directory loading in `CatalogManager` relative to binary location and working directory (#149).
+- Enhanced binary smoke test suite (`test_simulator_back_to_back.py`, `test_binary_smoke.py`) to test CLI, Web UI, Desktop UI, and Simulator against each other (#151).
+
+### Changed
+- Excluded protocol schemas and examples from embedded PyInstaller binary assets in `omniuart.spec` and packaged them as external editable release assets in release workflow (#150).
+
 ## [1.7.0] - 2026-09-27
 
 ### Added
