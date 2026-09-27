@@ -4,10 +4,8 @@ from pathlib import Path
 
 block_cipher = None
 
-# Asset data folders to bundle inside the binary
+# Asset data folders to bundle inside the binary (schemas & examples kept external for local user modification)
 datas = [
-    ('schemas', 'schemas'),
-    ('examples', 'examples'),
     ('docs', 'docs'),
 ]
 
