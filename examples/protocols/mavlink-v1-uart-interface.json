@@ -59,7 +59,8 @@
   "commands": [
     {
       "name": "HEARTBEAT",
-      "description": "Message ID 0. seq/sysId/compId/msgId are the 4 precedingHeaderBytes counted separately from LEN, now declared as position=before-length-field fields rather than left as an anonymous count; the fields below them are the LEN-counted payload.",
+      "tags": ["telemetry/heartbeat", "dashboard"],
+      "description": "Message ID 0. System status heartbeat broadcast by vehicle or ground station.",
       "fields": [
         {
           "name": "seq",
@@ -112,6 +113,316 @@
           "name": "mavlinkVersion",
           "type": "uint",
           "sizeBytes": 1
+        }
+      ]
+    },
+    {
+      "name": "SYS_STATUS",
+      "tags": ["telemetry/status", "dashboard"],
+      "description": "Message ID 1. System status, battery voltage, current draw, and sensor health.",
+      "fields": [
+        {
+          "name": "seq",
+          "type": "seq",
+          "position": "before-length-field"
+        },
+        {
+          "name": "sysId",
+          "type": "sysId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "compId",
+          "type": "compId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "msgId",
+          "type": "msgId",
+          "constValue": 1,
+          "position": "before-length-field",
+          "role": "discriminator"
+        },
+        {
+          "name": "onboardSensorsPresent",
+          "type": "uint",
+          "sizeBytes": 4
+        },
+        {
+          "name": "onboardSensorsEnabled",
+          "type": "uint",
+          "sizeBytes": 4
+        },
+        {
+          "name": "onboardSensorsHealth",
+          "type": "uint",
+          "sizeBytes": 4
+        },
+        {
+          "name": "load",
+          "type": "uint",
+          "sizeBytes": 2,
+          "unit": "d%"
+        },
+        {
+          "name": "voltageBattery",
+          "type": "uint",
+          "sizeBytes": 2,
+          "unit": "mV"
+        },
+        {
+          "name": "currentBattery",
+          "type": "int",
+          "sizeBytes": 2,
+          "unit": "cA"
+        },
+        {
+          "name": "batteryRemaining",
+          "type": "int",
+          "sizeBytes": 1,
+          "unit": "%"
+        }
+      ]
+    },
+    {
+      "name": "GPS_RAW_INT",
+      "tags": ["telemetry/gps", "sensor"],
+      "description": "Message ID 24. Raw GPS location and satellite fix data.",
+      "fields": [
+        {
+          "name": "seq",
+          "type": "seq",
+          "position": "before-length-field"
+        },
+        {
+          "name": "sysId",
+          "type": "sysId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "compId",
+          "type": "compId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "msgId",
+          "type": "msgId",
+          "constValue": 24,
+          "position": "before-length-field",
+          "role": "discriminator"
+        },
+        {
+          "name": "timeUsec",
+          "type": "uint",
+          "sizeBytes": 8,
+          "unit": "us"
+        },
+        {
+          "name": "fixType",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "lat",
+          "type": "int",
+          "sizeBytes": 4,
+          "unit": "deg",
+          "scale": 1e-7
+        },
+        {
+          "name": "lon",
+          "type": "int",
+          "sizeBytes": 4,
+          "unit": "deg",
+          "scale": 1e-7
+        },
+        {
+          "name": "alt",
+          "type": "int",
+          "sizeBytes": 4,
+          "unit": "mm"
+        },
+        {
+          "name": "eph",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "epv",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "vel",
+          "type": "uint",
+          "sizeBytes": 2,
+          "unit": "cm/s"
+        },
+        {
+          "name": "cog",
+          "type": "uint",
+          "sizeBytes": 2,
+          "unit": "cdeg"
+        },
+        {
+          "name": "satellitesVisible",
+          "type": "uint",
+          "sizeBytes": 1
+        }
+      ]
+    },
+    {
+      "name": "ATTITUDE",
+      "tags": ["telemetry/attitude"],
+      "description": "Message ID 30. Vehicle roll, pitch, and yaw angles and angular velocity.",
+      "fields": [
+        {
+          "name": "seq",
+          "type": "seq",
+          "position": "before-length-field"
+        },
+        {
+          "name": "sysId",
+          "type": "sysId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "compId",
+          "type": "compId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "msgId",
+          "type": "msgId",
+          "constValue": 30,
+          "position": "before-length-field",
+          "role": "discriminator"
+        },
+        {
+          "name": "timeBootMs",
+          "type": "uint",
+          "sizeBytes": 4,
+          "unit": "ms"
+        },
+        {
+          "name": "roll",
+          "type": "float",
+          "sizeBytes": 4,
+          "unit": "rad"
+        },
+        {
+          "name": "pitch",
+          "type": "float",
+          "sizeBytes": 4,
+          "unit": "rad"
+        },
+        {
+          "name": "yaw",
+          "type": "float",
+          "sizeBytes": 4,
+          "unit": "rad"
+        },
+        {
+          "name": "rollspeed",
+          "type": "float",
+          "sizeBytes": 4,
+          "unit": "rad/s"
+        },
+        {
+          "name": "pitchspeed",
+          "type": "float",
+          "sizeBytes": 4,
+          "unit": "rad/s"
+        },
+        {
+          "name": "yawspeed",
+          "type": "float",
+          "sizeBytes": 4,
+          "unit": "rad/s"
+        }
+      ]
+    },
+    {
+      "name": "COMMAND_LONG",
+      "tags": ["command/action"],
+      "description": "Message ID 76. Generic command dispatch to vehicle autopilot.",
+      "fields": [
+        {
+          "name": "seq",
+          "type": "seq",
+          "position": "before-length-field"
+        },
+        {
+          "name": "sysId",
+          "type": "sysId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "compId",
+          "type": "compId",
+          "position": "before-length-field"
+        },
+        {
+          "name": "msgId",
+          "type": "msgId",
+          "constValue": 76,
+          "position": "before-length-field",
+          "role": "discriminator"
+        },
+        {
+          "name": "targetSystem",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "targetComponent",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "command",
+          "type": "uint",
+          "sizeBytes": 2
+        },
+        {
+          "name": "confirmation",
+          "type": "uint",
+          "sizeBytes": 1
+        },
+        {
+          "name": "param1",
+          "type": "float",
+          "sizeBytes": 4
+        },
+        {
+          "name": "param2",
+          "type": "float",
+          "sizeBytes": 4
+        },
+        {
+          "name": "param3",
+          "type": "float",
+          "sizeBytes": 4
+        },
+        {
+          "name": "param4",
+          "type": "float",
+          "sizeBytes": 4
+        },
+        {
+          "name": "param5",
+          "type": "float",
+          "sizeBytes": 4
+        },
+        {
+          "name": "param6",
+          "type": "float",
+          "sizeBytes": 4
+        },
+        {
+          "name": "param7",
+          "type": "float",
+          "sizeBytes": 4
         }
       ]
     }
