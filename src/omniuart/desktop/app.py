@@ -132,6 +132,7 @@ class OmniUARTDesktopApp(tk.Tk):
     def _handle_transmit(self, label: str, raw_bytes: bytes) -> None:
         self.tx_bytes_count += len(raw_bytes)
         self.comms_view.log("TX", raw_bytes, label)
+        self.plotter_view.push_telemetry_bytes(raw_bytes)
         self.status_text_var.set(f"Transmitted '{label}' ({len(raw_bytes)} bytes)")
 
 
