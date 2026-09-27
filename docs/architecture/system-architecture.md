@@ -130,12 +130,52 @@ flowchart TD
 
 ---
 
-## 4. Architectural Quality Attributes
+---
+
+## 4. Technical Stack & Serial Communications Architecture
+
+### 4.1 Python Library Dependency Matrix
+
+| Category | Primary Library | Purpose & Rationale |
+| :--- | :--- | :--- |
+| **Serial Communications** | `pyserial` | Core OS-level hardware COM port handle interface (`Win32 API` / `POSIX termios`). |
+| **Async Concurrency** | `asyncio` (Python stdlib) | Event loop orchestration; uses `asyncio.to_thread` for non-blocking serial I/O. |
+| **Data Validation & Schemas** | `pydantic` (v2), `jsonschema` | High-performance data parsing, strict field validation, and JSON Schema compliance. |
+| **File Format Parsers** | `pyyaml`, `json` | Ingestion and serialization of protocol definitions and test automation scripts. |
+| **Command Line Interface** | `typer`, `rich` | Rich terminal formatting, colorized packet tables, progress bars, and CLI commands. |
+| **Web UI Server** | `fastapi`, `uvicorn`, `starlette` | Embedded lightweight ASGI web server hosting WebSockets streaming & dynamic dashboard. |
+| **Documentation & AsyncAPI** | `@asyncapi/cli`, `mkdocs` | Official npm AsyncAPI HTML spec generator and MkDocs Material documentation hub. |
+| **Executable Packaging** | `pyinstaller` | Single-file standalone executable compilation for Windows (`.exe`) and Linux. |
+
+### 4.2 Serial Communications Handling Architecture
+
+#### OS-Level Handle Management
+OmniUART interacts with hardware serial ports via PySerial, which abstracts OS-level serial driver handles:
+- **Windows**: Opens `\\\\.\\COMx` device handles via Win32 API calls (`CreateFileW`, `SetCommState`, `SetCommTimeouts`, `EscapeCommFunction` for DTR/RTS pin states).
+- **Linux / macOS**: Opens `/dev/ttyUSBx`, `/dev/ttyACMx`, or `/dev/pts/*` file descriptors via POSIX `open()` and configures baudrate, framing, and parity using `termios` and `ioctl`.
+
+#### Non-Blocking Asynchronous I/O Loop
+To prevent blocking the `asyncio` event loop during hardware serial reads or writes:
+1. `HardwareSerialTransport` delegates blocking PySerial `read()` and `write()` calls to dedicated worker thread pools via `asyncio.to_thread()`.
+2. Received raw byte streams are pushed into thread-safe `asyncio.Queue` buffers for asynchronous streaming frame recovery and packet dissection.
+3. Outbound write calls execute asynchronously, enabling real-time telemetry streaming and UI responsiveness under high packet rates (up to 921,600 bps).
+
+#### Control Pins & Timing Sequences
+- Hardware control pins (**DTR** and **RTS**) are manipulated directly via `set_pin_state(pin, state)` for microcontrollers requiring pulse sequences to enter bootloader modes (e.g. ESP32 / STM32 auto-reset hardware circuits).
+- Automated timing delays are executed using `asyncio.sleep()` within `pulse_pins()` sequences.
+
+#### Virtual Serial Pairs & Stateful Simulators
+- **In-Memory Pipe Pair**: `VirtualSerialPair` creates linked `PipeTransport` instances that connect host applications to simulated devices without physical hardware.
+- **Stateful Simulators**: Spec-driven endpoints (`ATModemSimulator`, `IoTSensorSimulator`, `ModbusRtuSimulator`) process requests, compute CRCs, and emit responses or unsolicited telemetry broadcasts over virtual serial links.
+
+---
+
+## 5. Architectural Quality Attributes
 
 | Attribute | Architectural Mechanism | Verification Target |
 | :--- | :--- | :--- |
 | **Portability** | PyInstaller single-file executable packaging; pure-Python core without native compilation dependencies. | Runs on clean Windows and Linux environments without Python installed. |
 | **Robustness** | Streaming sync hunt with sliding FIFO; garbage byte discarding; strict CRC validation. | Recovers framing sync within 1 frame when preceded by random noise bytes. |
 | **Extensibility** | Declarative JSON/YAML specifications; dynamic catalog auto-discovery; AsyncAPI 2.6.0 exporter. | Adding a new protocol definition requires zero code changes to the underlying Python codebase. |
-| **Testability** | Built-in Virtual MCU Transport with mock responses and fault injection. | Full test suite (60+ tests) executable in headless CI environments without physical hardware. |
+| **Testability** | Built-in Virtual MCU Transport with mock responses, VirtualSerialPair, and fault injection. | Full test suite (64 tests) executable in headless CI environments without physical hardware. |
 | **Low Latency** | Async I/O with `asyncio.to_thread`, lookup-table CRC calculation, and 60 FPS WebSockets. | Sub-millisecond packet processing overhead in user space. |
