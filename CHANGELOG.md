@@ -5,6 +5,17 @@ All notable changes to the OmniUART project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-27
+
+### Added
+- Added Global Active Protocol selector dropdown in `ConnectionToolbar` defaulting to `None`, synced across all tabs, auto-filling baudrate, data bits, parity, stop bits from spec (#171, #173).
+- Added multi-line multi-channel telemetry plotter with configurable command selector (`AT Ping`, `CSQ`, `CBC`, Modbus, active spec commands), frequency interval selector (`100 ms` to `5.0 s`), auto-polling controller timer (`▶ Start Auto-Poll` / `⏹ Stop Polling`), multi-line waveform rendering (`Line 1 Cyan`, `Line 2 Green`), dynamic statistical summary metrics (Min, Max, Avg, Latest), and channel legend badges (#172, #174, #179, #180).
+- Overhauled GitHub Pages documentation site as a dedicated "About OmniUART" landing page with a structured MkDocs and npm AsyncAPI 2.6.0 protocol catalog hub (#175, #176, #181, #182).
+
+### Changed
+- Connected Telemetry Plotter waveform chart directly to real live serial RX byte payloads, eliminating synthetic data (#177, #178).
+- Updated static documentation generator fallback in `docs_generator.py` to serve root About OmniUART landing page and generate `protocols/index.html` (#181, #182).
+
 ## [1.9.0] - 2026-09-27
 
 ### Added
@@ -92,6 +103,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release of OmniUART schema-driven protocol engine with interactive CLI, batch runner, and FastAPI Web UI.
 
+[2.0.0]: https://github.com/markbac/omni-uart/compare/v1.9.0...v2.0.0
+[1.9.0]: https://github.com/markbac/omni-uart/compare/v1.8.0...v1.9.0
 [1.6.0]: https://github.com/markbac/omni-uart/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/markbac/omni-uart/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/markbac/omni-uart/compare/v1.3.0...v1.4.0
