@@ -1,7 +1,7 @@
 # About OmniUART: Universal Schema-Driven UART Protocol Workbench
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Release-v1.9.0-blue.svg" alt="Release">
+  <img src="https://img.shields.io/badge/Release-v2.0.0-blue.svg" alt="Release">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-orange.svg" alt="Platforms">
   <img src="https://img.shields.io/badge/AsyncAPI-2.6.0-emerald.svg" alt="AsyncAPI 2.6.0">
