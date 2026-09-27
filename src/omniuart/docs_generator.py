@@ -235,6 +235,18 @@ def build_site_documentation(output_dir: Union[str, Path]) -> Path:
 
     (protocols_docs_dir / "index.md").write_text("\n".join(protocol_nav_index), encoding="utf-8")
 
+    # Compile AsyncAPI HTML for Protocol Schema Specification
+    specs_asyncapi_dir = docs_dir / "specs" / "asyncapi"
+    specs_asyncapi_dir.mkdir(parents=True, exist_ok=True)
+    spec_schema_yaml = specs_asyncapi_dir / "omniuart-protocol-schema.yaml"
+    spec_schema_html = specs_asyncapi_dir / "omniuart-protocol-schema.html"
+    if spec_schema_yaml.exists():
+        yaml_str = spec_schema_yaml.read_text(encoding="utf-8")
+        sample_spec = catalog.get_protocol("binary_sensor_node")
+        if sample_spec:
+            _compile_asyncapi_html(spec_schema_yaml, spec_schema_html, root_dir, specs_asyncapi_dir, "omniuart-protocol-schema", sample_spec, yaml_str)
+
+
     # Try building with MkDocs if mkdocs is available
     mkdocs_yml = root_dir / "mkdocs.yml"
     if mkdocs_yml.exists() and not os.environ.get("PYTEST_CURRENT_TEST"):

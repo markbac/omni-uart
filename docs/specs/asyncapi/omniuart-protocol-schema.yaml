@@ -1,0 +1,271 @@
+asyncapi: "2.6.0"
+info:
+  title: "OmniUART Protocol Specification Schema Engine"
+  version: "1.0.0"
+  description: "Formal AsyncAPI 2.6.0 specification for the OmniUART schema-driven hardware protocol engine, envelope framing models, parametric CRCs, and command/telemetry contract framework."
+  contact:
+    name: "OmniUART Engineering"
+    url: "https://markbac.github.io/omni-uart/"
+  license:
+    name: "MIT"
+    url: "https://opensource.org/licenses/MIT"
+
+servers:
+  serial_interface:
+    url: "serial://tty/115200"
+    protocol: "serial"
+    description: "Physical UART Serial Interface (115200 bps, 8N1, Binary & Delimited Framing)"
+    bindings:
+      serial:
+        baudRate: 115200
+        dataBits: 8
+        parity: "none"
+        stopBits: 1.0
+
+channels:
+  omniuart/schema/definition:
+    publish:
+      summary: "Register Declarative Protocol Definition"
+      description: "Dispatches a full YAML or JSON OmniUART protocol envelope specification detailing serial parameters, framing, CRC integrity, and opcode definitions."
+      message:
+        name: "ProtocolDefinitionMessage"
+        title: "Protocol Definition Envelope"
+        payload:
+          $ref: "#/components/schemas/ProtocolSchemaEnvelope"
+
+  omniuart/cmd/execute:
+    publish:
+      summary: "Execute Parameterized Command"
+      description: "Dispatches framed command opcodes and payload parameters to target hardware microcontroller."
+      message:
+        name: "CommandExecutionMessage"
+        title: "Command Execution Payload"
+        payload:
+          $ref: "#/components/schemas/CommandExecutionPayload"
+
+  omniuart/resp/stream:
+    subscribe:
+      summary: "Receive Parsed Response Stream"
+      description: "Streams decoded telemetry responses and command acknowledgment payloads returned from hardware."
+      message:
+        name: "CommandResponseMessage"
+        title: "Command Response Payload"
+        payload:
+          $ref: "#/components/schemas/CommandResponsePayload"
+
+components:
+  schemas:
+    ProtocolSchemaEnvelope:
+      type: "object"
+      required:
+        - "schema_version"
+        - "metadata"
+        - "serial_config"
+        - "framing"
+        - "commands"
+      properties:
+        schema_version:
+          type: "string"
+          example: "1.0.0"
+          description: "Target OmniUART schema specification version"
+        metadata:
+          $ref: "#/components/schemas/ProtocolMetadata"
+        serial_config:
+          $ref: "#/components/schemas/SerialConfig"
+        framing:
+          $ref: "#/components/schemas/FramingConfig"
+        commands:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/CommandDefinition"
+        telemetry:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/TelemetryDefinition"
+
+    ProtocolMetadata:
+      type: "object"
+      required:
+        - "name"
+        - "version"
+      properties:
+        name:
+          type: "string"
+          example: "BinarySensorNode"
+        version:
+          type: "string"
+          example: "1.1.0"
+        description:
+          type: "string"
+          example: "Environmental sensor node protocol specification"
+        author:
+          type: "string"
+          example: "Embedded Test Team"
+
+    SerialConfig:
+      type: "object"
+      required:
+        - "baudrate"
+      properties:
+        baudrate:
+          type: "integer"
+          example: 115200
+        bytesize:
+          type: "integer"
+          enum: [5, 6, 7, 8]
+          default: 8
+        parity:
+          type: "string"
+          enum: ["none", "even", "odd", "mark", "space"]
+          default: "none"
+        stopbits:
+          type: "number"
+          enum: [1, 1.5, 2]
+          default: 1
+        flow_control:
+          type: "string"
+          enum: ["none", "hardware", "software"]
+          default: "none"
+        timeout_ms:
+          type: "integer"
+          default: 1000
+
+    FramingConfig:
+      type: "object"
+      required:
+        - "type"
+      properties:
+        type:
+          type: "string"
+          enum: ["binary", "delimited", "cobs"]
+        header:
+          type: "array"
+          items:
+            type: "integer"
+          example: [170, 85]
+        length:
+          $ref: "#/components/schemas/LengthConfig"
+        command_id:
+          $ref: "#/components/schemas/CommandIdConfig"
+        integrity:
+          $ref: "#/components/schemas/IntegrityConfig"
+        footer:
+          type: "array"
+          items:
+            type: "integer"
+          example: [13, 10]
+
+    LengthConfig:
+      type: "object"
+      required:
+        - "type"
+      properties:
+        type:
+          type: "string"
+          enum: ["uint8", "uint16", "uint32"]
+        endian:
+          type: "string"
+          enum: ["little", "big"]
+          default: "little"
+        includes:
+          type: "string"
+          enum: ["payload_only", "full_frame", "from_length_field"]
+          default: "payload_only"
+
+    CommandIdConfig:
+      type: "object"
+      required:
+        - "type"
+      properties:
+        type:
+          type: "string"
+          enum: ["uint8", "uint16", "uint32", "string"]
+
+    IntegrityConfig:
+      type: "object"
+      required:
+        - "algorithm"
+      properties:
+        algorithm:
+          type: "string"
+          example: "crc16_modbus"
+        range:
+          type: "string"
+          enum: ["header_to_payload", "payload_only"]
+          default: "header_to_payload"
+
+    CommandDefinition:
+      type: "object"
+      required:
+        - "name"
+        - "id"
+      properties:
+        name:
+          type: "string"
+          example: "get_readings"
+        id:
+          type: "integer"
+          example: 2
+        description:
+          type: "string"
+          example: "Query sensor channel telemetry"
+        parameters:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/ParameterField"
+
+    ParameterField:
+      type: "object"
+      required:
+        - "name"
+        - "type"
+      properties:
+        name:
+          type: "string"
+          example: "channel"
+        type:
+          type: "string"
+          enum: ["uint8", "uint16", "uint32", "int8", "int16", "int32", "float32", "float64", "string", "enum"]
+        unit:
+          type: "string"
+          example: "°C"
+        min:
+          type: "number"
+        max:
+          type: "number"
+
+    TelemetryDefinition:
+      type: "object"
+      required:
+        - "name"
+        - "id"
+      properties:
+        name:
+          type: "string"
+          example: "sensor_alarm"
+        id:
+          type: "integer"
+          example: 160
+
+    CommandExecutionPayload:
+      type: "object"
+      properties:
+        command:
+          type: "string"
+          example: "get_readings"
+        parameters:
+          type: "object"
+          example:
+            channel: 1
+
+    CommandResponsePayload:
+      type: "object"
+      properties:
+        status:
+          type: "string"
+          example: "SUCCESS"
+        response_fields:
+          type: "object"
+          example:
+            temperature: 24.5
+            humidity: 58.2
