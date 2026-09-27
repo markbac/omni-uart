@@ -5,6 +5,16 @@ All notable changes to the OmniUART project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-09-27
+
+### Added
+- Added active protocol selector dropdown to Dashboard and Command Catalog views (#140).
+- Enhanced Comms Streamer with dual raw hex and decoded semantic packet field view (#141).
+- Bundled Virtual MCU Simulator executable (`omni-uart-simulator`) and `start-simulated-workspace.ps1` quickstart script in releases (#142).
+
+### Fixed
+- Fixed string discriminator formatting exception `ValueError: invalid format string` in frame payload builder (#139).
+
 ## [1.6.0] - 2026-09-27
 
 ### Added
