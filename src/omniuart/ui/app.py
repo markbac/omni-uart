@@ -278,6 +278,10 @@ def index() -> str:
     }
     .badge-tx { background: #0284c7; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-rx { background: #16a34a; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .badge-disc { background: #d97706; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-family: monospace; margin-left: 8px; font-size: 0.85rem; }
+    .tree-item { cursor: pointer; padding: 4px 8px; border-radius: 4px; user-select: none; }
+    .tree-item:hover { background: #334155; color: #38bdf8; }
+    .tree-node { margin-left: 12px; border-left: 1px dashed var(--border); padding-left: 8px; }
   </style>
 </head>
 <body>
@@ -294,6 +298,11 @@ def index() -> str:
   <div class="layout-grid">
     <!-- Left Column: Command & Dynamic Tabs -->
     <div>
+      <div class="card" style="margin-bottom: 1rem;">
+        <h3 style="margin-top:0;">🌳 Hierarchical Protocol Command Tree</h3>
+        <div id="tagTreeMenu">Loading command tree...</div>
+      </div>
+
       <div class="tabs" id="tabBar">
         <button class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard (Auto-Run)</button>
         <button class="tab-btn" onclick="switchTab('all-commands')">⚡ All Commands</button>
@@ -398,9 +407,55 @@ def index() -> str:
       const data = await res.json();
       currentSpec = data.spec;
 
+      renderTagTree(currentSpec.commands);
       renderTabs(data.tags, data.tag_groups);
       refreshDashboard();
       renderCommands("allCommandsList", currentSpec.commands);
+    }
+
+    function renderTagTree(commands) {
+      const treeContainer = document.getElementById("tagTreeMenu");
+      if (!treeContainer) return;
+
+      const tree = {};
+      commands.forEach(cmd => {
+        const tags = (cmd.tags && cmd.tags.length > 0) ? cmd.tags : ["general"];
+        tags.forEach(t => {
+          const parts = t.split("/");
+          let curr = tree;
+          parts.forEach((p, idx) => {
+            if (!curr[p]) curr[p] = { _cmds: [] };
+            if (idx === parts.length - 1) {
+              curr[p]._cmds.push(cmd);
+            }
+            curr = curr[p];
+          });
+        });
+      });
+
+      function buildHtml(node, prefix = "") {
+        let html = "";
+        for (const k in node) {
+          if (k === "_cmds") continue;
+          const fullPath = prefix ? `${prefix}/${k}` : k;
+          const cmdCount = node[k]._cmds.length;
+          html += `
+            <div class="tree-node">
+              <span class="tree-item" onclick="filterByTagPath('${fullPath}')">📁 <strong>${k}</strong> (${cmdCount})</span>
+              ${buildHtml(node[k], fullPath)}
+            </div>
+          `;
+        }
+        return html;
+      }
+
+      treeContainer.innerHTML = buildHtml(tree) || "<div>No tag hierarchy detected</div>";
+    }
+
+    function filterByTagPath(tagPath) {
+      switchTab('all-commands');
+      const filtered = currentSpec.commands.filter(c => c.tags && c.tags.some(t => t.startsWith(tagPath)));
+      renderCommands("allCommandsList", filtered);
     }
 
     function renderTabs(tags, tagGroups) {
@@ -442,7 +497,9 @@ def index() -> str:
       document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
       const activeContent = document.getElementById(`tab-${tabId}`);
       if (activeContent) activeContent.classList.add("active");
-      event.target.classList.add("active");
+      if (event && event.target && event.target.classList) {
+        event.target.classList.add("active");
+      }
     }
 
     async function refreshDashboard() {
@@ -454,6 +511,22 @@ def index() -> str:
       out.textContent = JSON.stringify(data, null, 2);
     }
 
+    function getDiscriminatorBadge(cmd) {
+      let badge = "";
+      if (cmd.parameters) {
+        const disc = cmd.parameters.find(p => p.role === "discriminator" || p.constValue !== undefined);
+        if (disc) {
+          const val = disc.constValue !== undefined ? disc.constValue : disc.default;
+          badge = `<span class="badge-disc">Opcode: ${disc.name}=${val}</span>`;
+        }
+      }
+      if (!badge && cmd.id !== undefined) {
+        const cmdIdStr = typeof cmd.id === 'number' ? `0x${cmd.id.toString(16).toUpperCase().padStart(2, '0')}` : cmd.id;
+        badge = `<span class="badge-disc">ID: ${cmdIdStr}</span>`;
+      }
+      return badge;
+    }
+
     function renderCommands(containerId, commands) {
       const container = document.getElementById(containerId);
       if (!container) return;
@@ -461,13 +534,14 @@ def index() -> str:
       commands.forEach(cmd => {
         const div = document.createElement("div");
         div.className = "card";
+        const discBadge = getDiscriminatorBadge(cmd);
         div.innerHTML = `
-          <h4>${cmd.name} (ID: ${cmd.id}) ${cmd.tags ? cmd.tags.map(t=>`<code>[${t}]</code>`).join(' ') : ''}</h4>
+          <h4>${cmd.name} ${discBadge} ${cmd.tags ? cmd.tags.map(t=>`<code>[${t}]</code>`).join(' ') : ''}</h4>
           <p>${cmd.description || ''}</p>
           <div class="cmd-form" id="form-${containerId}-${cmd.name}">
             ${cmd.parameters.map(p => `
               <label>${p.name} (${p.type}${p.unit ? ' ' + p.unit : ''}):
-                <input type="text" name="${p.name}" value="${p.default || ''}">
+                <input type="text" name="${p.name}" value="${p.default !== null && p.default !== undefined ? p.default : ''}">
               </label>
             `).join('')}
             <button class="send-btn" onclick="sendCommand('${cmd.name}', 'form-${containerId}-${cmd.name}', 'resp-${containerId}-${cmd.name}')">SEND COMMAND</button>
@@ -499,3 +573,4 @@ def index() -> str:
   </script>
 </body>
 </html>"""
+
