@@ -69,6 +69,16 @@ def test_desktop_app_initialization():
             assert app.dashboard_view.proto_var.get() == p_name
             assert app.catalog_view.proto_filter_var.get() == p_name
 
+        # Test TelemetryPlotterView polling toggle & multi-channel parsing
+        plotter = app.plotter_view
+        plotter._toggle_auto_poll()
+        assert plotter.is_polling is True
+        plotter.push_telemetry_bytes(b"+CSQ: 24, 9\r\n")
+        assert len(plotter.channel_1_points) > 0
+        assert len(plotter.channel_2_points) > 0
+        plotter._toggle_auto_poll()
+        assert plotter.is_polling is False
+
         app.destroy()
     except Exception as e:
         # If running in no-display environment, handle gracefully
