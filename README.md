@@ -8,25 +8,28 @@
 
 > **Universal, schema-driven UART protocol tool for embedded systems, IoT devices, and hardware test engineering.**
 
-OmniUART decouples protocol definitions from custom tooling code by using declarative JSON or YAML specifications. It provides an ad-hoc CLI, an automated test runner with assertions, and an auto-generated dynamic web UI with real-time streaming TX/RX packet inspection.
+OmniUART decouples protocol definitions from custom tooling code by using declarative JSON or YAML specifications. It provides an ad-hoc CLI, an automated test runner with assertions, a dynamic Web UI, and a 100% native desktop GUI workspace.
 
-Distributed as a **self-contained standalone executable** for Windows, Linux, and macOS—no Python installation required.
+Distributed as **three dedicated standalone executables** for Windows, Linux, and macOS—no Python installation required:
+- `omni-uart-cli`: Command Line Interface for batch automation and quick ad-hoc commands.
+- `omni-uart-web`: Browser-based Dynamic Web UI with WebSockets streaming.
+- `omni-uart-desktop`: 100% Native Tkinter/TTK Desktop Application workspace.
 
 ---
 
 ## Key Features
 
-- **Schema-Driven Protocols (JSON/YAML)**: Define message envelopes, sync preambles, dynamic length fields, opcodes, typed payloads (integers, floats, enums, strings, bitfields), and footers.
+- **Schema-Driven Protocols (JSON/YAML)**: Define message envelopes, sync preambles, dynamic length fields, opcodes, typed payloads (integers, floats, enums, strings, booleans), and footers.
 - **Custom Parametric CRC & Presets**: Pure-Python, zero-dependency integrity engine supporting standard presets (CRC8, CRC16-Modbus, CRC16-CCITT, CRC32, Sum, XOR) and **fully custom parametric CRCs** via the Rocksoft Model (`width`, `poly`, `init`, `refin`, `refout`, `xorout`, `endian`).
 - **Dual-View Raw & Decoded Stream Inspector**: Real-time side-by-side visualization with color-coded semantic byte slicing (Header, Length, Command, Payload, CRC, Footer) and interactive cross-highlighting.
 - **Session Recording & Export**: Record full serial transactions with microsecond timestamps and export to JSON Lines (`.jsonl`), CSV, or raw binary (`.bin`) for post-session analysis or automated playback.
-- **Three Operational Modes**:
-  1. **Interactive CLI**: Send commands, format parameters, and decode responses on the command line.
-  2. **Batch Script Runner**: Execute automated test sequences with timeouts, delays, and assertions, producing JSON and JUnit XML reports.
-  3. **Auto-Generated Web UI**: Zero-dependency local web interface (FastAPI + WebSockets) that dynamically builds forms for any loaded protocol, streams decoded frames, and provides session controls.
+- **Three Standalone Executables**:
+  1. **omni-uart-cli**: Send commands, format parameters, and decode responses on the command line.
+  2. **omni-uart-web**: Zero-dependency local web interface (FastAPI + WebSockets) that dynamically builds forms for any loaded protocol, streams decoded frames, and provides session controls.
+  3. **omni-uart-desktop**: 100% Native Tkinter/TTK desktop application with physical serial connection controls, command catalog tree, canvas line chart plotter, script runner, and comms streamer.
 - **Virtual MCU Simulation**: Test protocols and execute regression suites completely offline without physical hardware attached.
+- **Security Hardened**: Enforced loopback (`127.0.0.1`) binding, strict CORS middleware, input type validation, and zero external web runtime dependencies.
 - **Docs-as-Code & Zero-Defect Architecture**: Formal specifications, schemas, and comprehensive test suites for every subsystem.
-- **Standalone Distribution**: Multi-platform single-file executables bundled via PyInstaller and published via GitHub Actions releases.
 
 ---
 
@@ -34,6 +37,8 @@ Distributed as a **self-contained standalone executable** for Windows, Linux, an
 
 | Document | Purpose |
 | :--- | :--- |
+| [Changelog](CHANGELOG.md) | Release history complying with Keep a Changelog 1.1.0 |
+| [Security Policy](SECURITY.md) | Security architecture, CORS controls, and vulnerability reporting |
 | [System Architecture](docs/architecture/system-architecture.md) | High-level system blocks, data flow, and subsystem boundaries |
 | [Protocol Schema Specification](docs/specs/protocol-schema-specification.md) | Formal specification of YAML/JSON protocol definition files |
 | [Automation Script Specification](docs/specs/script-schema-specification.md) | Specification for automated test and command scripts |
@@ -96,22 +101,21 @@ commands:
 omni-uart/
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml                 # Automated linting, validation & tests
+│       ├── ci.yml                 # Automated linting, validation & binary smoke tests
 │       └── release.yml            # Multi-OS standalone binary release builder
-├── docs/
-│   ├── architecture/              # System architecture documents
-│   ├── specs/                     # Formal schema & script specifications
-│   ├── design/                    # Detailed subsystem design documents
-│   ├── testing/                   # Test strategy & test vector definitions
-│   └── release/                   # Release guidance and user manuals
-├── schemas/
-│   ├── protocol.schema.json       # JSON schema for protocol definitions
-│   └── script.schema.json         # JSON schema for automation scripts
-├── examples/
-│   ├── protocols/                 # Example YAML and JSON protocol specs
-│   └── scripts/                   # Example YAML and JSON automation scripts
-├── omniuart.spec                  # PyInstaller standalone build configuration
-├── pyproject.toml                 # Modern PEP 621 Python package configuration
+├── docs/                          # Architecture specs and release guidance
+├── schemas/                       # JSON schemas for protocol and script validation
+├── examples/                      # Example protocol definitions (UBX, MAVLink, SCPI, Modbus, XBee, HCI)
+├── src/omniuart/
+│   ├── cli.py                     # CLI parsing and command execution
+│   ├── desktop/                   # Native Tkinter/TTK Desktop Application
+│   ├── entrypoints/               # Executable entry points (cli_main, web_main, desktop_main)
+│   ├── ui/                        # Web UI FastAPI/Uvicorn routes and templates
+│   └── core/                      # Schema parser, framing builder, CRC engine, transports
+├── CHANGELOG.md                   # Keep a Changelog 1.1.0 log
+├── SECURITY.md                    # Security safeguards policy
+├── omniuart.spec                  # PyInstaller multi-target build spec
+├── pyproject.toml                 # PEP 621 Python project configuration
 └── README.md
 ```
 
@@ -119,7 +123,7 @@ omni-uart/
 
 ## Contributing & Standards
 
-OmniUART strictly enforces **Semantic Versioning 2.0.0** and **Conventional Commits 1.0.0**. All changes are delivered via scoped feature branches and Pull Requests merged into `main`.
+OmniUART strictly enforces **Semantic Versioning 2.0.0**, **Keep a Changelog 1.1.0**, and **Conventional Commits 1.0.0**. All changes are delivered via scoped feature branches and Pull Requests merged into `main`.
 
 For commit conventions, scopes, branch naming, and release procedures, please refer to [CONTRIBUTING.md](CONTRIBUTING.md).
 

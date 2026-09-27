@@ -1,4 +1,4 @@
-"""Release Notes Generator Script based on resolved GitHub Issues & Commit Log."""
+"""Release Notes Generator Script adhering to Keep a Changelog 1.1.0 Specification."""
 
 from __future__ import annotations
 
@@ -31,60 +31,69 @@ def get_git_commits_since_last_tag() -> list[str]:
 
 
 def generate_issue_release_notes(commits: list[str]) -> str:
-    """Categorize commits and resolved issue references into structured Release Notes."""
-    features = []
-    fixes = []
-    docs = []
-    refactoring = []
-    other = []
+    """Categorize commits and resolved issue references into Keep a Changelog 1.1.0 sections."""
+    added = []
+    changed = []
+    deprecated = []
+    removed = []
+    fixed = []
+    security = []
 
     issue_pattern = re.compile(r"#(\d+)")
 
     for line in commits:
         if not line.strip():
             continue
-        # Extract issue numbers
+
         issues = issue_pattern.findall(line)
         issue_str = f" ({', '.join('#' + i for i in issues)})" if issues else ""
 
         clean_line = line.split(" ", 1)[1] if " " in line else line
 
-        if clean_line.startswith(("feat", "subtask(protocols)", "subtask(ui)", "subtask(entrypoints)", "subtask(build)")):
-            features.append(f"- {clean_line}{issue_str}")
-        elif clean_line.startswith(("fix", "subtask(cli)")):
-            fixes.append(f"- {clean_line}{issue_str}")
-        elif clean_line.startswith("docs"):
-            docs.append(f"- {clean_line}{issue_str}")
-        elif clean_line.startswith("refactor"):
-            refactoring.append(f"- {clean_line}{issue_str}")
+        lowered = clean_line.lower()
+        if lowered.startswith(("feat", "subtask(protocols)", "subtask(ui)", "subtask(desktop)", "subtask(entrypoints)")):
+            added.append(f"- {clean_line}{issue_str}")
+        elif lowered.startswith("fix"):
+            fixed.append(f"- {clean_line}{issue_str}")
+        elif lowered.startswith(("sec", "subtask(sec)", "security")):
+            security.append(f"- {clean_line}{issue_str}")
+        elif lowered.startswith("deprecate"):
+            deprecated.append(f"- {clean_line}{issue_str}")
+        elif lowered.startswith("remove"):
+            removed.append(f"- {clean_line}{issue_str}")
         else:
-            other.append(f"- {clean_line}{issue_str}")
+            changed.append(f"- {clean_line}{issue_str}")
 
-    md_lines = ["## 📋 Resolved Issues & Release Changelog\n"]
+    md_lines = ["## Release Notes (Keep a Changelog 1.1.0 Format)\n"]
 
-    if features:
-        md_lines.append("### 🚀 New Features & Enhancements")
-        md_lines.extend(features)
+    if added:
+        md_lines.append("### Added")
+        md_lines.extend(added)
         md_lines.append("")
 
-    if fixes:
-        md_lines.append("### 🐛 Bug Fixes & Stability Patch Resolutions")
-        md_lines.extend(fixes)
+    if changed:
+        md_lines.append("### Changed")
+        md_lines.extend(changed)
         md_lines.append("")
 
-    if docs:
-        md_lines.append("### 📖 Documentation & Protocol Specifications")
-        md_lines.extend(docs)
+    if deprecated:
+        md_lines.append("### Deprecated")
+        md_lines.extend(deprecated)
         md_lines.append("")
 
-    if refactoring:
-        md_lines.append("### 🏗️ Codebase Architecture & Refactoring")
-        md_lines.extend(refactoring)
+    if removed:
+        md_lines.append("### Removed")
+        md_lines.extend(removed)
         md_lines.append("")
 
-    if other:
-        md_lines.append("### 📦 Maintenance & Build System")
-        md_lines.extend(other)
+    if fixed:
+        md_lines.append("### Fixed")
+        md_lines.extend(fixed)
+        md_lines.append("")
+
+    if security:
+        md_lines.append("### Security")
+        md_lines.extend(security)
         md_lines.append("")
 
     return "\n".join(md_lines)
