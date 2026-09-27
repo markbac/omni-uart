@@ -69,6 +69,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate Issue-Based Release Notes
+        run: |
+          python scripts/generate_release_notes.py
 
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
@@ -93,13 +104,4 @@ jobs:
             release-artifacts/*
           draft: false
           prerelease: false
-          generate_release_notes: true
-          body: |
-            ## OmniUART Standalone Binary Suite Release
-            
-            This release contains three dedicated standalone single-file executables for Windows and Linux:
-            - **`omni-uart-cli`**: Dedicated Command Line Interface binary.
-            - **`omni-uart-web`**: Dynamic Web UI server & browser launcher binary.
-            - **`omni-uart-desktop`**: Native Desktop Application Window binary.
-            
-            All binaries are verified in CI before release publication.
+          body_path: RELEASE_NOTES.md
