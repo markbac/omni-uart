@@ -210,21 +210,22 @@ class DashboardView(ttk.Frame):
         super().__init__(parent, padding=16)
         self.catalog = catalog
 
+        # Protocol Selector Bar
+        proto_bar = ttk.Frame(self)
+        proto_bar.pack(fill=tk.X, pady=(0, 10))
+
+        ttk.Label(proto_bar, text="Active Protocol View:", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT, padx=(0, 8))
+        self.proto_var = tk.StringVar(value="All Protocols")
+        self.proto_combo = ttk.Combobox(proto_bar, textvariable=self.proto_var, state="readonly", width=35)
+        self.proto_combo.pack(side=tk.LEFT)
+        self.proto_combo.bind("<<ComboboxSelected>>", lambda e: self.refresh_data())
+
         # Metrics cards frame
-        cards_frame = ttk.Frame(self)
-        cards_frame.pack(fill=tk.X, pady=10)
-
-        summary = catalog.catalog_summary()
-        protocols_count = summary.get("protocols_found", 0)
-        scripts_count = summary.get("scripts_found", 0)
-
-        self._create_card(cards_frame, "Loaded Protocols", str(protocols_count), "#2563eb", 0)
-        self._create_card(cards_frame, "Automation Scripts", str(scripts_count), "#7c3aed", 1)
-        self._create_card(cards_frame, "TX Bytes Sent", "0 B", "#059669", 2)
-        self._create_card(cards_frame, "RX Bytes Received", "0 B", "#d97706", 3)
+        self.cards_frame = ttk.Frame(self)
+        self.cards_frame.pack(fill=tk.X, pady=10)
 
         # Overview section
-        overview_frame = ttk.LabelFrame(self, text=" Loaded Protocol Schemas ", padding=12)
+        overview_frame = ttk.LabelFrame(self, text=" Protocol Schemas ", padding=12)
         overview_frame.pack(fill=tk.BOTH, expand=True, pady=10)
 
         tree_columns = ("id", "name", "version", "transport", "commands")
@@ -253,23 +254,45 @@ class DashboardView(ttk.Frame):
         tk.Label(card, text=value, font=("Segoe UI", 16, "bold"), fg="#f8fafc", bg="#1e293b").pack(anchor="w", pady=(4, 0))
 
     def refresh_data(self) -> None:
-        """Populate protocol schema treeview."""
+        """Populate protocol schema treeview and cards based on active selection."""
+        for child in self.cards_frame.winfo_children():
+            child.destroy()
+
         for item in self.tree.get_children():
             self.tree.delete(item)
 
         summary = self.catalog.catalog_summary()
-        for p in summary.get("protocols", []):
-            self.tree.insert(
-                "",
-                tk.END,
-                values=(
-                    p.get("filename", ""),
-                    p.get("name", ""),
-                    p.get("version", ""),
-                    "UART",
-                    p.get("commands_count", 0),
-                ),
-            )
+        protocols = summary.get("protocols", [])
+
+        # Update combo options
+        proto_names = ["All Protocols"] + [p.get("name", "") for p in protocols]
+        self.proto_combo["values"] = proto_names
+
+        selected = self.proto_var.get()
+
+        if selected == "All Protocols":
+            protocols_count = summary.get("protocols_found", 0)
+            scripts_count = summary.get("scripts_found", 0)
+            self._create_card(self.cards_frame, "Loaded Protocols", str(protocols_count), "#2563eb", 0)
+            self._create_card(self.cards_frame, "Automation Scripts", str(scripts_count), "#7c3aed", 1)
+            self._create_card(self.cards_frame, "TX Bytes Sent", "0 B", "#059669", 2)
+            self._create_card(self.cards_frame, "RX Bytes Received", "0 B", "#d97706", 3)
+
+            for p in protocols:
+                self.tree.insert("", tk.END, values=(p.get("filename", ""), p.get("name", ""), p.get("version", ""), "UART", p.get("commands_count", 0)))
+        else:
+            filtered = [p for p in protocols if p.get("name") == selected]
+            p_obj = filtered[0] if filtered else {}
+            cmd_count = p_obj.get("commands_count", 0)
+            baud = p_obj.get("baudrate", 115200)
+
+            self._create_card(self.cards_frame, "Selected Protocol", selected[:18], "#2563eb", 0)
+            self._create_card(self.cards_frame, "Available Commands", str(cmd_count), "#7c3aed", 1)
+            self._create_card(self.cards_frame, "Baud Rate", f"{baud} bps", "#059669", 2)
+            self._create_card(self.cards_frame, "Schema Version", str(p_obj.get("version", "1.0")), "#d97706", 3)
+
+            for p in filtered:
+                self.tree.insert("", tk.END, values=(p.get("filename", ""), p.get("name", ""), p.get("version", ""), "UART", p.get("commands_count", 0)))
 
 
 class CommandCatalogView(ttk.Frame):
@@ -290,6 +313,13 @@ class CommandCatalogView(ttk.Frame):
         # Left pane: Command Treeview & Filter
         left_frame = ttk.Frame(paned, padding=8)
         paned.add(left_frame, weight=1)
+
+        # Protocol Filter Combo
+        ttk.Label(left_frame, text="Active Protocol Filter:").pack(anchor="w")
+        self.proto_filter_var = tk.StringVar(value="All Protocols")
+        self.proto_filter_combo = ttk.Combobox(left_frame, textvariable=self.proto_filter_var, state="readonly")
+        self.proto_filter_combo.pack(fill=tk.X, pady=(0, 6))
+        self.proto_filter_combo.bind("<<ComboboxSelected>>", lambda e: self._populate_tree())
 
         ttk.Label(left_frame, text="Filter Commands:").pack(anchor="w")
         self.filter_var = tk.StringVar()
@@ -334,9 +364,20 @@ class CommandCatalogView(ttk.Frame):
             self.tree.delete(item)
 
         filter_text = self.filter_var.get().lower()
+        selected_proto_name = self.proto_filter_var.get()
 
         summary = self.catalog.catalog_summary()
-        for p in summary.get("protocols", []):
+        protocols = summary.get("protocols", [])
+
+        # Update protocol combo values
+        proto_names = ["All Protocols"] + [p.get("name", "") for p in protocols]
+        self.proto_filter_combo["values"] = proto_names
+
+        for p in protocols:
+            p_name = p.get("name", "")
+            if selected_proto_name != "All Protocols" and p_name != selected_proto_name:
+                continue
+
             filename = p.get("filename", "")
             spec = self.catalog.get_protocol(filename)
             if not spec:
