@@ -48,13 +48,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist/omni-uart-cli.exe", "dist/omni-uart-web.exe", "dist/omni-uart-desktop.exe", "docs/release/guidance.md", "README.md", "LICENSE" -DestinationPath "${{ matrix.archive_name }}"
+          Compress-Archive -Path "dist/omni-uart-cli.exe", "dist/omni-uart-web.exe", "dist/omni-uart-desktop.exe", "dist/omni-uart-simulator.exe", "start-simulated-workspace.ps1", "docs/release/guidance.md", "README.md", "LICENSE" -DestinationPath "${{ matrix.archive_name }}"
 
       - name: Package Binaries (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          chmod +x dist/omni-uart-cli dist/omni-uart-web dist/omni-uart-desktop
-          tar -czvf ${{ matrix.archive_name }} -C dist omni-uart-cli omni-uart-web omni-uart-desktop -C .. docs/release/guidance.md README.md LICENSE
+          chmod +x dist/omni-uart-cli dist/omni-uart-web dist/omni-uart-desktop dist/omni-uart-simulator
+          tar -czvf ${{ matrix.archive_name }} -C dist omni-uart-cli omni-uart-web omni-uart-desktop omni-uart-simulator -C .. start-simulated-workspace.ps1 docs/release/guidance.md README.md LICENSE
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
