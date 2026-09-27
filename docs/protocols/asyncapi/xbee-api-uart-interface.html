@@ -18,7 +18,7 @@
     </head>
   
     <body>
-      <div id="root"><section class="aui-root"><div class="container:xl relative md:flex bg-white leading-normal" id=""><div class="burger-menu rounded-full h-16 w-16 bg-white fixed bottom-16 right-8 flex items-center justify-center z-30 cursor-pointer shadow-md bg-teal-500" data-lol="false"><svg viewBox="0 0 100 70" width="40" height="30" class="fill-current text-gray-200"><rect width="100" height="10"></rect><rect y="30" width="100" height="10"></rect><rect y="60" width="100" height="10"></rect></svg></div><div class="hidden sidebar relative w-64 max-h-screen h-full bg-gray-200 shadow z-20"><div class=" block fixed max-h-screen h-full font-sans px-4 pt-8 pb-16 overflow-y-auto bg-gray-200"><div class="sidebar--content"><div><h1 class="text-2xl font-light">XBee API Mode<!-- --> <!-- -->S2C Zigbee firmware</h1></div><ul class="text-sm mt-10 relative"><li class="mb-3"><a class="text-gray-700 no-underline hover:text-gray-900" href="#introduction">Introduction</a></li><li class="mb-3 mt-9"><a class="text-xs uppercase text-gray-700 mt-10 mb-4 font-thin hover:text-gray-900" href="#servers">Servers</a><ul class="text-sm mt-2"><li><a class="flex no-underline text-gray-700 mb-2 hover:text-gray-900" href="#server-serial_link"><span class="break-all inline-block">serial_link</span></a></li></ul></li><li class="mb-3 mt-9"><a class="text-xs uppercase text-gray-700 mt-10 mb-4 font-thin hover:text-gray-900" href="#operations">Operations</a><ul class="text-sm mt-2"><li><a class="flex no-underline text-gray-700 mb-2 hover:text-gray-900" href="#operation-receive-publish"><strong class="h-6 no-underline text-white uppercase p-1 mr-2 rounded text-xs bg-green-600" title="PUB">PUB</strong><span class="break-all inline-block">Send command SetChannelATCommand (ID: CH)</span></a></li></ul></li><li class="mb-3 mt-9"><a class="text-xs uppercase text-gray-700 mt-10 mb-4 font-thin hover:text-gray-900" href="#schemas">Schemas</a><ul class="text-sm mt-2"><li><a class="flex break-words no-underline text-gray-700 mt-2 hover:text-gray-900" href="#schema-SetChannelATCommand_Request"><div class="break-all inline-block">SetChannelATCommand_Request</div></a></li></ul></li></ul></div></div></div><div class="panel--center relative py-8 flex-1"><div class="relative z-10"><div class="panel-item"><div class="panel-item--center px-8 text-left" id="introduction"><div class="text-4xl">XBee API Mode<!-- --> <!-- -->S2C Zigbee firmware</div><ul class="flex flex-wrap mt-2 leading-normal"></ul><div class="mt-4"><div class="prose max-w-none text-sm"><p>Digi XBee radio module binary command protocol, including an AT Command frame setting ATCH (the RF channel/frequency).</p>
+      <div id="root"><section class="aui-root"><div class="container:xl relative md:flex bg-white leading-normal" id=""><div class="burger-menu rounded-full h-16 w-16 bg-white fixed bottom-16 right-8 flex items-center justify-center z-30 cursor-pointer shadow-md bg-teal-500" data-lol="false"><svg viewBox="0 0 100 70" width="40" height="30" class="fill-current text-gray-200"><rect width="100" height="10"></rect><rect y="30" width="100" height="10"></rect><rect y="60" width="100" height="10"></rect></svg></div><div class="hidden sidebar relative w-64 max-h-screen h-full bg-gray-200 shadow z-20"><div class=" block fixed max-h-screen h-full font-sans px-4 pt-8 pb-16 overflow-y-auto bg-gray-200"><div class="sidebar--content"><div><h1 class="text-2xl font-light">XBee API Mode<!-- --> <!-- -->S2C Zigbee firmware</h1></div><ul class="text-sm mt-10 relative"><li class="mb-3"><a class="text-gray-700 no-underline hover:text-gray-900" href="#introduction">Introduction</a></li><li class="mb-3 mt-9"><a class="text-xs uppercase text-gray-700 mt-10 mb-4 font-thin hover:text-gray-900" href="#servers">Servers</a><ul class="text-sm mt-2"><li><a class="flex no-underline text-gray-700 mb-2 hover:text-gray-900" href="#server-serial_link"><span class="break-all inline-block">serial_link</span></a></li></ul></li><li class="mb-3 mt-9"><a class="text-xs uppercase text-gray-700 mt-10 mb-4 font-thin hover:text-gray-900" href="#operations">Operations</a><ul class="text-sm mt-2"><li><a class="flex no-underline text-gray-700 mb-2 hover:text-gray-900" href="#operation-receive-publish"><strong class="h-6 no-underline text-white uppercase p-1 mr-2 rounded text-xs bg-green-600" title="PUB">PUB</strong><span class="break-all inline-block">Send command SetChannelATCommand (ID: CH)</span></a></li><li><a class="flex no-underline text-gray-700 mb-2 hover:text-gray-900" href="#operation-receive-publish"><strong class="h-6 no-underline text-white uppercase p-1 mr-2 rounded text-xs bg-green-600" title="PUB">PUB</strong><span class="break-all inline-block">Send command TransmitRequest (ID: 0x10)</span></a></li><li><a class="flex no-underline text-gray-700 mb-2 hover:text-gray-900" href="#operation-receive-publish"><strong class="h-6 no-underline text-white uppercase p-1 mr-2 rounded text-xs bg-green-600" title="PUB">PUB</strong><span class="break-all inline-block">Send command RemoteATCommand (ID: 0x17)</span></a></li></ul></li><li class="mb-3 mt-9"><a class="text-xs uppercase text-gray-700 mt-10 mb-4 font-thin hover:text-gray-900" href="#schemas">Schemas</a><ul class="text-sm mt-2"><li><a class="flex break-words no-underline text-gray-700 mt-2 hover:text-gray-900" href="#schema-SetChannelATCommand_Request"><div class="break-all inline-block">SetChannelATCommand_Request</div></a></li><li><a class="flex break-words no-underline text-gray-700 mt-2 hover:text-gray-900" href="#schema-TransmitRequest_Request"><div class="break-all inline-block">TransmitRequest_Request</div></a></li><li><a class="flex break-words no-underline text-gray-700 mt-2 hover:text-gray-900" href="#schema-RemoteATCommand_Request"><div class="break-all inline-block">RemoteATCommand_Request</div></a></li></ul></li></ul></div></div></div><div class="panel--center relative py-8 flex-1"><div class="relative z-10"><div class="panel-item"><div class="panel-item--center px-8 text-left" id="introduction"><div class="text-4xl">XBee API Mode<!-- --> <!-- -->S2C Zigbee firmware</div><ul class="flex flex-wrap mt-2 leading-normal"></ul><div class="mt-4"><div class="prose max-w-none text-sm"><p>Digi XBee radio module binary command protocol, including an AT Command frame setting ATCH (the RF channel/frequency).</p>
 </div></div></div><div class="panel-item--right"></div></div><section id="servers" class="mt-16"><h2 class="2xl:w-7/12 text-3xl font-light mb-4 px-8">Servers</h2><ul><li class="mb-4" id="server-serial_link"><div class="panel-item"><div class="panel-item--center px-8"><div class="shadow rounded bg-gray-200 p-4 border bg-gray-100"><div><span class="font-mono text-base">serial://tty/115200</span><strong class="bg-teal-500 no-underline text-white uppercase rounded mx-2 px-2 py-1 text-sm">serial</strong><strong class="bg-blue-500 no-underline text-white uppercase rounded px-2 py-1 text-sm">serial_link</strong></div><div class="mt-2"><div class="prose max-w-none text-sm"><p>Physical UART Transport (115200 bps, 8N1.0)</p>
 </div></div><div id="server-serial_link-security"></div><div class="mt-2"><div class="flex mb-4 gap-2"><div class="border rounded overflow-visible w-full"><div class="flex flex-col justify-center p-4 bg-gray-100 border-b"><div class="flex justify-between items-start"><div class="flex items-center gap-2 w-full"><div class="flex items-center gap-2"><button class="focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 " type="button"><div class="inline-block"><div class="inline-block text-sm"><span>Server specific information</span><strong class="bg-teal-500 no-underline text-white uppercase rounded mx-2 px-2 py-1 text-xs">serial</strong></div></div><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 20 20" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" class="inline-block align-baseline cursor-pointer ml-0.5 -mb-1 w-5 h-5 transform transition-transform duration-150 ease-linear  "><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg></button></div><span class="capitalize text-sm text-teal-500 font-bold">object</span><div class="ml-auto flex gap-4"><button type="button" class="text-sm text-gray-500 hover:text-gray-700">Expand all</button></div></div></div></div><div class="flex "></div></div></div></div></div></div><div class="panel-item--right"></div></div></li></ul></section><section id="operations" class="mt-16"><h2 class="2xl:w-7/12 text-3xl font-light mb-4 px-8">Operations</h2><ul><li class="mb-12" id="operation-receive-publish"><div><div class="panel-item--center px-8"><div class="mb-4"><h3><span class="font-mono text-white uppercase p-1 rounded mr-2 bg-green-600" title="receive">PUB</span> <span class="font-mono text-base">omniuart/cmd/SetChannelATCommand</span></h3></div><p class="text-gray-600 text-sm mt-2">Send command SetChannelATCommand (ID: CH)</p><div class="mt-2"><div class="prose max-w-none text-sm"><p>Frame type 0x08: local AT Command. The AT command here is 'CH (RF channel/frequency), one of 16 channels in the 2.4GHz band.</p>
 </div></div><div class="border bg-gray-100 rounded px-4 py-2 mt-2"><div class="text-sm text-gray-700">Operation ID<span class="bg-orange-600 text-white rounded text-xs ml-2 py-0 px-2">publish</span></div></div><div class="mt-2 text-sm"><p>Available only on servers:</p><ul class="flex flex-wrap leading-normal"><li class="inline-block mt-2 mr-2"><a href="#server-serial_link" class="border border-solid border-blue-300 hover:bg-blue-300 hover:text-blue-600 text-blue-500 font-bold no-underline text-xs rounded px-3 py-1 cursor-pointer"><span class="underline">serial_link</span></a></li></ul></div><div class="mt-2" id="operation-receive-omniuart/cmd/SetChannelATCommand-security"></div><div class="mt-2"></div><div class="mt-2"></div><div class="mt-2"></div></div><div class="w-full mt-4" id="operation-receive-omniuart/cmd/SetChannelATCommand-message"><div class="mt-2"><p class="px-8">Accepts the following message:</p><div class="mt-2"><div class="panel-item"><div class="panel-item--center px-8"><div class="shadow rounded bg-gray-200 p-4 border"><div><span class="text-gray-700 mr-2">SetChannelATCommand Command</span></div><div class="mt-2"><div class="flex mb-4 gap-2"><div class="border rounded overflow-visible w-full"><div class="flex flex-col justify-center p-4 bg-gray-100 border-b"><div class="flex justify-between items-start"><div class="flex items-center gap-2 w-full"><div class="flex items-center gap-2"><button class="focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 " type="button"><div class="inline-block"><span class="break-anywhere text-sm w-full ">Payload</span></div><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 20 20" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" class="inline-block align-baseline cursor-pointer ml-0.5 -mb-1 w-5 h-5 transform transition-transform duration-150 ease-linear  "><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg></button></div><span class="capitalize text-sm text-teal-500 font-bold">object</span><div class="ml-auto flex gap-4"><button type="button" class="text-sm text-gray-500 hover:text-gray-700">Expand all</button></div></div></div><div class="mt-2 text-sm text-gray-600"><div class="prose max-w-none text-sm"><p>Frame type 0x08: local AT Command. The AT command here is 'CH (RF channel/frequency), one of 16 channels in the 2.4GHz band.</p>
@@ -30,7 +30,34 @@
   <span class="hljs-attr">"parameterValue"</span>: <span class="hljs-number">0</span>
 }
 </code></pre>
+</div><h6 class="text-xs font-bold text-gray-600 italic mt-2">This example has been generated automatically.</h6></div></div></div></div></div></div></div></div></div></div></li><li class="mb-12" id="operation-receive-publish"><div><div class="panel-item--center px-8"><div class="mb-4"><h3><span class="font-mono text-white uppercase p-1 rounded mr-2 bg-green-600" title="receive">PUB</span> <span class="font-mono text-base">omniuart/cmd/TransmitRequest</span></h3></div><p class="text-gray-600 text-sm mt-2">Send command TransmitRequest (ID: 0x10)</p><div class="mt-2"><div class="prose max-w-none text-sm"><p>Frame type 0x10: Transmit data packet to 64-bit destination address.</p>
+</div></div><div class="border bg-gray-100 rounded px-4 py-2 mt-2"><div class="text-sm text-gray-700">Operation ID<span class="bg-orange-600 text-white rounded text-xs ml-2 py-0 px-2">publish</span></div></div><div class="mt-2 text-sm"><p>Available only on servers:</p><ul class="flex flex-wrap leading-normal"><li class="inline-block mt-2 mr-2"><a href="#server-serial_link" class="border border-solid border-blue-300 hover:bg-blue-300 hover:text-blue-600 text-blue-500 font-bold no-underline text-xs rounded px-3 py-1 cursor-pointer"><span class="underline">serial_link</span></a></li></ul></div><div class="mt-2" id="operation-receive-omniuart/cmd/TransmitRequest-security"></div><div class="mt-2"></div><div class="mt-2"></div><div class="mt-2"></div></div><div class="w-full mt-4" id="operation-receive-omniuart/cmd/TransmitRequest-message"><div class="mt-2"><p class="px-8">Accepts the following message:</p><div class="mt-2"><div class="panel-item"><div class="panel-item--center px-8"><div class="shadow rounded bg-gray-200 p-4 border"><div><span class="text-gray-700 mr-2">TransmitRequest Command</span></div><div class="mt-2"><div class="flex mb-4 gap-2"><div class="border rounded overflow-visible w-full"><div class="flex flex-col justify-center p-4 bg-gray-100 border-b"><div class="flex justify-between items-start"><div class="flex items-center gap-2 w-full"><div class="flex items-center gap-2"><button class="focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 " type="button"><div class="inline-block"><span class="break-anywhere text-sm w-full ">Payload</span></div><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 20 20" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" class="inline-block align-baseline cursor-pointer ml-0.5 -mb-1 w-5 h-5 transform transition-transform duration-150 ease-linear  "><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg></button></div><span class="capitalize text-sm text-teal-500 font-bold">object</span><div class="ml-auto flex gap-4"><button type="button" class="text-sm text-gray-500 hover:text-gray-700">Expand all</button></div></div></div><div class="mt-2 text-sm text-gray-600"><div class="prose max-w-none text-sm"><p>Frame type 0x10: Transmit data packet to 64-bit destination address.</p>
+</div></div></div><div class="flex "></div></div></div></div></div></div><div class="panel-item--right px-8"><div class="bg-gray-800 px-8 py-4 mt-4 -mx-8 2xl:mx-0 2xl:px-4 2xl:rounded examples"><h4 class="text-white text-lg">Examples</h4><div class="mt-4"><div><button class="focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 " type="button"><div class="inline-block"><span class="inline-block w-20 py-0.5 mr-1 text-gray-200 text-sm border text-center rounded focus:outline-none">Payload</span></div><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 20 20" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" class="inline-block align-baseline cursor-pointer ml-0.5 -mb-1 w-5 h-5 transform transition-transform duration-150 ease-linear  fill-current text-gray-200"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg></button></div><div class="hidden"><div class="mt-4"><div class="prose max-w-none text-sm"><pre><code class="hljs language-json">{
+  <span class="hljs-attr">"command_id"</span>: <span class="hljs-number">16</span>,
+  <span class="hljs-attr">"frameType"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"frameId"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"dest64"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"dest16"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"broadcastRadius"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"options"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"payload"</span>: <span class="hljs-number">0</span>
+}
+</code></pre>
+</div><h6 class="text-xs font-bold text-gray-600 italic mt-2">This example has been generated automatically.</h6></div></div></div></div></div></div></div></div></div></div></li><li class="mb-12" id="operation-receive-publish"><div><div class="panel-item--center px-8"><div class="mb-4"><h3><span class="font-mono text-white uppercase p-1 rounded mr-2 bg-green-600" title="receive">PUB</span> <span class="font-mono text-base">omniuart/cmd/RemoteATCommand</span></h3></div><p class="text-gray-600 text-sm mt-2">Send command RemoteATCommand (ID: 0x17)</p><div class="mt-2"><div class="prose max-w-none text-sm"><p>Frame type 0x17: Issue AT Command to remote node in mesh network.</p>
+</div></div><div class="border bg-gray-100 rounded px-4 py-2 mt-2"><div class="text-sm text-gray-700">Operation ID<span class="bg-orange-600 text-white rounded text-xs ml-2 py-0 px-2">publish</span></div></div><div class="mt-2 text-sm"><p>Available only on servers:</p><ul class="flex flex-wrap leading-normal"><li class="inline-block mt-2 mr-2"><a href="#server-serial_link" class="border border-solid border-blue-300 hover:bg-blue-300 hover:text-blue-600 text-blue-500 font-bold no-underline text-xs rounded px-3 py-1 cursor-pointer"><span class="underline">serial_link</span></a></li></ul></div><div class="mt-2" id="operation-receive-omniuart/cmd/RemoteATCommand-security"></div><div class="mt-2"></div><div class="mt-2"></div><div class="mt-2"></div></div><div class="w-full mt-4" id="operation-receive-omniuart/cmd/RemoteATCommand-message"><div class="mt-2"><p class="px-8">Accepts the following message:</p><div class="mt-2"><div class="panel-item"><div class="panel-item--center px-8"><div class="shadow rounded bg-gray-200 p-4 border"><div><span class="text-gray-700 mr-2">RemoteATCommand Command</span></div><div class="mt-2"><div class="flex mb-4 gap-2"><div class="border rounded overflow-visible w-full"><div class="flex flex-col justify-center p-4 bg-gray-100 border-b"><div class="flex justify-between items-start"><div class="flex items-center gap-2 w-full"><div class="flex items-center gap-2"><button class="focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 " type="button"><div class="inline-block"><span class="break-anywhere text-sm w-full ">Payload</span></div><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 20 20" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" class="inline-block align-baseline cursor-pointer ml-0.5 -mb-1 w-5 h-5 transform transition-transform duration-150 ease-linear  "><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg></button></div><span class="capitalize text-sm text-teal-500 font-bold">object</span><div class="ml-auto flex gap-4"><button type="button" class="text-sm text-gray-500 hover:text-gray-700">Expand all</button></div></div></div><div class="mt-2 text-sm text-gray-600"><div class="prose max-w-none text-sm"><p>Frame type 0x17: Issue AT Command to remote node in mesh network.</p>
+</div></div></div><div class="flex "></div></div></div></div></div></div><div class="panel-item--right px-8"><div class="bg-gray-800 px-8 py-4 mt-4 -mx-8 2xl:mx-0 2xl:px-4 2xl:rounded examples"><h4 class="text-white text-lg">Examples</h4><div class="mt-4"><div><button class="focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 " type="button"><div class="inline-block"><span class="inline-block w-20 py-0.5 mr-1 text-gray-200 text-sm border text-center rounded focus:outline-none">Payload</span></div><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 20 20" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" class="inline-block align-baseline cursor-pointer ml-0.5 -mb-1 w-5 h-5 transform transition-transform duration-150 ease-linear  fill-current text-gray-200"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg></button></div><div class="hidden"><div class="mt-4"><div class="prose max-w-none text-sm"><pre><code class="hljs language-json">{
+  <span class="hljs-attr">"command_id"</span>: <span class="hljs-number">23</span>,
+  <span class="hljs-attr">"frameType"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"frameId"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"dest64"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"dest16"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"applyOptions"</span>: <span class="hljs-number">0</span>,
+  <span class="hljs-attr">"atCommand"</span>: <span class="hljs-number">0</span>
+}
+</code></pre>
 </div><h6 class="text-xs font-bold text-gray-600 italic mt-2">This example has been generated automatically.</h6></div></div></div></div></div></div></div></div></div></div></li></ul></section><section id="schemas" class="mt-16"><h2 class="2xl:w-7/12 text-3xl font-light mb-4 px-8">Schemas</h2><ul><li class="mb-4" id="schema-SetChannelATCommand_Request"><div><div class="panel-item--center px-8"><div class="shadow rounded px-4 py-2 border bg-gray-200"><div class="flex mb-4 gap-2"><div class="border rounded overflow-visible w-full"><div class="flex flex-col justify-center p-4 bg-gray-100 border-b"><div class="flex justify-between items-start"><div class="flex items-center gap-2 w-full"><div class="flex items-center gap-2"><button class="focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 " type="button"><div class="inline-block"><span class="break-anywhere text-sm w-full ">SetChannelATCommand_Request</span></div><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 20 20" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" class="inline-block align-baseline cursor-pointer ml-0.5 -mb-1 w-5 h-5 transform transition-transform duration-150 ease-linear  "><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg></button></div><span class="capitalize text-sm text-teal-500 font-bold">object</span><div class="ml-auto flex gap-4"><button type="button" class="text-sm text-gray-500 hover:text-gray-700">Expand all</button></div></div></div><div class="mt-2 text-sm text-gray-600"><div class="prose max-w-none text-sm"><p>Frame type 0x08: local AT Command. The AT command here is 'CH (RF channel/frequency), one of 16 channels in the 2.4GHz band.</p>
+</div></div></div><div class="flex "></div></div></div></div></div><div class="w-full mt-4"></div></div></li><li class="mb-4" id="schema-TransmitRequest_Request"><div><div class="panel-item--center px-8"><div class="shadow rounded px-4 py-2 border bg-gray-200"><div class="flex mb-4 gap-2"><div class="border rounded overflow-visible w-full"><div class="flex flex-col justify-center p-4 bg-gray-100 border-b"><div class="flex justify-between items-start"><div class="flex items-center gap-2 w-full"><div class="flex items-center gap-2"><button class="focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 " type="button"><div class="inline-block"><span class="break-anywhere text-sm w-full ">TransmitRequest_Request</span></div><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 20 20" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" class="inline-block align-baseline cursor-pointer ml-0.5 -mb-1 w-5 h-5 transform transition-transform duration-150 ease-linear  "><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg></button></div><span class="capitalize text-sm text-teal-500 font-bold">object</span><div class="ml-auto flex gap-4"><button type="button" class="text-sm text-gray-500 hover:text-gray-700">Expand all</button></div></div></div><div class="mt-2 text-sm text-gray-600"><div class="prose max-w-none text-sm"><p>Frame type 0x10: Transmit data packet to 64-bit destination address.</p>
+</div></div></div><div class="flex "></div></div></div></div></div><div class="w-full mt-4"></div></div></li><li class="mb-4" id="schema-RemoteATCommand_Request"><div><div class="panel-item--center px-8"><div class="shadow rounded px-4 py-2 border bg-gray-200"><div class="flex mb-4 gap-2"><div class="border rounded overflow-visible w-full"><div class="flex flex-col justify-center p-4 bg-gray-100 border-b"><div class="flex justify-between items-start"><div class="flex items-center gap-2 w-full"><div class="flex items-center gap-2"><button class="focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 " type="button"><div class="inline-block"><span class="break-anywhere text-sm w-full ">RemoteATCommand_Request</span></div><svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 20 20" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg" class="inline-block align-baseline cursor-pointer ml-0.5 -mb-1 w-5 h-5 transform transition-transform duration-150 ease-linear  "><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg></button></div><span class="capitalize text-sm text-teal-500 font-bold">object</span><div class="ml-auto flex gap-4"><button type="button" class="text-sm text-gray-500 hover:text-gray-700">Expand all</button></div></div></div><div class="mt-2 text-sm text-gray-600"><div class="prose max-w-none text-sm"><p>Frame type 0x17: Issue AT Command to remote node in mesh network.</p>
 </div></div></div><div class="flex "></div></div></div></div></div><div class="w-full mt-4"></div></div></li></ul></section></div><div class="panel--right absolute top-0 right-0 h-full bg-gray-800"></div></div></div></section></div>
   
       <script type="text/javascript">
@@ -111,12 +138,112 @@
           }
         }
       }
+    },
+    "omniuart/cmd/TransmitRequest": {
+      "publish": {
+        "summary": "Send command TransmitRequest (ID: 0x10)",
+        "description": "Frame type 0x10: Transmit data packet to 64-bit destination address.",
+        "message": {
+          "name": "TransmitRequest_Message",
+          "title": "TransmitRequest Command",
+          "payload": {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "integer",
+                "const": 16,
+                "description": "Opcode ID for TransmitRequest",
+                "x-parser-schema-id": "<anonymous-schema-6>"
+              },
+              "frameType": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-7>"
+              },
+              "frameId": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-8>"
+              },
+              "dest64": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-9>"
+              },
+              "dest16": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-10>"
+              },
+              "broadcastRadius": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-11>"
+              },
+              "options": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-12>"
+              },
+              "payload": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-13>"
+              }
+            },
+            "description": "Frame type 0x10: Transmit data packet to 64-bit destination address.",
+            "x-parser-schema-id": "TransmitRequest_Request"
+          }
+        }
+      }
+    },
+    "omniuart/cmd/RemoteATCommand": {
+      "publish": {
+        "summary": "Send command RemoteATCommand (ID: 0x17)",
+        "description": "Frame type 0x17: Issue AT Command to remote node in mesh network.",
+        "message": {
+          "name": "RemoteATCommand_Message",
+          "title": "RemoteATCommand Command",
+          "payload": {
+            "type": "object",
+            "properties": {
+              "command_id": {
+                "type": "integer",
+                "const": 23,
+                "description": "Opcode ID for RemoteATCommand",
+                "x-parser-schema-id": "<anonymous-schema-14>"
+              },
+              "frameType": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-15>"
+              },
+              "frameId": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-16>"
+              },
+              "dest64": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-17>"
+              },
+              "dest16": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-18>"
+              },
+              "applyOptions": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-19>"
+              },
+              "atCommand": {
+                "type": "integer",
+                "x-parser-schema-id": "<anonymous-schema-20>"
+              }
+            },
+            "description": "Frame type 0x17: Issue AT Command to remote node in mesh network.",
+            "x-parser-schema-id": "RemoteATCommand_Request"
+          }
+        }
+      }
     }
   },
   "components": {
     "messages": {},
     "schemas": {
-      "SetChannelATCommand_Request": "$ref:$.channels.omniuart/cmd/SetChannelATCommand.publish.message.payload"
+      "SetChannelATCommand_Request": "$ref:$.channels.omniuart/cmd/SetChannelATCommand.publish.message.payload",
+      "TransmitRequest_Request": "$ref:$.channels.omniuart/cmd/TransmitRequest.publish.message.payload",
+      "RemoteATCommand_Request": "$ref:$.channels.omniuart/cmd/RemoteATCommand.publish.message.payload"
     }
   },
   "x-parser-spec-parsed": true,

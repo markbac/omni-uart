@@ -23,15 +23,51 @@ channels:
   omniuart/cmd/HEARTBEAT:
     publish:
       summary: 'Send command HEARTBEAT (ID: 0x00)'
-      description: Message ID 0. seq/sysId/compId/msgId are the 4 precedingHeaderBytes
-        counted separately from LEN, now declared as position=before-length-field
-        fields rather than left as an anonymous count; the fields below them are the
-        LEN-counted payload.
+      description: Message ID 0. System status heartbeat broadcast by vehicle or ground
+        station.
       message:
         name: HEARTBEAT_Message
         title: HEARTBEAT Command
         payload:
           $ref: '#/components/schemas/HEARTBEAT_Request'
+  omniuart/cmd/SYS_STATUS:
+    publish:
+      summary: 'Send command SYS_STATUS (ID: 0x01)'
+      description: Message ID 1. System status, battery voltage, current draw, and
+        sensor health.
+      message:
+        name: SYS_STATUS_Message
+        title: SYS_STATUS Command
+        payload:
+          $ref: '#/components/schemas/SYS_STATUS_Request'
+  omniuart/cmd/GPS_RAW_INT:
+    publish:
+      summary: 'Send command GPS_RAW_INT (ID: 0x18)'
+      description: Message ID 24. Raw GPS location and satellite fix data.
+      message:
+        name: GPS_RAW_INT_Message
+        title: GPS_RAW_INT Command
+        payload:
+          $ref: '#/components/schemas/GPS_RAW_INT_Request'
+  omniuart/cmd/ATTITUDE:
+    publish:
+      summary: 'Send command ATTITUDE (ID: 0x1E)'
+      description: Message ID 30. Vehicle roll, pitch, and yaw angles and angular
+        velocity.
+      message:
+        name: ATTITUDE_Message
+        title: ATTITUDE Command
+        payload:
+          $ref: '#/components/schemas/ATTITUDE_Request'
+  omniuart/cmd/COMMAND_LONG:
+    publish:
+      summary: 'Send command COMMAND_LONG (ID: 0x4C)'
+      description: Message ID 76. Generic command dispatch to vehicle autopilot.
+      message:
+        name: COMMAND_LONG_Message
+        title: COMMAND_LONG Command
+        payload:
+          $ref: '#/components/schemas/COMMAND_LONG_Request'
 components:
   messages: {}
   schemas:
@@ -62,7 +98,141 @@ components:
           type: integer
         mavlinkVersion:
           type: integer
-      description: Message ID 0. seq/sysId/compId/msgId are the 4 precedingHeaderBytes
-        counted separately from LEN, now declared as position=before-length-field
-        fields rather than left as an anonymous count; the fields below them are the
-        LEN-counted payload.
+      description: Message ID 0. System status heartbeat broadcast by vehicle or ground
+        station.
+    SYS_STATUS_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 1
+          description: Opcode ID for SYS_STATUS
+        seq:
+          type: integer
+        sysId:
+          type: integer
+        compId:
+          type: integer
+        msgId:
+          type: integer
+        onboardSensorsPresent:
+          type: integer
+        onboardSensorsEnabled:
+          type: integer
+        onboardSensorsHealth:
+          type: integer
+        load:
+          type: integer
+        voltageBattery:
+          type: integer
+        currentBattery:
+          type: integer
+        batteryRemaining:
+          type: integer
+      description: Message ID 1. System status, battery voltage, current draw, and
+        sensor health.
+    GPS_RAW_INT_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 24
+          description: Opcode ID for GPS_RAW_INT
+        seq:
+          type: integer
+        sysId:
+          type: integer
+        compId:
+          type: integer
+        msgId:
+          type: integer
+        timeUsec:
+          type: integer
+        fixType:
+          type: integer
+        lat:
+          type: integer
+        lon:
+          type: integer
+        alt:
+          type: integer
+        eph:
+          type: integer
+        epv:
+          type: integer
+        vel:
+          type: integer
+        cog:
+          type: integer
+        satellitesVisible:
+          type: integer
+      description: Message ID 24. Raw GPS location and satellite fix data.
+    ATTITUDE_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 30
+          description: Opcode ID for ATTITUDE
+        seq:
+          type: integer
+        sysId:
+          type: integer
+        compId:
+          type: integer
+        msgId:
+          type: integer
+        timeBootMs:
+          type: integer
+        roll:
+          type: integer
+        pitch:
+          type: integer
+        yaw:
+          type: integer
+        rollspeed:
+          type: integer
+        pitchspeed:
+          type: integer
+        yawspeed:
+          type: integer
+      description: Message ID 30. Vehicle roll, pitch, and yaw angles and angular
+        velocity.
+    COMMAND_LONG_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 76
+          description: Opcode ID for COMMAND_LONG
+        seq:
+          type: integer
+        sysId:
+          type: integer
+        compId:
+          type: integer
+        msgId:
+          type: integer
+        targetSystem:
+          type: integer
+        targetComponent:
+          type: integer
+        command:
+          type: integer
+        confirmation:
+          type: integer
+        param1:
+          type: integer
+        param2:
+          type: integer
+        param3:
+          type: integer
+        param4:
+          type: integer
+        param5:
+          type: integer
+        param6:
+          type: integer
+        param7:
+          type: integer
+      description: Message ID 76. Generic command dispatch to vehicle autopilot.

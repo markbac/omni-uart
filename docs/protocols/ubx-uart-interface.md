@@ -12,7 +12,7 @@ GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the
 
 ## Command Catalog & Message Signatures
 
-### Category: DASHBOARD
+### Category: GNSS/CONFIG
 
 #### `CFG-PRT-Poll` (Command ID: `0x00`) - Poll vs SetBaud share identical class/id, so they don't disambiguate by value at all -- this schema's dispatch algorithm correctly falls back to resolved length instead (0 payload bytes here vs SetBaud's fixed 12), which is genuinely unambiguous, so no role=discriminator is needed on class/id.
 
@@ -20,8 +20,6 @@ GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the
 | :--- | :--- | :--- | :--- | :--- |
 | `class` | `bytes` | - | - | - |
 | `id` | `bytes` | - | - | - |
-
-### Category: GENERAL
 
 #### `CFG-PRT-SetBaud` (Command ID: `0x00`) - Same class=0x06, id=0x00 as CFG-PRT-Poll, but with a payload requesting a new port baud rate. The module's own ack is sent at the OLD rate; the host must reconfigure its own UART to the new rate immediately afterwards, per baudRateNegotiation.
 
@@ -33,6 +31,110 @@ GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the
 | `reserved` | `bytes` | - | - | - |
 | `mode` | `bytes` | - | - | - |
 | `baudRate` | `bytes` | - | - | - |
+
+### Category: DASHBOARD
+
+#### `CFG-PRT-Poll` (Command ID: `0x00`) - Poll vs SetBaud share identical class/id, so they don't disambiguate by value at all -- this schema's dispatch algorithm correctly falls back to resolved length instead (0 payload bytes here vs SetBaud's fixed 12), which is genuinely unambiguous, so no role=discriminator is needed on class/id.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `class` | `bytes` | - | - | - |
+| `id` | `bytes` | - | - | - |
+
+#### `NAV-PVT` (Command ID: `0x07`) - Navigation Position Velocity Time Solution returning fix status, time accuracy, and 3D velocity.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `class` | `bytes` | - | - | - |
+| `id` | `bytes` | - | - | - |
+| `iTOW` | `bytes` | - | - | - |
+| `year` | `bytes` | - | - | - |
+| `month` | `bytes` | - | - | - |
+| `day` | `bytes` | - | - | - |
+| `hour` | `bytes` | - | - | - |
+| `min` | `bytes` | - | - | - |
+| `sec` | `bytes` | - | - | - |
+| `valid` | `bytes` | - | - | - |
+| `tAcc` | `bytes` | - | - | - |
+| `fixType` | `bytes` | - | - | - |
+| `numSV` | `bytes` | - | - | - |
+| `gSpeed` | `bytes` | - | - | - |
+| `heading` | `bytes` | - | - | - |
+
+#### `MON-VER` (Command ID: `0x04`) - Receiver Software and Hardware Version Poll.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `class` | `bytes` | - | - | - |
+| `id` | `bytes` | - | - | - |
+
+### Category: GNSS/NAV
+
+#### `NAV-POSLLH` (Command ID: `0x02`) - Geodetic Position Solution returning latitude, longitude, and height above ellipsoid/MSL.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `class` | `bytes` | - | - | - |
+| `id` | `bytes` | - | - | - |
+| `iTOW` | `bytes` | - | - | - |
+| `lon` | `bytes` | - | - | - |
+| `lat` | `bytes` | - | - | - |
+| `height` | `bytes` | - | - | - |
+| `hMSL` | `bytes` | - | - | - |
+| `hAcc` | `bytes` | - | - | - |
+| `vAcc` | `bytes` | - | - | - |
+
+#### `NAV-PVT` (Command ID: `0x07`) - Navigation Position Velocity Time Solution returning fix status, time accuracy, and 3D velocity.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `class` | `bytes` | - | - | - |
+| `id` | `bytes` | - | - | - |
+| `iTOW` | `bytes` | - | - | - |
+| `year` | `bytes` | - | - | - |
+| `month` | `bytes` | - | - | - |
+| `day` | `bytes` | - | - | - |
+| `hour` | `bytes` | - | - | - |
+| `min` | `bytes` | - | - | - |
+| `sec` | `bytes` | - | - | - |
+| `valid` | `bytes` | - | - | - |
+| `tAcc` | `bytes` | - | - | - |
+| `fixType` | `bytes` | - | - | - |
+| `numSV` | `bytes` | - | - | - |
+| `gSpeed` | `bytes` | - | - | - |
+| `heading` | `bytes` | - | - | - |
+
+#### `NAV-STATUS` (Command ID: `0x03`) - Receiver Navigation Status Poll.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `class` | `bytes` | - | - | - |
+| `id` | `bytes` | - | - | - |
+
+### Category: TELEMETRY
+
+#### `NAV-POSLLH` (Command ID: `0x02`) - Geodetic Position Solution returning latitude, longitude, and height above ellipsoid/MSL.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `class` | `bytes` | - | - | - |
+| `id` | `bytes` | - | - | - |
+| `iTOW` | `bytes` | - | - | - |
+| `lon` | `bytes` | - | - | - |
+| `lat` | `bytes` | - | - | - |
+| `height` | `bytes` | - | - | - |
+| `hMSL` | `bytes` | - | - | - |
+| `hAcc` | `bytes` | - | - | - |
+| `vAcc` | `bytes` | - | - | - |
+
+### Category: GNSS/MON
+
+#### `MON-VER` (Command ID: `0x04`) - Receiver Software and Hardware Version Poll.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `class` | `bytes` | - | - | - |
+| `id` | `bytes` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -83,6 +185,44 @@ channels:
         title: CFG-PRT-SetBaud Command
         payload:
           $ref: '#/components/schemas/CFG-PRT-SetBaud_Request'
+  omniuart/cmd/NAV-POSLLH:
+    publish:
+      summary: 'Send command NAV-POSLLH (ID: 0x02)'
+      description: Geodetic Position Solution returning latitude, longitude, and height
+        above ellipsoid/MSL.
+      message:
+        name: NAV-POSLLH_Message
+        title: NAV-POSLLH Command
+        payload:
+          $ref: '#/components/schemas/NAV-POSLLH_Request'
+  omniuart/cmd/NAV-PVT:
+    publish:
+      summary: 'Send command NAV-PVT (ID: 0x07)'
+      description: Navigation Position Velocity Time Solution returning fix status,
+        time accuracy, and 3D velocity.
+      message:
+        name: NAV-PVT_Message
+        title: NAV-PVT Command
+        payload:
+          $ref: '#/components/schemas/NAV-PVT_Request'
+  omniuart/cmd/MON-VER:
+    publish:
+      summary: 'Send command MON-VER (ID: 0x04)'
+      description: Receiver Software and Hardware Version Poll.
+      message:
+        name: MON-VER_Message
+        title: MON-VER Command
+        payload:
+          $ref: '#/components/schemas/MON-VER_Request'
+  omniuart/cmd/NAV-STATUS:
+    publish:
+      summary: 'Send command NAV-STATUS (ID: 0x03)'
+      description: Receiver Navigation Status Poll.
+      message:
+        name: NAV-STATUS_Message
+        title: NAV-STATUS Command
+        payload:
+          $ref: '#/components/schemas/NAV-STATUS_Request'
 components:
   messages: {}
   schemas:
@@ -124,5 +264,95 @@ components:
         a new port baud rate. The module's own ack is sent at the OLD rate; the host
         must reconfigure its own UART to the new rate immediately afterwards, per
         baudRateNegotiation.
+    NAV-POSLLH_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 2
+          description: Opcode ID for NAV-POSLLH
+        class:
+          type: integer
+        id:
+          type: integer
+        iTOW:
+          type: integer
+        lon:
+          type: integer
+        lat:
+          type: integer
+        height:
+          type: integer
+        hMSL:
+          type: integer
+        hAcc:
+          type: integer
+        vAcc:
+          type: integer
+      description: Geodetic Position Solution returning latitude, longitude, and height
+        above ellipsoid/MSL.
+    NAV-PVT_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 7
+          description: Opcode ID for NAV-PVT
+        class:
+          type: integer
+        id:
+          type: integer
+        iTOW:
+          type: integer
+        year:
+          type: integer
+        month:
+          type: integer
+        day:
+          type: integer
+        hour:
+          type: integer
+        min:
+          type: integer
+        sec:
+          type: integer
+        valid:
+          type: integer
+        tAcc:
+          type: integer
+        fixType:
+          type: integer
+        numSV:
+          type: integer
+        gSpeed:
+          type: integer
+        heading:
+          type: integer
+      description: Navigation Position Velocity Time Solution returning fix status,
+        time accuracy, and 3D velocity.
+    MON-VER_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 4
+          description: Opcode ID for MON-VER
+        class:
+          type: integer
+        id:
+          type: integer
+      description: Receiver Software and Hardware Version Poll.
+    NAV-STATUS_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 3
+          description: Opcode ID for NAV-STATUS
+        class:
+          type: integer
+        id:
+          type: integer
+      description: Receiver Navigation Status Poll.
 
 ```

@@ -79,7 +79,7 @@ Below is the complete catalog of auto-discovered hardware UART protocols with de
 
 ### [MAVLink v1](mavlink-v1-uart-interface.md) (v1.0)
 - **Description**: Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit between the length field and the region LEN actually counts.
-- **Framing**: `BINARY` | **Baudrate**: `115200 bps` | **Commands**: `1`
+- **Framing**: `BINARY` | **Baudrate**: `115200 bps` | **Commands**: `5`
 - **AsyncAPI**: [YAML Spec](asyncapi/mavlink-v1-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/mavlink-v1-uart-interface.html)
 
 ### [M-Bus (EN 13757-2/3), long/control frame](mbus-long-uart-interface.md) (vEN 13757-2)
@@ -104,7 +104,7 @@ Below is the complete catalog of auto-discovered hardware UART protocols with de
 
 ### [Modbus RTU](modbus-rtu-uart-interface.md) (v1.0)
 - **Description**: Modbus over serial, RTU transmission mode. Frame boundaries are marked by line silence rather than sync bytes or a length field.
-- **Framing**: `DELIMITED` | **Baudrate**: `115200 bps` | **Commands**: `2`
+- **Framing**: `DELIMITED` | **Baudrate**: `115200 bps` | **Commands**: `6`
 - **AsyncAPI**: [YAML Spec](asyncapi/modbus-rtu-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/modbus-rtu-uart-interface.html)
 
 ### [9-bit UART multidrop addressing](multidrop-9bit-uart-interface.md) (vgeneric (common 8051/PIC UART mode))
@@ -129,7 +129,7 @@ Below is the complete catalog of auto-discovered hardware UART protocols with de
 
 ### [SCPI (Standard Commands for Programmable Instruments) over RS-232](scpi-uart-interface.md) (vSCPI-99 / IEEE 488.2)
 - **Description**: ASCII line-based instrument control (oscilloscopes, PSUs, DMMs). Baud is configured manually on both sides -- no auto-negotiation -- and commonly must match exactly or the instrument just doesn't respond, with no error reported at all. Chains multiple independent commands onto one physical line via ';', which compoundMessageDelimiter exists specifically for.
-- **Framing**: `DELIMITED` | **Baudrate**: `9600 bps` | **Commands**: `4`
+- **Framing**: `DELIMITED` | **Baudrate**: `9600 bps` | **Commands**: `6`
 - **AsyncAPI**: [YAML Spec](asyncapi/scpi-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/scpi-uart-interface.html)
 
 ### [Single-wire half-duplex UART link (illustrative)](single-wire-uart-interface.md) (villustrative)
@@ -149,12 +149,12 @@ Below is the complete catalog of auto-discovered hardware UART protocols with de
 
 ### [u-blox UBX](ubx-uart-interface.md) (v34)
 - **Description**: GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the length field -- before the length-counted region, unlike MAVLink's after.
-- **Framing**: `BINARY` | **Baudrate**: `9600 bps` | **Commands**: `2`
+- **Framing**: `BINARY` | **Baudrate**: `9600 bps` | **Commands**: `6`
 - **AsyncAPI**: [YAML Spec](asyncapi/ubx-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/ubx-uart-interface.html)
 
 ### [XBee API Mode](xbee-api-uart-interface.md) (vS2C Zigbee firmware)
 - **Description**: Digi XBee radio module binary command protocol, including an AT Command frame setting ATCH (the RF channel/frequency).
-- **Framing**: `BINARY` | **Baudrate**: `115200 bps` | **Commands**: `1`
+- **Framing**: `BINARY` | **Baudrate**: `115200 bps` | **Commands**: `3`
 - **AsyncAPI**: [YAML Spec](asyncapi/xbee-api-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/xbee-api-uart-interface.html)
 
 ### [XMODEM (checksum variant)](xmodem-uart-interface.md) (vclassic)

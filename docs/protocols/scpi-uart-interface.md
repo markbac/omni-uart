@@ -12,21 +12,21 @@ ASCII line-based instrument control (oscilloscopes, PSUs, DMMs). Baud is configu
 
 ## Command Catalog & Message Signatures
 
-### Category: GENERAL
+### Category: SCPI/SYSTEM
 
-#### `Identify` (Command ID: `*IDN?`) - *IDN?
-
-| Parameter | Type | Unit | Range / Constraints | Options |
-| :--- | :--- | :--- | :--- | :--- |
-| `text` | `bytes` | - | - | - |
-
-#### `Reset` (Command ID: `*RST`) - *RST
+#### `Identify` (Command ID: `*IDN?`) - *IDN? System identification query.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `text` | `bytes` | - | - | - |
 
-#### `MeasureVoltageDC` (Command ID: `MEAS:VOLT:DC?`) - MEAS:VOLT:DC? -- often chained after *RST;*CLS via compoundMessageDelimiter, e.g. one line reading '*RST;*CLS;MEAS:VOLT:DC?'.
+#### `Reset` (Command ID: `*RST`) - *RST System reset command.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `text` | `bytes` | - | - | - |
+
+#### `ClearStatus` (Command ID: `*CLS`) - *CLS Clear status registers.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
@@ -34,11 +34,40 @@ ASCII line-based instrument control (oscilloscopes, PSUs, DMMs). Baud is configu
 
 ### Category: DASHBOARD
 
-#### `ClearStatus` (Command ID: `*CLS`) - *CLS
+#### `Identify` (Command ID: `*IDN?`) - *IDN? System identification query.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `text` | `bytes` | - | - | - |
+
+#### `MeasureVoltageDC` (Command ID: `MEAS:VOLT:DC?`) - MEAS:VOLT:DC? Measure DC voltage in Volts.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `text` | `bytes` | - | - | - |
+
+### Category: SCPI/MEASURE
+
+#### `MeasureVoltageDC` (Command ID: `MEAS:VOLT:DC?`) - MEAS:VOLT:DC? Measure DC voltage in Volts.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `text` | `bytes` | - | - | - |
+
+#### `MeasureCurrentDC` (Command ID: `MEAS:CURR:DC?`) - MEAS:CURR:DC? Measure DC current in Amperes.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `text` | `bytes` | - | - | - |
+
+### Category: SCPI/SOURCE
+
+#### `SetVoltageOutput` (Command ID: `SOUR:VOLT `) - SOUR:VOLT <val> Set programmable power supply output voltage.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `prefix` | `bytes` | - | - | - |
+| `voltage` | `bytes` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -71,7 +100,7 @@ channels:
   omniuart/cmd/Identify:
     publish:
       summary: 'Send command Identify (ID: *IDN?)'
-      description: '*IDN?'
+      description: '*IDN? System identification query.'
       message:
         name: Identify_Message
         title: Identify Command
@@ -80,7 +109,7 @@ channels:
   omniuart/cmd/Reset:
     publish:
       summary: 'Send command Reset (ID: *RST)'
-      description: '*RST'
+      description: '*RST System reset command.'
       message:
         name: Reset_Message
         title: Reset Command
@@ -89,7 +118,7 @@ channels:
   omniuart/cmd/ClearStatus:
     publish:
       summary: 'Send command ClearStatus (ID: *CLS)'
-      description: '*CLS'
+      description: '*CLS Clear status registers.'
       message:
         name: ClearStatus_Message
         title: ClearStatus Command
@@ -98,13 +127,30 @@ channels:
   omniuart/cmd/MeasureVoltageDC:
     publish:
       summary: 'Send command MeasureVoltageDC (ID: MEAS:VOLT:DC?)'
-      description: MEAS:VOLT:DC? -- often chained after *RST;*CLS via compoundMessageDelimiter,
-        e.g. one line reading '*RST;*CLS;MEAS:VOLT:DC?'.
+      description: MEAS:VOLT:DC? Measure DC voltage in Volts.
       message:
         name: MeasureVoltageDC_Message
         title: MeasureVoltageDC Command
         payload:
           $ref: '#/components/schemas/MeasureVoltageDC_Request'
+  omniuart/cmd/MeasureCurrentDC:
+    publish:
+      summary: 'Send command MeasureCurrentDC (ID: MEAS:CURR:DC?)'
+      description: MEAS:CURR:DC? Measure DC current in Amperes.
+      message:
+        name: MeasureCurrentDC_Message
+        title: MeasureCurrentDC Command
+        payload:
+          $ref: '#/components/schemas/MeasureCurrentDC_Request'
+  omniuart/cmd/SetVoltageOutput:
+    publish:
+      summary: 'Send command SetVoltageOutput (ID: SOUR:VOLT )'
+      description: SOUR:VOLT <val> Set programmable power supply output voltage.
+      message:
+        name: SetVoltageOutput_Message
+        title: SetVoltageOutput Command
+        payload:
+          $ref: '#/components/schemas/SetVoltageOutput_Request'
 components:
   messages: {}
   schemas:
@@ -117,7 +163,7 @@ components:
           description: Opcode ID for Identify
         text:
           type: integer
-      description: '*IDN?'
+      description: '*IDN? System identification query.'
     Reset_Request:
       type: object
       properties:
@@ -127,7 +173,7 @@ components:
           description: Opcode ID for Reset
         text:
           type: integer
-      description: '*RST'
+      description: '*RST System reset command.'
     ClearStatus_Request:
       type: object
       properties:
@@ -137,7 +183,7 @@ components:
           description: Opcode ID for ClearStatus
         text:
           type: integer
-      description: '*CLS'
+      description: '*CLS Clear status registers.'
     MeasureVoltageDC_Request:
       type: object
       properties:
@@ -147,7 +193,28 @@ components:
           description: Opcode ID for MeasureVoltageDC
         text:
           type: integer
-      description: MEAS:VOLT:DC? -- often chained after *RST;*CLS via compoundMessageDelimiter,
-        e.g. one line reading '*RST;*CLS;MEAS:VOLT:DC?'.
+      description: MEAS:VOLT:DC? Measure DC voltage in Volts.
+    MeasureCurrentDC_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: MEAS:CURR:DC?
+          description: Opcode ID for MeasureCurrentDC
+        text:
+          type: integer
+      description: MEAS:CURR:DC? Measure DC current in Amperes.
+    SetVoltageOutput_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 'SOUR:VOLT '
+          description: Opcode ID for SetVoltageOutput
+        prefix:
+          type: integer
+        voltage:
+          type: integer
+      description: SOUR:VOLT <val> Set programmable power supply output voltage.
 
 ```

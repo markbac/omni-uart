@@ -12,16 +12,54 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 
 ## Command Catalog & Message Signatures
 
-### Category: GENERAL
+### Category: XBEE/AT_COMMAND
 
 #### `SetChannelATCommand` (Command ID: `CH`) - Frame type 0x08: local AT Command. The AT command here is 'CH' (RF channel/frequency), one of 16 channels in the 2.4GHz band.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `frameType` | `enum` | - | - | `{'8': 'ATCommand', '136': 'ATCommandResponse'}` |
+| `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
 | `frameId` | `bytes` | - | - | - |
 | `atCommand` | `bytes` | - | - | - |
 | `parameterValue` | `bytes` | - | - | - |
+
+### Category: DASHBOARD
+
+#### `SetChannelATCommand` (Command ID: `CH`) - Frame type 0x08: local AT Command. The AT command here is 'CH' (RF channel/frequency), one of 16 channels in the 2.4GHz band.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
+| `frameId` | `bytes` | - | - | - |
+| `atCommand` | `bytes` | - | - | - |
+| `parameterValue` | `bytes` | - | - | - |
+
+### Category: XBEE/TRANSMIT
+
+#### `TransmitRequest` (Command ID: `0x10`) - Frame type 0x10: Transmit data packet to 64-bit destination address.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
+| `frameId` | `bytes` | - | - | - |
+| `dest64` | `bytes` | - | - | - |
+| `dest16` | `bytes` | - | - | - |
+| `broadcastRadius` | `bytes` | - | - | - |
+| `options` | `bytes` | - | - | - |
+| `payload` | `bytes` | - | - | - |
+
+### Category: XBEE/REMOTE_AT
+
+#### `RemoteATCommand` (Command ID: `0x17`) - Frame type 0x17: Issue AT Command to remote node in mesh network.
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
+| `frameId` | `bytes` | - | - | - |
+| `dest64` | `bytes` | - | - | - |
+| `dest16` | `bytes` | - | - | - |
+| `applyOptions` | `bytes` | - | - | - |
+| `atCommand` | `bytes` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -58,6 +96,24 @@ channels:
         title: SetChannelATCommand Command
         payload:
           $ref: '#/components/schemas/SetChannelATCommand_Request'
+  omniuart/cmd/TransmitRequest:
+    publish:
+      summary: 'Send command TransmitRequest (ID: 0x10)'
+      description: 'Frame type 0x10: Transmit data packet to 64-bit destination address.'
+      message:
+        name: TransmitRequest_Message
+        title: TransmitRequest Command
+        payload:
+          $ref: '#/components/schemas/TransmitRequest_Request'
+  omniuart/cmd/RemoteATCommand:
+    publish:
+      summary: 'Send command RemoteATCommand (ID: 0x17)'
+      description: 'Frame type 0x17: Issue AT Command to remote node in mesh network.'
+      message:
+        name: RemoteATCommand_Message
+        title: RemoteATCommand Command
+        payload:
+          $ref: '#/components/schemas/RemoteATCommand_Request'
 components:
   messages: {}
   schemas:
@@ -78,5 +134,47 @@ components:
           type: integer
       description: 'Frame type 0x08: local AT Command. The AT command here is ''CH''
         (RF channel/frequency), one of 16 channels in the 2.4GHz band.'
+    TransmitRequest_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 16
+          description: Opcode ID for TransmitRequest
+        frameType:
+          type: integer
+        frameId:
+          type: integer
+        dest64:
+          type: integer
+        dest16:
+          type: integer
+        broadcastRadius:
+          type: integer
+        options:
+          type: integer
+        payload:
+          type: integer
+      description: 'Frame type 0x10: Transmit data packet to 64-bit destination address.'
+    RemoteATCommand_Request:
+      type: object
+      properties:
+        command_id:
+          type: integer
+          const: 23
+          description: Opcode ID for RemoteATCommand
+        frameType:
+          type: integer
+        frameId:
+          type: integer
+        dest64:
+          type: integer
+        dest16:
+          type: integer
+        applyOptions:
+          type: integer
+        atCommand:
+          type: integer
+      description: 'Frame type 0x17: Issue AT Command to remote node in mesh network.'
 
 ```
