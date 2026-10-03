@@ -197,16 +197,8 @@ def _send_command(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any], 
 
 
 def _resolve_script_protocol(script: Any, catalog: CatalogManager, override: Optional[str]) -> Optional[ProtocolSpec]:
-    """Find the protocol a script targets: ``--protocol``, else ``meta.protocol`` as a catalog name or a file path."""
-    for ref in [override] if override else [script.meta.protocol, Path(script.meta.protocol).name, Path(script.meta.protocol).stem]:
-        if not ref:
-            continue
-        if Path(ref).is_file():
-            return load_protocol(Path(ref))
-        spec = catalog.get_protocol(ref)
-        if spec:
-            return spec
-    return None
+    """Find the protocol a script targets (shared with the desktop GUI)."""
+    return catalog.resolve_script_protocol(script, override)
 
 
 def _run_script(args: argparse.Namespace, catalog: CatalogManager) -> int:

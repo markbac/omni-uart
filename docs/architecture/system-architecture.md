@@ -128,7 +128,7 @@ flowchart TD
 - **Interactive Web UI**: Zero-dependency FastAPI + WebSockets local web interface. Auto-generates command parameter forms, auto-runs dashboard diagnostics, streams 60 FPS real-time serial traffic, and provides dark/light themes and compact mode.
 - **GUI Launch Mode**: Double-clicking `omni-uart-windows-amd64.exe` (or running zero CLI arguments) automatically starts the Web UI server and opens the browser to `http://localhost:8000`.
 
----
+The native desktop GUI (`omniuart.desktop`) never touches a transport itself. `omniuart.core.background.BackgroundDevice` runs one asyncio loop in a worker thread and exposes connect, disconnect, send, raw send and script execution as futures built on `DeviceSession` and `ScriptRunner`, serialising operations so a poll cannot interleave with a script. Results return to the Tk thread through a queue drained by `after`. `is_safe_poll_command` defines which commands the plotter may poll.
 
 ---
 

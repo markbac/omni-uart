@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import math
-import random
-import struct
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from typing import Any, Callable, Dict, List, Optional
+from concurrent.futures import Future
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from omniuart.core.catalog import CatalogManager
+from omniuart.core.background import VIRTUAL_PORT, is_safe_poll_command
 from omniuart.core.codec import FrameCodec
 from omniuart.core.models import CommandSpec, ProtocolSpec
 from omniuart.core.transport import list_available_ports
@@ -51,10 +50,8 @@ class ConnectionToolbar(ttk.Frame):
 
         # Physical serial settings widgets
         ttk.Label(self, text="Serial Port:", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=4)
-        self.port_var = tk.StringVar(value="COM1")
-        self.port_combo = ttk.Combobox(
-            self, textvariable=self.port_var, values=["COM1", "COM2", "COM3", "/dev/ttyUSB0", "/dev/ttyACM0"], width=10
-        )
+        self.port_var = tk.StringVar(value=VIRTUAL_PORT)
+        self.port_combo = ttk.Combobox(self, textvariable=self.port_var, values=[VIRTUAL_PORT], width=14)
         self.port_combo.pack(side=tk.LEFT, padx=2)
 
         self.refresh_btn = ttk.Button(self, text="🔄", width=3, command=self._refresh_ports)
@@ -135,34 +132,51 @@ class ConnectionToolbar(ttk.Frame):
 
     def _refresh_ports(self) -> None:
         """Scan available physical COM / serial ports and update combobox values."""
-        detected = list_available_ports()
-        port_names = [p["device"] for p in detected] if detected else ["COM1", "COM2", "COM3", "/dev/ttyUSB0", "/dev/ttyACM0"]
+        try:
+            detected = [p["device"] for p in list_available_ports()]
+        except Exception:  # noqa: BLE001 - enumeration can fail on locked-down systems
+            detected = []
+        # Only ports that exist are offered, plus the explicitly simulated virtual device.
+        port_names = detected + [VIRTUAL_PORT]
         self.port_combo["values"] = port_names
-        if port_names and self.port_var.get() not in port_names:
+        if self.port_var.get() not in port_names and not self.is_connected:
             self.port_var.set(port_names[0])
 
     def _toggle_connection(self) -> None:
-        self.is_connected = not self.is_connected
+        """Ask the application to connect or disconnect; the button changes only once it reports back."""
         if self.is_connected:
+            config: Dict[str, Any] = {"connected": False}
+        else:
+            try:
+                config = {
+                    "connected": True,
+                    "port": self.port_var.get().strip(),
+                    "baudrate": int(self.baud_var.get()),
+                    "databits": int(self.databits_var.get()),
+                    "parity": self.parity_var.get(),
+                    "stopbits": float(self.stopbits_var.get()),
+                    "rts": self.rts_var.get(),
+                    "dtr": self.dtr_var.get(),
+                }
+            except ValueError as exc:
+                messagebox.showerror("Connection settings", f"Invalid serial setting: {exc}")
+                return
+            if not config["port"]:
+                messagebox.showerror("Connection settings", "Choose a serial port or the virtual device.")
+                return
+        self.connect_btn.config(state=tk.DISABLED)
+        self.on_connect_toggle(config)
+
+    def set_connected(self, connected: bool, detail: str = "") -> None:
+        """Reflect the real link state reported by the application."""
+        self.is_connected = connected
+        self.connect_btn.config(state=tk.NORMAL)
+        if connected:
             self.connect_btn.config(text="🔌 Disconnect")
-            self.status_label.config(
-                text=f"● Connected ({self.port_var.get()} @ {self.baud_var.get()})", foreground="#16a34a"
-            )
+            self.status_label.config(text=f"● Connected ({detail})", foreground="#16a34a")
         else:
             self.connect_btn.config(text="⚡ Connect")
             self.status_label.config(text="● Disconnected", foreground="#dc2626")
-
-        config = {
-            "connected": self.is_connected,
-            "port": self.port_var.get(),
-            "baudrate": int(self.baud_var.get()),
-            "databits": int(self.databits_var.get()),
-            "parity": self.parity_var.get(),
-            "stopbits": float(self.stopbits_var.get()),
-            "rts": self.rts_var.get(),
-            "dtr": self.dtr_var.get(),
-        }
-        self.on_connect_toggle(config)
 
 
 class DashboardView(ttk.Frame):
@@ -265,7 +279,12 @@ class DashboardView(ttk.Frame):
 class CommandCatalogView(ttk.Frame):
     """Command catalog browser and dynamic parameter builder tab."""
 
-    def __init__(self, parent: tk.Widget, catalog: CatalogManager, on_transmit: Callable[[str, bytes], None]) -> None:
+    def __init__(
+        self,
+        parent: tk.Widget,
+        catalog: CatalogManager,
+        on_transmit: Callable[[ProtocolSpec, str, Dict[str, Any]], None],
+    ) -> None:
         super().__init__(parent, padding=12)
         self.catalog = catalog
         self.on_transmit = on_transmit
@@ -477,71 +496,52 @@ class CommandCatalogView(ttk.Frame):
             param_dict[k] = var.get()
 
         try:
-            raw_bytes = build_frame_payload(self.selected_proto, self.selected_cmd, param_dict)
-            self.on_transmit(self.selected_cmd.name, raw_bytes)
+            build_frame_payload(self.selected_proto, self.selected_cmd, param_dict)  # validate before sending
         except Exception as e:
-            messagebox.showerror("Transmission Error", f"Failed to build payload: {e}")
+            messagebox.showerror("Transmission Error", f"Invalid parameters: {e}")
+            return
+        self.on_transmit(self.selected_proto, self.selected_cmd.name, param_dict)
 
 
 class TelemetryPlotterView(ttk.Frame):
-    """Real-time Canvas Telemetry Line Chart Plotter supporting multi-line signals, periodic command polling, and frequency control."""
+    """Line chart of numeric fields from decoded RX frames, with optional polling of safe commands.
+
+    Nothing is plotted from transmitted bytes or guessed from raw data: only values the protocol codec
+    decoded from a valid device response reach the chart.
+    """
+
+    MAX_POINTS = 100
 
     def __init__(
         self,
         parent: tk.Widget,
         catalog: Optional[CatalogManager] = None,
-        on_transmit: Optional[Callable[[str, bytes], None]] = None,
+        on_poll: Optional[Callable[[ProtocolSpec, str], Optional["Future[Any]"]]] = None,
     ) -> None:
         super().__init__(parent, padding=12)
         self.catalog = catalog
-        self.on_transmit = on_transmit
+        self.on_poll = on_poll
         self.channel_1_points: List[float] = []
         self.channel_2_points: List[float] = []
-        self.data_points: List[float] = []
+        self.channel_names: List[str] = ["", ""]
         self.is_running = True
         self.is_polling = False
         self.poll_timer_id: Optional[str] = None
-        self.poll_payload_map: Dict[str, bytes] = {
-            "⚡ AT Ping": b"AT\r\n",
-            "📶 Signal CSQ": b"AT+CSQ\r\n",
-            "🔋 Battery CBC": b"AT+CBC\r\n",
-            "🌐 Network CREG?": b"AT+CREG?\r\n",
-            "⚙️ Modbus Read": b"\x01\x03\x00\x00\x00\x02\xC4\x0B",
-        }
+        self._poll_future: Optional["Future[Any]"] = None
+        self.poll_targets: Dict[str, Tuple[ProtocolSpec, str]] = {}
 
-        # Header toolbar 1: Channel & Controls
         toolbar1 = ttk.Frame(self)
         toolbar1.pack(fill=tk.X, pady=(0, 4))
-
-        ttk.Label(toolbar1, text="📈 Real-Time Telemetry Plotter", font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
-
-        ttk.Label(toolbar1, text="  Signal Channel:").pack(side=tk.LEFT, padx=(8, 2))
-        self.metric_var = tk.StringVar(value="Analog Sensor Voltage (mV)")
-        self.metric_combo = ttk.Combobox(
-            toolbar1,
-            textvariable=self.metric_var,
-            values=[
-                "Analog Sensor Voltage (mV)",
-                "Device Signal Strength (CSQ %)",
-                "MCU Internal Temperature (°C)",
-                "Battery Supply Voltage (V)",
-            ],
-            state="readonly",
-            width=26,
-        )
-        self.metric_combo.pack(side=tk.LEFT, padx=2)
-
+        ttk.Label(toolbar1, text="📈 Live Telemetry (decoded RX fields)", font=("Segoe UI", 11, "bold")).pack(side=tk.LEFT)
         self.pause_btn = ttk.Button(toolbar1, text="Pause Plotter", command=self._toggle_plotter)
         self.pause_btn.pack(side=tk.RIGHT, padx=4)
         ttk.Button(toolbar1, text="Clear Data", command=self._clear_plotter).pack(side=tk.RIGHT, padx=4)
 
-        # Header toolbar 2: Telemetry Polling Command & Frequency Interval
         toolbar2 = ttk.Frame(self)
         toolbar2.pack(fill=tk.X, pady=(0, 6))
-
         ttk.Label(toolbar2, text="Poll Command:", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(0, 4))
-        self.cmd_var = tk.StringVar(value="⚡ AT Ping")
-        self.cmd_combo = ttk.Combobox(toolbar2, textvariable=self.cmd_var, values=list(self.poll_payload_map.keys()), width=24)
+        self.cmd_var = tk.StringVar()
+        self.cmd_combo = ttk.Combobox(toolbar2, textvariable=self.cmd_var, state="readonly", width=34)
         self.cmd_combo.pack(side=tk.LEFT, padx=2)
 
         ttk.Label(toolbar2, text="Frequency:", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=(10, 4))
@@ -554,46 +554,34 @@ class TelemetryPlotterView(ttk.Frame):
             width=8,
         )
         self.interval_combo.pack(side=tk.LEFT, padx=2)
-
         self.poll_btn = ttk.Button(toolbar2, text="▶ Start Auto-Poll", command=self._toggle_auto_poll)
         self.poll_btn.pack(side=tk.LEFT, padx=8)
 
-        # Signal description label
-        desc_label = ttk.Label(
+        ttk.Label(
             self,
-            text="Visualizing real-time multi-channel UART telemetry waveforms (Line 1 Cyan = Primary payload, Line 2 Green = Secondary payload).",
+            text="Only read-only commands tagged 'dashboard' with defaulted parameters can be polled. "
+            "Ch1 and Ch2 are the first two numeric fields of each decoded response.",
             foreground="#64748b",
             font=("Segoe UI", 9, "italic"),
-        )
-        desc_label.pack(anchor="w", pady=(0, 6))
+            wraplength=900,
+        ).pack(anchor="w", pady=(0, 6))
 
-        # Real-time statistics banner
         stats_frame = ttk.Frame(self)
         stats_frame.pack(fill=tk.X, pady=(0, 8))
-
         self.cur_val_var = tk.StringVar(value="Ch1 (Cyan): --")
         self.ch2_val_var = tk.StringVar(value="Ch2 (Green): --")
         self.min_val_var = tk.StringVar(value="Min: --")
         self.max_val_var = tk.StringVar(value="Max: --")
         self.avg_val_var = tk.StringVar(value="Avg: --")
+        for var, colour in (
+            (self.cur_val_var, "#38bdf8"),
+            (self.ch2_val_var, "#4ade80"),
+            (self.min_val_var, "#94a3b8"),
+            (self.max_val_var, "#94a3b8"),
+            (self.avg_val_var, "#94a3b8"),
+        ):
+            ttk.Label(stats_frame, textvariable=var, font=("Consolas", 10, "bold"), foreground=colour).pack(side=tk.LEFT, padx=(0, 12))
 
-        ttk.Label(stats_frame, textvariable=self.cur_val_var, font=("Consolas", 10, "bold"), foreground="#38bdf8").pack(
-            side=tk.LEFT, padx=(0, 12)
-        )
-        ttk.Label(stats_frame, textvariable=self.ch2_val_var, font=("Consolas", 10, "bold"), foreground="#4ade80").pack(
-            side=tk.LEFT, padx=12
-        )
-        ttk.Label(stats_frame, textvariable=self.min_val_var, font=("Consolas", 10), foreground="#94a3b8").pack(
-            side=tk.LEFT, padx=12
-        )
-        ttk.Label(stats_frame, textvariable=self.max_val_var, font=("Consolas", 10), foreground="#94a3b8").pack(
-            side=tk.LEFT, padx=12
-        )
-        ttk.Label(stats_frame, textvariable=self.avg_val_var, font=("Consolas", 10), foreground="#94a3b8").pack(
-            side=tk.LEFT, padx=12
-        )
-
-        # Plotter canvas
         self.canvas = tk.Canvas(self, bg="#0f172a", highlightthickness=1, highlightbackground="#334155")
         self.canvas.pack(fill=tk.BOTH, expand=True)
 
@@ -601,27 +589,26 @@ class TelemetryPlotterView(ttk.Frame):
         self._draw_chart()
 
     def _refresh_poll_commands(self) -> None:
-        """Populate poll command options from active protocol catalog."""
-        if not self.catalog:
-            return
-        summary = self.catalog.catalog_summary()
-        for p in summary.get("protocols", []):
-            spec = self.catalog.get_protocol(p.get("filename", ""))
-            if not spec:
-                continue
-            for cmd in spec.commands:
-                cmd_label = f"⚡ {spec.metadata.name}: {cmd.name}"
-                if cmd_label not in self.poll_payload_map:
-                    try:
-                        raw_b = build_frame_payload(spec, cmd, {})
-                        self.poll_payload_map[cmd_label] = raw_b
-                    except Exception:
-                        pass
-
-        self.cmd_combo["values"] = list(self.poll_payload_map.keys())
+        """Offer only commands that are safe to repeat unattended (see ``is_safe_poll_command``)."""
+        self.poll_targets = {}
+        if self.catalog:
+            for entry in self.catalog.catalog_summary().get("protocols", []):
+                spec = self.catalog.get_protocol(entry.get("filename", ""))
+                if not spec:
+                    continue
+                for cmd in spec.commands:
+                    if is_safe_poll_command(cmd):
+                        self.poll_targets[f"{spec.metadata.name}: {cmd.name}"] = (spec, cmd.name)
+        labels = list(self.poll_targets)
+        self.cmd_combo["values"] = labels
+        if labels and self.cmd_var.get() not in self.poll_targets:
+            self.cmd_var.set(labels[0])
 
     def _toggle_auto_poll(self) -> None:
-        """Start or stop periodic telemetry command polling timer."""
+        """Start or stop periodic polling of the selected safe command."""
+        if not self.is_polling and self.cmd_var.get() not in self.poll_targets:
+            messagebox.showinfo("Auto-Poll", "No pollable command is available (needs a 'dashboard' command with defaulted parameters).")
+            return
         self.is_polling = not self.is_polling
         if self.is_polling:
             self.poll_btn.config(text="⏹ Stop Polling")
@@ -632,21 +619,25 @@ class TelemetryPlotterView(ttk.Frame):
                 self.after_cancel(self.poll_timer_id)
                 self.poll_timer_id = None
 
+    @staticmethod
+    def _interval_ms(text: str) -> int:
+        text = text.strip()
+        if text.endswith("ms"):
+            return int(float(text[:-2]))
+        return int(float(text.rstrip("s").strip()) * 1000)
+
     def _trigger_poll(self) -> None:
         if not self.is_polling:
             return
-        cmd_text = self.cmd_var.get()
-        payload = self.poll_payload_map.get(cmd_text, b"AT\r\n")
-        if self.on_transmit:
-            self.on_transmit(f"Poll: {cmd_text}", payload)
-
-        interval_raw = self.interval_var.get()
-        if "s" in interval_raw and "ms" not in interval_raw:
-            interval_ms = int(float(interval_raw.replace(" s", "").strip()) * 1000)
-        else:
-            interval_ms = int(interval_raw.replace(" ms", "").strip())
-
-        self.poll_timer_id = self.after(max(100, interval_ms), self._trigger_poll)
+        target = self.poll_targets.get(self.cmd_var.get())
+        busy = self._poll_future is not None and not self._poll_future.done()
+        if target and self.on_poll and not busy:
+            future = self.on_poll(target[0], target[1])
+            if future is None:  # not connected: stop instead of polling a dead link
+                self._toggle_auto_poll()
+                return
+            self._poll_future = future
+        self.poll_timer_id = self.after(max(100, self._interval_ms(self.interval_var.get())), self._trigger_poll)
 
     def _toggle_plotter(self) -> None:
         self.is_running = not self.is_running
@@ -655,63 +646,21 @@ class TelemetryPlotterView(ttk.Frame):
     def _clear_plotter(self) -> None:
         self.channel_1_points = []
         self.channel_2_points = []
-        self.data_points = []
         self._draw_chart()
 
-    def push_value(self, val: float) -> None:
-        """Push single real telemetry reading into Channel 1 dataset."""
-        self.channel_1_points.append(val)
-        if len(self.channel_1_points) > 100:
-            self.channel_1_points.pop(0)
-        self.data_points = self.channel_1_points
-        self._draw_chart()
-
-    def push_telemetry_bytes(self, data: bytes) -> None:
-        """Parse incoming real serial payload bytes and push multi-channel numerical readings to chart."""
-        if not data or not self.is_running:
+    def push_fields(self, fields: Mapping[str, Any]) -> None:
+        """Plot the first two numeric fields of one decoded RX frame."""
+        if not self.is_running:
             return
-
-        vals: List[float] = []
-        try:
-            text = data.decode("utf-8", errors="ignore").strip()
-            numbers = re.findall(r"[-+]?\d*\.\d+|\d+", text)
-            for n_str in numbers:
-                parsed_val = float(n_str)
-                if parsed_val > 100.0 and parsed_val <= 4096.0:
-                    scaled = (parsed_val / 4095.0) * 100.0
-                elif parsed_val > 100.0:
-                    scaled = parsed_val % 100.0
-                else:
-                    scaled = parsed_val
-                vals.append(max(0.0, min(100.0, scaled)))
-        except Exception:
-            pass
-
-        if not vals and len(data) >= 1:
-            if len(data) >= 4:
-                raw1 = (data[0] << 8) | data[1]
-                raw2 = (data[2] << 8) | data[3]
-                vals = [(raw1 / 65535.0) * 100.0, (raw2 / 65535.0) * 100.0]
-            elif len(data) >= 2:
-                raw1 = (data[-2] << 8) | data[-1]
-                vals = [(raw1 / 65535.0) * 100.0]
-            else:
-                vals = [(data[0] / 255.0) * 100.0]
-
-        if vals:
-            self.channel_1_points.append(vals[0])
-            if len(self.channel_1_points) > 100:
-                self.channel_1_points.pop(0)
-
-            if len(vals) > 1:
-                self.channel_2_points.append(vals[1])
-            elif self.channel_2_points:
-                self.channel_2_points.append(self.channel_2_points[-1])
-            if len(self.channel_2_points) > 100:
-                self.channel_2_points.pop(0)
-
-            self.data_points = self.channel_1_points
-            self._draw_chart()
+        numeric = [(k, float(v)) for k, v in fields.items() if isinstance(v, (int, float)) and not isinstance(v, bool)]
+        if not numeric:
+            return
+        for index, points in enumerate((self.channel_1_points, self.channel_2_points)):
+            if index < len(numeric):
+                self.channel_names[index] = numeric[index][0]
+                points.append(numeric[index][1])
+                del points[: -self.MAX_POINTS]
+        self._draw_chart()
 
     def _draw_chart(self) -> None:
         self.canvas.delete("all")
@@ -720,99 +669,89 @@ class TelemetryPlotterView(ttk.Frame):
         if w < 100 or h < 100:
             return
 
-        margin_left = 55
-        margin_bottom = 30
+        margin_left, margin_bottom = 70, 30
         plot_w = w - margin_left - 15
         plot_h = h - margin_bottom - 20
-
-        # Draw grid lines & Y-axis scale labels (0% to 100%)
-        for i in range(5):
-            pct = 100 - i * 25
-            y = 20 + i * (plot_h / 4.0)
-            self.canvas.create_line(margin_left, y, w - 15, y, fill="#1e293b", dash=(2, 4))
-            self.canvas.create_text(margin_left - 8, y, text=f"{pct}%", fill="#64748b", font=("Consolas", 8), anchor="e")
-
-        # Draw X-axis line and label
-        self.canvas.create_line(margin_left, 20 + plot_h, w - 15, 20 + plot_h, fill="#334155")
-        self.canvas.create_text(
-            w / 2 + margin_left / 2, h - 10, text="Incoming Serial RX Samples", fill="#64748b", font=("Segoe UI", 8, "italic")
-        )
-
-        metric_name = self.metric_var.get()
-        unit = "%" if "%" in metric_name else ("mV" if "mV" in metric_name else ("°C" if "°C" in metric_name else "V"))
 
         if not self.channel_1_points:
             self.canvas.create_text(
                 w / 2 + margin_left / 2,
                 h / 2,
-                text="📡 Waiting for real UART serial telemetry packets...\n(Use '▶ Start Auto-Poll' to query device at selected frequency)",
+                text="📡 Waiting for decoded device responses...\n(Transmit a command or use '▶ Start Auto-Poll')",
                 fill="#64748b",
                 font=("Segoe UI", 10, "italic"),
                 justify="center",
             )
-            self.cur_val_var.set(f"Ch1 (Cyan): -- {unit}")
-            self.ch2_val_var.set(f"Ch2 (Green): -- {unit}")
-            self.min_val_var.set(f"Min: -- {unit}")
-            self.max_val_var.set(f"Max: -- {unit}")
-            self.avg_val_var.set(f"Avg: -- {unit}")
+            for var, label in (
+                (self.cur_val_var, "Ch1 (Cyan)"),
+                (self.ch2_val_var, "Ch2 (Green)"),
+                (self.min_val_var, "Min"),
+                (self.max_val_var, "Max"),
+                (self.avg_val_var, "Avg"),
+            ):
+                var.set(f"{label}: --")
             return
 
-        # Plot Channel 1 Waveform (Cyan)
-        step = plot_w / max(1, len(self.channel_1_points) - 1)
-        coords1 = []
-        for i, val in enumerate(self.channel_1_points):
-            x = margin_left + i * step
-            y = (20 + plot_h) - (val / 100.0 * plot_h)
-            coords1.extend([x, y])
+        everything = self.channel_1_points + self.channel_2_points
+        lo, hi = min(everything), max(everything)
+        if hi == lo:
+            lo, hi = lo - 1.0, hi + 1.0
+        pad = (hi - lo) * 0.05
+        lo, hi = lo - pad, hi + pad
 
-        if len(coords1) >= 4:
-            self.canvas.create_line(*coords1, fill="#38bdf8", width=2, smooth=True)
+        def y_of(value: float) -> float:
+            return (20 + plot_h) - (value - lo) / (hi - lo) * plot_h
 
-        # Plot Channel 2 Waveform (Green) if present
-        if self.channel_2_points:
-            step2 = plot_w / max(1, len(self.channel_2_points) - 1)
-            coords2 = []
-            for i, val in enumerate(self.channel_2_points):
-                x = margin_left + i * step2
-                y = (20 + plot_h) - (val / 100.0 * plot_h)
-                coords2.extend([x, y])
+        for i in range(5):
+            y = 20 + i * (plot_h / 4.0)
+            self.canvas.create_line(margin_left, y, w - 15, y, fill="#1e293b", dash=(2, 4))
+            self.canvas.create_text(margin_left - 8, y, text=f"{hi - i * (hi - lo) / 4.0:.4g}", fill="#64748b", font=("Consolas", 8), anchor="e")
+        self.canvas.create_line(margin_left, 20 + plot_h, w - 15, 20 + plot_h, fill="#334155")
+        self.canvas.create_text(
+            w / 2 + margin_left / 2, h - 10, text="Decoded RX samples", fill="#64748b", font=("Segoe UI", 8, "italic")
+        )
 
-            if len(coords2) >= 4:
-                self.canvas.create_line(*coords2, fill="#4ade80", width=2, smooth=True)
+        for points, colour in ((self.channel_1_points, "#38bdf8"), (self.channel_2_points, "#4ade80")):
+            if len(points) >= 2:
+                step = plot_w / (len(points) - 1)
+                coords: List[float] = []
+                for i, val in enumerate(points):
+                    coords.extend([margin_left + i * step, y_of(val)])
+                self.canvas.create_line(*coords, fill=colour, width=2)
+            elif points:
+                self.canvas.create_oval(margin_left - 2, y_of(points[0]) - 2, margin_left + 2, y_of(points[0]) + 2, fill=colour, outline=colour)
 
-        # Multi-Channel Legend box top-right
+        name1 = self.channel_names[0] or "Ch1"
+        name2 = self.channel_names[1] or "Ch2"
         self.canvas.create_rectangle(w - 270, 20, w - 20, 65, fill="#1e293b", outline="#334155")
         self.canvas.create_line(w - 260, 32, w - 230, 32, fill="#38bdf8", width=2)
-        self.canvas.create_text(w - 225, 32, text="Line 1 (Cyan): Primary", fill="#f8fafc", font=("Segoe UI", 8, "bold"), anchor="w")
-
+        self.canvas.create_text(w - 225, 32, text=f"Line 1: {name1}", fill="#f8fafc", font=("Segoe UI", 8, "bold"), anchor="w")
         self.canvas.create_line(w - 260, 52, w - 230, 52, fill="#4ade80", width=2)
-        self.canvas.create_text(w - 225, 52, text="Line 2 (Green): Secondary", fill="#f8fafc", font=("Segoe UI", 8, "bold"), anchor="w")
+        self.canvas.create_text(w - 225, 52, text=f"Line 2: {name2}", fill="#f8fafc", font=("Segoe UI", 8, "bold"), anchor="w")
 
-        # Update stats banners
-        curr1 = self.channel_1_points[-1]
-        mn1 = min(self.channel_1_points)
-        mx1 = max(self.channel_1_points)
-        avg1 = sum(self.channel_1_points) / len(self.channel_1_points)
-
-        self.cur_val_var.set(f"Ch1 (Cyan): {curr1:.1f} {unit}")
-        if self.channel_2_points:
-            self.ch2_val_var.set(f"Ch2 (Green): {self.channel_2_points[-1]:.1f} {unit}")
-        else:
-            self.ch2_val_var.set(f"Ch2 (Green): N/A")
-
-        self.min_val_var.set(f"Min: {mn1:.1f} {unit}")
-        self.max_val_var.set(f"Max: {mx1:.1f} {unit}")
-        self.avg_val_var.set(f"Avg: {avg1:.1f} {unit}")
+        p1 = self.channel_1_points
+        self.cur_val_var.set(f"{name1} (Cyan): {p1[-1]:.4g}")
+        self.ch2_val_var.set(f"{name2} (Green): {self.channel_2_points[-1]:.4g}" if self.channel_2_points else "Ch2 (Green): N/A")
+        self.min_val_var.set(f"Min: {min(p1):.4g}")
+        self.max_val_var.set(f"Max: {max(p1):.4g}")
+        self.avg_val_var.set(f"Avg: {sum(p1) / len(p1):.4g}")
 
 
 class AutomationScriptRunnerView(ttk.Frame):
-    """Interactive Automation Sequence Runner Tab."""
+    """Runs a script with the shared :class:`ScriptRunner` and shows the real result of every step."""
 
-    def __init__(self, parent: tk.Widget, catalog: CatalogManager, on_transmit: Callable[[str, bytes], None]) -> None:
+    def __init__(
+        self,
+        parent: tk.Widget,
+        catalog: CatalogManager,
+        on_run: Callable[..., Optional["Future[Any]"]],
+    ) -> None:
+        """``on_run(script, spec, on_step, on_done)`` starts the run and returns its future (None if not connected)."""
         super().__init__(parent, padding=12)
         self.catalog = catalog
-        self.on_transmit = on_transmit
+        self.on_run = on_run
         self.is_running = False
+        self._future: Optional["Future[Any]"] = None
 
         paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
         paned.pack(fill=tk.BOTH, expand=True)
@@ -832,13 +771,10 @@ class AutomationScriptRunnerView(ttk.Frame):
         self.stop_btn = ttk.Button(controls, text="⏹ Stop", command=self._stop_script, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=2)
 
-        self.steps_tree = ttk.Treeview(left_frame, columns=("step", "cmd", "delay"), show="headings", height=8)
-        self.steps_tree.heading("step", text="Step")
-        self.steps_tree.heading("cmd", text="Command")
-        self.steps_tree.heading("delay", text="Delay (ms)")
-        self.steps_tree.column("step", width=50)
-        self.steps_tree.column("cmd", width=160)
-        self.steps_tree.column("delay", width=80)
+        self.steps_tree = ttk.Treeview(left_frame, columns=("step", "cmd", "delay", "result"), show="headings", height=8)
+        for column, title, width in (("step", "Step", 45), ("cmd", "Command", 150), ("delay", "Delay (ms)", 75), ("result", "Result", 80)):
+            self.steps_tree.heading(column, text=title)
+            self.steps_tree.column(column, width=width)
         self.steps_tree.pack(fill=tk.BOTH, expand=True, pady=8)
 
         right_frame = ttk.LabelFrame(paned, text=" Execution Output Log ", padding=8)
@@ -849,10 +785,13 @@ class AutomationScriptRunnerView(ttk.Frame):
 
         self._populate_scripts()
 
+    def _log(self, text: str) -> None:
+        self.log_text.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] {text}\n")
+        self.log_text.see(tk.END)
+
     def _populate_scripts(self) -> None:
         summary = self.catalog.catalog_summary()
-        scripts = summary.get("scripts", [])
-        script_ids = [s.get("filename", "") for s in scripts]
+        script_ids = [s.get("filename", "") for s in summary.get("scripts", [])]
         self.script_combo["values"] = script_ids
         if script_ids:
             self.script_var.set(script_ids[0])
@@ -862,54 +801,70 @@ class AutomationScriptRunnerView(ttk.Frame):
     def _load_steps(self, script_id: str) -> None:
         for item in self.steps_tree.get_children():
             self.steps_tree.delete(item)
-
         script = self.catalog.get_script(script_id)
-        if not script or not hasattr(script, "steps"):
+        if not script:
             return
-
         for idx, step in enumerate(script.steps, 1):
-            cmd_name = getattr(step, "command", getattr(step, "name", str(step)))
-            delay = getattr(step, "delay_ms", 100)
-            self.steps_tree.insert("", tk.END, values=(idx, cmd_name, delay))
+            label = step.command or step.name or ("delay" if step.delay_ms else "log")
+            self.steps_tree.insert("", tk.END, iid=str(idx), values=(idx, label, step.delay_ms or "", ""))
 
     def _run_script(self) -> None:
+        script = self.catalog.get_script(self.script_var.get())
+        if script is None:
+            self._log(f"Cannot load script '{self.script_var.get()}'.")
+            return
+        spec = self.catalog.resolve_script_protocol(script)
+        if spec is None:
+            self._log(f"Cannot run: protocol '{script.meta.protocol}' referenced by the script was not found.")
+            return
+        self._load_steps(self.script_var.get())
+        future = self.on_run(script, spec, self._on_step, self._on_done)
+        if future is None:
+            self._log("Not connected. Connect a serial port or the virtual device first.")
+            return
+        self._future = future
         self.is_running = True
         self.run_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
-        self.log_text.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] Starting script execution...\n")
-        self.log_text.see(tk.END)
-        self._execute_step(0)
+        self._log(f"Starting '{script.meta.name}' on the connected link...")
 
-    def _execute_step(self, step_idx: int) -> None:
-        children = self.steps_tree.get_children()
-        if not self.is_running or step_idx >= len(children):
-            self._stop_script()
-            self.log_text.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] Script execution completed successfully.\n")
-            self.log_text.see(tk.END)
-            return
+    def _on_step(self, result: Any) -> None:
+        """Called on the Tk thread with a :class:`StepResult`."""
+        iid = str(result.index)
+        if self.steps_tree.exists(iid):
+            self.steps_tree.set(iid, "result", result.status.value.upper())
+        detail = f" - {result.message}" if result.message else ""
+        self._log(f"Step {result.index} {result.name}: {result.status.value.upper()}{detail} ({result.duration_ms:.0f} ms)")
+        for assertion in result.assertions:
+            mark = "PASS" if assertion.passed else "FAIL"
+            self._log(f"    {mark} {assertion.field} {assertion.op} {assertion.expected!r} (actual {assertion.actual!r})")
 
-        item = self.steps_tree.item(children[step_idx])
-        vals = item.get("values", [])
-        cmd_name, delay = vals[1], int(vals[2])
+    def _on_done(self, result: Any, error: Optional[BaseException], cancelled: bool) -> None:
+        """Called on the Tk thread when the run ends."""
+        if cancelled:
+            self._log("Script stopped.")
+        elif error is not None:
+            self._log(f"Script aborted: {type(error).__name__}: {error}")
+        else:
+            self._log(f"Script {'PASSED' if result.passed else 'FAILED'} (exit code {result.exit_code}).")
+        self._finish()
 
-        self.log_text.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] Step {step_idx + 1}: Executing {cmd_name}...\n")
-        self.log_text.see(tk.END)
-
-        # Trigger mock payload
-        self.on_transmit(str(cmd_name), b"\xAA\xBB\xCC")
-
-        self.after(delay, lambda: self._execute_step(step_idx + 1))
-
-    def _stop_script(self) -> None:
+    def _finish(self) -> None:
         self.is_running = False
+        self._future = None
         self.run_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
+
+    def _stop_script(self) -> None:
+        if self._future is not None:
+            self._future.cancel()
 
 
 class CommsStreamerView(ttk.Frame):
     """Raw Hex/ASCII Comms Streamer Console Tab with Dual Decoded Packet Field Breakdown."""
 
     def __init__(self, parent: tk.Widget, on_transmit: Callable[[str, bytes], None]) -> None:
+        """``on_transmit(label, raw_bytes)`` sends raw bytes on the link and logs the traffic."""
         super().__init__(parent, padding=12)
         self.on_transmit = on_transmit
         self.is_recording = False
@@ -945,24 +900,8 @@ class CommsStreamerView(ttk.Frame):
         self.console.tag_config("RX", foreground="#4ade80")
         self.console.tag_config("ERR", foreground="#f87171")
         self.console.tag_config("TIME", foreground="#64748b")
+        self.console.tag_config("SYS", foreground="#a78bfa")
         self.console.tag_config("DECODED", foreground="#fbbf24")
-
-        # Macro shortcuts bar
-        macro_bar = ttk.Frame(self)
-        macro_bar.pack(fill=tk.X, pady=(6, 0))
-
-        ttk.Label(macro_bar, text="Quick IoT Macros:", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=4)
-
-        macros = [
-            ("⚡ AT Ping", b"AT\r\n"),
-            ("📶 Signal CSQ", b"AT+CSQ\r\n"),
-            ("🔋 Battery CBC", b"AT+CBC\r\n"),
-            ("🌐 Network CREG?", b"AT+CREG?\r\n"),
-            ("⚙️ Modbus Read", b"\x01\x03\x00\x00\x00\x02\xC4\x0B"),
-        ]
-
-        for label, raw_b in macros:
-            ttk.Button(macro_bar, text=label, command=lambda b=raw_b, l=label: self._send_macro(l, b)).pack(side=tk.LEFT, padx=2)
 
         # Raw transmit bar
         tx_bar = ttk.Frame(self)
@@ -975,47 +914,24 @@ class CommsStreamerView(ttk.Frame):
 
         ttk.Button(tx_bar, text="Send Packet", command=self._send_raw).pack(side=tk.RIGHT, padx=4)
 
-    def _send_macro(self, label: str, data: bytes) -> None:
-        """Transmit macro shortcut frame payload."""
-        self.log("TX", data, f"Macro: {label}")
-        self.on_transmit(f"Macro: {label}", data)
-
-    def _decode_packet_fields(self, data: bytes) -> str:
-        """Decode raw packet into structured semantic fields and framing breakdown."""
+    @staticmethod
+    def _describe_bytes(data: bytes) -> str:
+        """Plain facts about the bytes (length and ASCII/binary); no field layout is guessed."""
         if not data:
-            return "Empty packet"
-
-        fields = [f"Length: {len(data)}B"]
+            return "Length: 0B"
         is_ascii = all(32 <= b <= 126 or b in (10, 13) for b in data)
+        return f"Length: {len(data)}B | Type: {'ASCII' if is_ascii else 'Binary'}"
 
-        if is_ascii:
-            fields.append("Type: ASCII")
-            fields.append(f'Data: "{data.decode("utf-8", errors="replace").strip()}"')
-        else:
-            fields.append("Type: Binary")
-            if len(data) >= 1:
-                fields.append(f"Header: 0x{data[0]:02X}")
-            if len(data) >= 2:
-                fields.append(f"Opcode/ID: 0x{data[1]:02X}")
-            if len(data) > 3:
-                payload_hex = data[2:-1].hex().upper()
-                fields.append(f"Payload ({len(data)-3}B): 0x{payload_hex}")
-                fields.append(f"CRC/Check: 0x{data[-1]:02X}")
-            elif len(data) == 3:
-                fields.append(f"Payload: 0x{data[2]:02X}")
-
-        return " | ".join(fields)
-
-    def log(self, direction: str, data: bytes, label: str = "") -> None:
-        """Append RX/TX packet event to console with dual raw/decoded formatting."""
+    def log(self, direction: str, data: bytes, label: str = "", decoded: str = "") -> None:
+        """Append a TX/RX/ERR/SYS event. ``decoded`` is the codec's decoded fields, when there are any."""
         now = time.time()
         ts = f"[{time.strftime('%H:%M:%S', time.localtime(now))}.{int((now % 1) * 1000):03d}]"
         hex_str = " ".join(f"{b:02X}" for b in data)
         ascii_str = "".join(chr(b) if 32 <= b <= 126 else "." for b in data)
-        decoded_fields = self._decode_packet_fields(data)
+        decoded_fields = self._describe_bytes(data) + (f" | {decoded}" if decoded else "")
 
         mode = self.mode_var.get()
-        dir_tag = "TX" if direction.upper() == "TX" else "RX"
+        dir_tag = direction.upper() if direction.upper() in ("TX", "RX", "ERR", "SYS") else "RX"
         tag_str = f"[{dir_tag}] {label}: " if label else f"[{dir_tag}]: "
 
         self.console.insert(tk.END, f"{ts} ", "TIME")
@@ -1030,7 +946,6 @@ class CommsStreamerView(ttk.Frame):
         elif mode == "Hex + ASCII":
             self.console.insert(tk.END, f"{hex_str} | '{ascii_str}'\n")
         else:
-            # Dual (Raw Hex + Decoded Fields)
             self.console.insert(tk.END, f"{hex_str} | '{ascii_str}'\n")
             self.console.insert(tk.END, f"    └─ Decoded: {decoded_fields}\n", "DECODED")
 
@@ -1081,6 +996,5 @@ class CommsStreamerView(ttk.Frame):
         except ValueError:
             raw_bytes = raw_text.encode("utf-8")
 
-        self.log("TX", raw_bytes, "Raw Direct")
         self.on_transmit("Raw Direct", raw_bytes)
         self.raw_input.delete(0, tk.END)
