@@ -10,7 +10,8 @@ The **OmniUART Script Specification** provides a declarative language in YAML or
 An OmniUART script comprises:
 - `meta`: Name, description, author, and associated protocol definition reference.
 - `configuration`: Overrides for serial port parameters, default step timeouts, and error handling policies (`abort` vs `continue`).
-- `steps`: An ordered list of execution instructions (`send`, `expect`, `assert`, `delay_ms`, `log`, `loop`).
+- `variables` *(optional)*: Initial variables available as `${name}` in step parameters, assertion values and log messages.
+- `steps`: An ordered list of execution instructions (a `command` with optional `assertions`, `delay_ms`, `log`).
 
 ```yaml
 version: "1.0.0"
@@ -62,9 +63,12 @@ Dispatches an outbound message defined in the protocol schema:
 | `name` | string | No | Descriptive label for the test step. |
 | `command` | string | Yes | Protocol command name matching the protocol definition. |
 | `params` | object | No | Key-value mapping of parameter values. |
-| `expect_response` | string | No | Name of expected response frame. |
-| `timeout_ms` | integer | No | Step-specific timeout override. |
-| `assertions` | list | No | Verification conditions checked against response fields. |
+| `expect_response` | string | No | Label for the expected response. Declares that the step requires a response; the command must define a `response` in the protocol, otherwise the script is invalid. |
+| `timeout_ms` | integer | No | Step-specific response timeout override. |
+| `assertions` | list | No | Verification conditions checked against the decoded response fields. |
+| `save` | object | No | Maps variable names to response fields, e.g. `{previous: value}`. |
+
+The response timeout is the step's `timeout_ms`, else `config.default_timeout_ms` when the script sets it, else the command's own `response.timeout_ms`. A `delay_ms` or `log` on a command step runs before the command is sent.
 
 [[CAPTION:Table]] Command step properties.
 
@@ -82,19 +86,23 @@ Outputs user-defined messages or variable values to console and test reports:
   log: "Phase 1 calibration completed."
 ```
 
-### 3.4 `repeat` / `loop` Step
-Executes a sub-sequence multiple times or iterates across parameter values:
+### 3.4 Variables
+Variables come from the script's `variables` map, from values passed by the caller, and from `save` on earlier steps. `${name}` is replaced in step `params`, assertion `value` and `log` text. A value that is exactly one reference keeps the variable's type (`value: "${previous}"` stays an integer); inside longer text it is converted to a string. Referencing an undefined variable is a script error.
+
 ```yaml
-- name: "Voltage Ramp"
-  repeat: 5
-  with_variable:
-    name: "step_idx"
-  steps:
-    - command: "set_dac"
-      params:
-        channel: 0
-        raw_value: "{{ step_idx * 1000 }}"
+variables:
+  target: 42
+steps:
+  - command: "set_temperature"
+    params: { target_temp: "${target}" }
+  - command: "get_readings"
+    save: { measured: "temperature" }
+    assertions:
+      - { field: "temperature", op: "tolerance", value: "${target}", tolerance: 2.0 }
+  - log: "measured ${measured}"
 ```
+
+> **Note:** `repeat` / `loop` steps are not implemented. A step that has none of `command`, `delay_ms` or `log` is reported as an error rather than being skipped, so an unsupported construct can never make a script pass.
 
 ---
 
@@ -111,20 +119,25 @@ Assertions validate field values returned in the device's response payload:
 | `>` | Greater than | `voltage > 3.0` |
 | `>=` | Greater than or equal | `rssi >= -80` |
 | `in` | Value is member of set | `state in [1, 2, 4]` |
-| `tolerance` | Floating point approx equality | `measured_v == 3.3 (within 0.05)` |
+| `tolerance` | Floating point approx equality; requires the assertion's `tolerance` value (`==` with `tolerance` set behaves the same) | `measured_v == 3.3 (within 0.05)` |
 
 [[CAPTION:Table]] Supported assertion operators.
+
+The kit-format names `equals`, `notEquals`, `lessThan`, `lessThanOrEqual`, `greaterThan` and `greaterThanOrEqual` (and `eq`, `ne`, `lt`, `le`, `gt`, `ge`) are accepted as aliases. An unknown operator is a script error. A field that is missing from the response, or values that cannot be compared, fail the assertion.
 
 ---
 
 ## 5. Execution Reporting & Exit Codes
-The script execution engine generates structured test reports:
-- **Console Summary**: Rich-rendered table displaying step names, execution duration, payload bytes, evaluated assertions, and pass/fail indicators.
-- **Machine-Readable JSON**: Complete JSON artifact containing every transmitted/received frame with timestamps and assertion outcomes.
-- **JUnit XML Report**: Standard CI test format compatible with GitHub Actions, Jenkins, and GitLab CI.
+The engine (`omniuart.core.runner.ScriptRunner`, driven by `omni-uart run`) executes steps in order against a real or simulated device and reports each step as `passed`, `failed` (the device did not behave as required: timeout, invalid response or failed assertion), `error` (the script or link is broken) or `skipped` (an earlier step failed and `abort_on_error` is `true`). With `abort_on_error: false` execution continues after a failure.
+
+- **Console Summary**: One line per step with duration and failure reason, then a result line.
+- **Machine-Readable JSON** (`--report file.json`): Every step with its request and response bytes, decoded fields and assertion outcomes.
+- **Session Recording** (`--record file.jsonl`): Every transmitted and received frame, replayable with `omni-uart replay`.
+
+> **Note:** JUnit XML output is not implemented yet.
 
 Process Exit Codes:
-- `0`: All steps passed successfully.
-- `1`: One or more assertions failed or timed out.
-- `2`: Protocol or script schema validation error.
+- `0`: All steps passed.
+- `1`: A step failed (assertion, timeout or invalid response), or steps were skipped.
+- `2`: Invalid script or input: unknown variable or operator, invalid parameters, unsupported step, protocol not found, or no transport selected.
 - `3`: Serial communication or transport error.
