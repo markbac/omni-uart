@@ -168,3 +168,22 @@ The WebSocket connection (`ws://127.0.0.1:8080/ws/serial`) exchanges structured 
   ```
 - **`status_event`**: `{ "type": "status", "connected": true, "port": "COM3", "recording": true, "packet_count": 282, "error": null }`
 - **`session_export`**: `{ "type": "session_export", "format": "jsonl", "filename": "session_20260921.jsonl", "data": "..." }`
+
+## 5. REST API Behaviour
+
+Every endpoint that talks to a device uses the same `DeviceSession`, `FrameCodec` and `ScriptRunner` as the CLI. Nothing is fabricated: a result describes what the device actually did.
+
+| Endpoint | Behaviour |
+| :--- | :--- |
+| `GET /api/serial/ports` | Ports the operating system reports (an empty list if none) and the name of the simulated device port (`virtual`). |
+| `POST /api/serial/connect` | Validates `baudrate` (1 to 4,000,000) and opens the port as a real transport, replacing any open link. `400` if the port cannot be opened. |
+| `POST /api/serial/disconnect` | Closes the link; harmless when nothing is open. |
+| `GET /api/serial/status` | Current connection state. |
+| `POST /api/send/{protocol}` | Encodes, transmits and decodes the response. `404` unknown protocol or command, `409` not connected, `422` invalid parameters, `504` no response, `502` invalid response or link failure. |
+| `POST /api/script/run/{script}` | Runs the script with the shared runner and returns every step's request, response, fields and assertion results. `404` unknown script, `409` not connected, `422` invalid script, `502` link failure; failed assertions return `200` with `"status": "FAILED"`. |
+| `GET /api/dashboard/auto-run/{protocol}` | Really runs each `dashboard`-tagged command that needs no input and reports `SUCCESS`, `FAILED` or `SKIPPED` per command. `409` when not connected. |
+
+**Simulated device.** Connecting to the port `virtual` (with a `protocol`) is an explicit demo mode backed by the schema-driven simulator. Every send, script and dashboard response then carries `"simulated": true`; without it, a response always came from the connected port.
+
+---
+

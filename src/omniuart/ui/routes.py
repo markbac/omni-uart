@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import logging
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from omniuart.core.catalog import CatalogManager
+from omniuart.core.codec import CodecError
 from omniuart.core.recorder import SessionRecorder
+from omniuart.core.runner import ScriptRunner, StepStatus
+from omniuart.core.session import ExchangeStatus
+from omniuart.ui.connection import VIRTUAL_PORT, ConnectionManager, NotConnectedError
 from omniuart.ui.models import CommandRequest, SerialConnectRequest
 from omniuart.ui.views import get_index_html
 
@@ -21,14 +26,8 @@ catalog = CatalogManager()
 recorder = SessionRecorder()
 active_connections: Set[WebSocket] = set()
 
-# Global serial connection state
-connection_state = {
-    "connected": False,
-    "port": "COM1",
-    "baudrate": 115200,
-    "rts": True,
-    "dtr": True,
-}
+# The single serial link shared by every request
+connection = ConnectionManager()
 
 
 async def broadcast_packet(packet_data: Dict[str, Any]) -> None:
@@ -95,80 +94,105 @@ def get_protocol_spec(identifier: str) -> Dict[str, Any]:
 
 @router.get("/api/serial/ports")
 def list_serial_ports() -> Dict[str, Any]:
-    """Enumerate hardware serial ports available on system."""
-    try:
-        import serial.tools.list_ports
-        ports = [p.device for p in serial.tools.list_ports.comports()]
-    except Exception:
-        ports = []
-    if not ports:
-        ports = ["COM1", "COM3", "/dev/ttyUSB0", "/dev/ttyS0", "VirtualSerialPair-1"]
+    """Enumerate the serial ports present on this machine (never invented), plus the simulated device."""
+    from omniuart.core.transport import list_available_ports
 
+    try:
+        ports = [p["device"] for p in list_available_ports()]
+    except Exception:  # noqa: BLE001 - enumeration can fail on locked-down systems
+        ports = []
     return {
         "ports": ports,
-        "current": connection_state,
+        "virtual_port": VIRTUAL_PORT,
+        "current": connection.state(),
     }
 
 
 @router.post("/api/serial/connect")
-def connect_serial(req: SerialConnectRequest) -> Dict[str, Any]:
-    """Connect or disconnect target physical or virtual serial port."""
-    connection_state["connected"] = True
-    connection_state["port"] = req.port
-    connection_state["baudrate"] = req.baudrate
-    connection_state["rts"] = req.rts
-    connection_state["dtr"] = req.dtr
-    return {"status": "success", "connection": connection_state}
+async def connect_serial(req: SerialConnectRequest) -> Dict[str, Any]:
+    """Open the requested serial port (or the labelled simulated device), replacing any open link."""
+    if req.port == VIRTUAL_PORT and (not req.protocol or not catalog.get_protocol(req.protocol)):
+        raise HTTPException(status_code=422, detail="The virtual device needs a valid 'protocol' to simulate.")
+    try:
+        await connection.connect(req.port, req.baudrate, req.rts, req.dtr)
+    except Exception as exc:  # noqa: BLE001 - port missing, busy or not permitted
+        raise HTTPException(status_code=400, detail=f"Cannot open port '{req.port}': {exc}") from exc
+    return {"status": "success", "connection": connection.state()}
 
 
-@router.post("/api/send/{identifier}")
-async def send_command(identifier: str, req: CommandRequest) -> Dict[str, Any]:
-    """Execute command dispatch, record event, and broadcast over WebSocket."""
+@router.post("/api/serial/disconnect")
+async def disconnect_serial() -> Dict[str, Any]:
+    """Close the open link. Disconnecting when nothing is open is not an error."""
+    await connection.disconnect()
+    return {"status": "success", "connection": connection.state()}
+
+
+@router.get("/api/serial/status")
+def serial_status() -> Dict[str, Any]:
+    return {"connection": connection.state()}
+
+
+def _resolve(identifier: str, command: str):
     spec = catalog.get_protocol(identifier)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
-    cmd = spec.get_command(req.command) or spec.get_command_by_id(req.command)
+    cmd = spec.get_command(command) or spec.get_command_by_id(command)
     if not cmd:
-        raise HTTPException(status_code=404, detail=f"Command '{req.command}' not found")
+        raise HTTPException(status_code=404, detail=f"Command '{command}' not found")
+    return spec, cmd
 
-    tx_bytes = bytes([0xAA, 0x55, 0x02, 0x00, int(cmd.id) if str(cmd.id).isdigit() else 0x01, 0x00, 0x3C, 0x12])
-    tx_event = recorder.record(
-        direction="tx",
-        raw_bytes=tx_bytes,
-        command_name=cmd.name,
-        command_id=cmd.id,
-        decoded_fields=req.params,
-        crc_valid=True,
-    )
-    await broadcast_packet(tx_event.model_dump())
 
-    rx_bytes = bytes([0xAA, 0x55, 0x82, 0x00, 0x00, 0x28, 0x00, 0x4B, 0x12, 0x90])
-    rx_decoded = {
-        "status": "SUCCESS",
-        "firmware_version": "v2.1.0",
-        "temperature": 24.5 + (time.time() % 5),
-        "voltage": 3.3 + (time.time() % 0.2),
-        "channel_reading": 100 + int(time.time() % 50),
-    }
-    rx_event = recorder.record(
-        direction="rx",
-        raw_bytes=rx_bytes,
-        command_name=f"{cmd.name}_response",
-        command_id=0x82,
-        decoded_fields=rx_decoded,
-        crc_valid=True,
-        latency_ms=12.4,
-    )
-    await broadcast_packet(rx_event.model_dump())
+async def _publish(events: List[Any]) -> None:
+    """Add a request's recorded frames to the shared log and stream them to WebSocket clients."""
+    for event in events:
+        recorder.events.append(event)
+        await broadcast_packet(event.model_dump())
 
-    return {
-        "status": "success",
+
+def _not_connected(exc: NotConnectedError) -> HTTPException:
+    return HTTPException(status_code=409, detail=str(exc))
+
+
+_FAILURE_CODES = {
+    ExchangeStatus.TIMEOUT: 504,
+    ExchangeStatus.INVALID_RESPONSE: 502,
+    ExchangeStatus.TRANSPORT_ERROR: 502,
+}
+
+
+@router.post("/api/send/{identifier}")
+async def send_command(identifier: str, req: CommandRequest) -> Any:
+    """Encode the command, transmit it on the open link and return the decoded device response.
+
+    Failures are real HTTP errors: 404 unknown protocol/command, 409 not connected, 422 invalid
+    parameters, 504 no response, 502 invalid response or link failure.
+    """
+    spec, cmd = _resolve(identifier, req.command)
+    temp = SessionRecorder()
+    try:
+        async with connection.use(spec, temp) as session:
+            exchange = await session.send(cmd, req.params)
+    except NotConnectedError as exc:
+        raise _not_connected(exc) from exc
+    except CodecError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await _publish(temp.events)
+
+    body = {
+        "status": "success" if exchange.ok else "failed",
         "protocol": spec.metadata.name,
         "command": cmd.name,
         "sent_params": req.params,
-        "simulated_raw_hex": tx_event.raw_hex,
-        "decoded_response": rx_decoded,
+        "request_hex": exchange.request.hex(" ").upper(),
+        "response_hex": exchange.response_bytes.hex(" ").upper(),
+        "decoded_response": exchange.fields,
+        "latency_ms": round(exchange.latency_ms, 2),
+        "simulated": connection.virtual,
     }
+    if not exchange.ok:
+        body["error"] = exchange.error
+        return JSONResponse(status_code=_FAILURE_CODES[exchange.status], content=body)
+    return body
 
 
 @router.get("/api/scripts")
@@ -188,51 +212,86 @@ def list_scripts() -> Dict[str, Any]:
 
 
 @router.post("/api/script/run/{script_name}")
-async def run_script(script_name: str) -> Dict[str, Any]:
-    """Execute automated test sequence script and return assertion results."""
-    steps_results = [
-        {"step": "1. Ping Device", "action": "send_cmd", "command": "ping", "status": "PASSED", "duration_ms": 12.4},
-        {"step": "2. Thermal Sensor Calibration", "action": "assert", "field": "temperature", "op": "<=", "value": 50.0, "status": "PASSED", "duration_ms": 8.1},
-        {"step": "3. Set DAC Output Voltage", "action": "send_cmd", "command": "set_dac", "status": "PASSED", "duration_ms": 15.2},
-        {"step": "4. Verify Battery Telemetry", "action": "assert", "field": "voltage", "op": ">=", "value": 3.0, "status": "PASSED", "duration_ms": 6.5},
-    ]
+async def run_script(script_name: str) -> Any:
+    """Execute a script with the shared runner and return the real per-step results.
 
-    return {
+    404 unknown script, 409 not connected, 422 invalid script, 502 link failure. A script whose
+    assertions fail returns 200 with ``"status": "FAILED"``.
+    """
+    script = catalog.get_script(script_name)
+    if not script:
+        raise HTTPException(status_code=404, detail=f"Script '{script_name}' not found")
+    spec = None
+    for ref in (script.meta.protocol, Path(script.meta.protocol).name, Path(script.meta.protocol).stem):
+        spec = catalog.get_protocol(ref) if ref else None
+        if spec:
+            break
+    if spec is None:
+        raise HTTPException(status_code=422, detail=f"Protocol '{script.meta.protocol}' for this script was not found")
+
+    temp = SessionRecorder()
+    try:
+        async with connection.use(spec, temp) as session:
+            result = await ScriptRunner(script, session).run()
+    except NotConnectedError as exc:
+        raise _not_connected(exc) from exc
+    await _publish(temp.events)
+
+    report = result.to_dict()
+    counts = {s: sum(1 for step in result.steps if step.status is s) for s in StepStatus}
+    body = {
+        **report,
         "script": script_name,
-        "status": "PASSED",
-        "total_steps": len(steps_results),
-        "passed_steps": len(steps_results),
-        "failed_steps": 0,
-        "duration_ms": 42.2,
-        "steps": steps_results,
+        "status": "PASSED" if result.passed else "FAILED",
+        "total_steps": len(result.steps),
+        "passed_steps": counts[StepStatus.PASSED],
+        "failed_steps": counts[StepStatus.FAILED] + counts[StepStatus.ERROR],
+        "simulated": connection.virtual,
     }
+    if result.exit_code == 3:
+        return JSONResponse(status_code=502, content=body)
+    if result.exit_code == 2:
+        return JSONResponse(status_code=422, content=body)
+    return body
 
 
 @router.get("/api/dashboard/auto-run/{identifier}")
-def dashboard_auto_run(identifier: str) -> Dict[str, Any]:
-    """Auto-run all commands tagged with 'dashboard' to fetch version & system info."""
+async def dashboard_auto_run(identifier: str) -> Dict[str, Any]:
+    """Really run every ``dashboard``-tagged command that needs no input and report each outcome."""
     spec = catalog.get_protocol(identifier)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
 
     dashboard_cmds = [cmd for cmd in spec.commands if "dashboard" in cmd.tags]
-    results = {}
-    for cmd in dashboard_cmds:
-        results[cmd.name] = {
-            "command_id": cmd.id,
-            "status": "SUCCESS",
-            "response": {
-                "firmware_version": "v2.1.0-release",
-                "system_status": "READY",
-                "device_id": "MCU-UART-9921",
-                "voltage": 3.3,
-            },
-        }
+    temp = SessionRecorder()
+    results: Dict[str, Any] = {}
+    try:
+        async with connection.use(spec, temp) as session:
+            for cmd in dashboard_cmds:
+                missing = [p.name for p in cmd.parameters if p.default is None]
+                if missing:
+                    results[cmd.name] = {"command_id": cmd.id, "status": "SKIPPED", "error": f"needs a value for: {', '.join(missing)}"}
+                    continue
+                try:
+                    exchange = await session.send(cmd, {})
+                except CodecError as exc:
+                    results[cmd.name] = {"command_id": cmd.id, "status": "FAILED", "error": str(exc)}
+                    continue
+                results[cmd.name] = {
+                    "command_id": cmd.id,
+                    "status": "SUCCESS" if exchange.ok else "FAILED",
+                    "response": exchange.fields if exchange.ok else None,
+                    "error": exchange.error,
+                }
+    except NotConnectedError as exc:
+        raise _not_connected(exc) from exc
+    await _publish(temp.events)
 
     return {
         "protocol": spec.metadata.name,
-        "dashboard_commands_executed": len(dashboard_cmds),
+        "dashboard_commands_executed": sum(1 for r in results.values() if r["status"] != "SKIPPED"),
         "data": results,
+        "simulated": connection.virtual,
     }
 
 

@@ -57,11 +57,16 @@ def test_ui_api_protocol_spec_and_tags() -> None:
 
 def test_ui_api_dashboard_auto_run() -> None:
     """Verify GET /api/dashboard/auto-run/{identifier} auto-executes dashboard-tagged commands."""
-    response = client.get("/api/dashboard/auto-run/binary_sensor_node.yaml")
+    client.post("/api/serial/connect", json={"port": "virtual", "protocol": "binary_sensor_node"})
+    try:
+        response = client.get("/api/dashboard/auto-run/binary_sensor_node.yaml")
+    finally:
+        client.post("/api/serial/disconnect")
     assert response.status_code == 200
     data = response.json()
     assert data["dashboard_commands_executed"] >= 1
     assert "data" in data
+    assert data["simulated"] is True
 
 
 def test_ui_websocket_serial_stream() -> None:

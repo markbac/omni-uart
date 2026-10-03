@@ -28,12 +28,13 @@ def test_ui_serial_ports_and_connect():
     resp = client.get("/api/serial/ports")
     assert resp.status_code == 200
     data = resp.json()
-    assert "ports" in data
-    assert len(data["ports"]) > 0
+    assert isinstance(data["ports"], list)  # real ports only; may be empty
+    assert data["virtual_port"] == "virtual"
 
-    conn_resp = client.post("/api/serial/connect", json={"port": data["ports"][0], "baudrate": 115200})
+    conn_resp = client.post("/api/serial/connect", json={"port": "virtual", "baudrate": 115200, "protocol": "binary_sensor_node"})
     assert conn_resp.status_code == 200
-    assert conn_resp.json()["status"] == "success"
+    assert conn_resp.json()["connection"]["simulated"] is True
+    assert client.post("/api/serial/disconnect").json()["connection"]["connected"] is False
 
 
 def test_ui_scripts_list_and_run():
@@ -42,9 +43,14 @@ def test_ui_scripts_list_and_run():
     data = resp.json()
     assert "scripts" in data
 
-    run_resp = client.post("/api/script/run/sensor_test_suite")
+    client.post("/api/serial/connect", json={"port": "virtual", "protocol": "binary_sensor_node"})
+    try:
+        run_resp = client.post("/api/script/run/sensor_test_suite")
+    finally:
+        client.post("/api/serial/disconnect")
     assert run_resp.status_code == 200
-    assert run_resp.json()["status"] == "PASSED"
+    body = run_resp.json()
+    assert body["status"] == "PASSED" and body["simulated"] is True
 
 
 def test_ui_index_html_renders_workspace_tabs_and_plotter():

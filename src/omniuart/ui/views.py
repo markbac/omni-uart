@@ -347,25 +347,32 @@ def get_index_html() -> str:
         opt.textContent = p;
         select.appendChild(opt);
       });
+      const virtual = document.createElement("option");
+      virtual.value = data.virtual_port;
+      virtual.textContent = "virtual (SIMULATED device)";
+      select.appendChild(virtual);
     }
 
     async function toggleSerialConnect() {
       const btn = document.getElementById("connectBtn");
       const port = document.getElementById("portSelect").value;
       const baud = parseInt(document.getElementById("baudSelect").value);
-      isConnected = !isConnected;
-      if (isConnected) {
-        btn.textContent = "DISCONNECT";
-        btn.style.background = "#ef4444";
-      } else {
-        btn.textContent = "CONNECT";
-        btn.style.background = "var(--accent)";
+      const res = isConnected
+        ? await fetch("/api/serial/disconnect", {method: "POST"})
+        : await fetch("/api/serial/connect", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({port: port, baudrate: baud, rts: true, dtr: true, protocol: currentProtoId})
+          });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(`Serial ${isConnected ? "disconnect" : "connect"} failed: ${JSON.stringify(err.detail || err)}`);
+        return;
       }
-      await fetch("/api/serial/connect", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({port: port, baudrate: baud, rts: true, dtr: true})
-      });
+      const data = await res.json();
+      isConnected = data.connection.connected;
+      btn.textContent = isConnected ? "DISCONNECT" : "CONNECT";
+      btn.style.background = isConnected ? "#ef4444" : "var(--accent)";
     }
 
     async function loadScriptList() {
