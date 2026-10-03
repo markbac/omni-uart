@@ -15,6 +15,8 @@ The schema governs:
 
 ## 2. Top-Level Schema Structure
 
+> **Important:** Unknown keys are errors. A misspelled or unsupported key (for example `comands`, `sufix` or `safty`) in a protocol or script makes loading and `lint` fail with the key's location, instead of being ignored. This applies to every section of both native formats.
+
 A valid protocol specification contains four root sections:
 1. `metadata`: Identification and documentation properties.
 2. `serial_config`: Default hardware serial communication parameters.
