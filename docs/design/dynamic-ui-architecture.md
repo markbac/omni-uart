@@ -179,9 +179,9 @@ Every endpoint that talks to a device uses the same `DeviceSession`, `FrameCodec
 | `POST /api/serial/connect` | Validates `baudrate` (1 to 4,000,000) and opens the port as a real transport, replacing any open link. `400` if the port cannot be opened. |
 | `POST /api/serial/disconnect` | Closes the link; harmless when nothing is open. |
 | `GET /api/serial/status` | Current connection state. |
-| `POST /api/send/{protocol}` | Encodes, transmits and decodes the response. `404` unknown protocol or command, `409` not connected, `422` invalid parameters, `504` no response, `502` invalid response or link failure. |
+| `POST /api/send/{protocol}` | Encodes, transmits and decodes the response. `404` unknown protocol or command, `409` not connected, `422` invalid parameters, `504` no response, `502` invalid response or link failure, `403` refused by a read-only connection, `428` a `mutating` or `destructive` command sent without `"confirm": true`. |
 | `POST /api/script/run/{script}` | Runs the script with the shared runner and returns every step's request, response, fields and assertion results. `404` unknown script, `409` not connected, `422` invalid script, `502` link failure; failed assertions return `200` with `"status": "FAILED"`. |
-| `GET /api/dashboard/auto-run/{protocol}` | Really runs each `dashboard`-tagged command that needs no input and reports `SUCCESS`, `FAILED` or `SKIPPED` per command. `409` when not connected. |
+| `GET /api/dashboard/auto-run/{protocol}` | Really runs each command that is tagged `dashboard`, marked `safety: read_only` and needs no input, and reports `SUCCESS`, `FAILED` or `SKIPPED` per command (a dashboard command that is not `read_only` is skipped, not sent). `409` when not connected. |
 
 **Simulated device.** Connecting to the port `virtual` (with a `protocol`) is an explicit demo mode backed by the schema-driven simulator. Every send, script and dashboard response then carries `"simulated": true`; without it, a response always came from the connected port.
 

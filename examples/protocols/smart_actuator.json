@@ -36,6 +36,7 @@
       "name": "set_position",
       "id": 4097,
       "description": "Sets servo angular position and maximum velocity",
+      "safety": "idempotent",
       "parameters": [
         {
           "name": "channel",

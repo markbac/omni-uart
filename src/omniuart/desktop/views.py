@@ -93,6 +93,10 @@ class ConnectionToolbar(ttk.Frame):
         self.dtr_check = ttk.Checkbutton(self, text="DTR", variable=self.dtr_var)
         self.dtr_check.pack(side=tk.LEFT, padx=4)
 
+        self.read_only_var = tk.BooleanVar(value=False)
+        self.read_only_check = ttk.Checkbutton(self, text="Read-only", variable=self.read_only_var)
+        self.read_only_check.pack(side=tk.LEFT, padx=4)
+
         self.connect_btn = ttk.Button(self, text="⚡ Connect", command=self._toggle_connection, width=12)
         self.connect_btn.pack(side=tk.LEFT, padx=10)
 
@@ -157,6 +161,7 @@ class ConnectionToolbar(ttk.Frame):
                     "stopbits": float(self.stopbits_var.get()),
                     "rts": self.rts_var.get(),
                     "dtr": self.dtr_var.get(),
+                    "read_only": self.read_only_var.get(),
                 }
             except ValueError as exc:
                 messagebox.showerror("Connection settings", f"Invalid serial setting: {exc}")
@@ -426,7 +431,7 @@ class CommandCatalogView(ttk.Frame):
         else:
             disc_text = ""
         cmd_id_str = f"0x{cmd.id:02X}" if isinstance(cmd.id, int) else str(cmd.id)
-        self.cmd_title_label.config(text=f"{cmd.name} (ID: {cmd_id_str}{disc_text})")
+        self.cmd_title_label.config(text=f"{cmd.name} (ID: {cmd_id_str}{disc_text}) [{cmd.safety.value}]")
         self.cmd_desc_label.config(text=cmd.description or "No description provided.")
 
         # Rebuild dynamic form fields
@@ -500,6 +505,13 @@ class CommandCatalogView(ttk.Frame):
         except Exception as e:
             messagebox.showerror("Transmission Error", f"Invalid parameters: {e}")
             return
+        cmd = self.selected_cmd
+        if cmd.needs_confirmation and not messagebox.askyesno(
+            "Confirm transmission",
+            f"'{cmd.name}' is marked {cmd.safety.value}.\n\nIt can change the device's state. Send it?",
+            icon="warning",
+        ):
+            return
         self.on_transmit(self.selected_proto, self.selected_cmd.name, param_dict)
 
 
@@ -559,7 +571,7 @@ class TelemetryPlotterView(ttk.Frame):
 
         ttk.Label(
             self,
-            text="Only read-only commands tagged 'dashboard' with defaulted parameters can be polled. "
+            text="Only commands marked 'safety: read_only' with defaulted parameters can be polled. "
             "Ch1 and Ch2 are the first two numeric fields of each decoded response.",
             foreground="#64748b",
             font=("Segoe UI", 9, "italic"),
@@ -607,7 +619,7 @@ class TelemetryPlotterView(ttk.Frame):
     def _toggle_auto_poll(self) -> None:
         """Start or stop periodic polling of the selected safe command."""
         if not self.is_polling and self.cmd_var.get() not in self.poll_targets:
-            messagebox.showinfo("Auto-Poll", "No pollable command is available (needs a 'dashboard' command with defaulted parameters).")
+            messagebox.showinfo("Auto-Poll", "No pollable command is available (needs a command marked 'safety: read_only' with defaulted parameters).")
             return
         self.is_polling = not self.is_polling
         if self.is_polling:

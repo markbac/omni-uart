@@ -170,6 +170,7 @@ def get_index_html() -> str:
         <option value="230400">230400 bps</option>
         <option value="921600">921600 bps</option>
       </select>
+      <label title="Refuse every command not marked safety: read_only"><input type="checkbox" id="readOnlyCheck"> Read-only</label>
       <button id="connectBtn" class="send-btn" onclick="toggleSerialConnect()">CONNECT</button>
     </div>
   </header>
@@ -362,7 +363,7 @@ def get_index_html() -> str:
         : await fetch("/api/serial/connect", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({port: port, baudrate: baud, rts: true, dtr: true, protocol: currentProtoId})
+            body: JSON.stringify({port: port, baudrate: baud, rts: true, dtr: true, read_only: document.getElementById("readOnlyCheck").checked, protocol: currentProtoId})
           });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -526,11 +527,20 @@ def get_index_html() -> str:
       });
 
       respBox.textContent = `Sending ${cmdName}...`;
-      const res = await fetch(`/api/send/${currentProtoId}`, {
+      const post = (confirmed) => fetch(`/api/send/${currentProtoId}`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({command: cmdName, params: params})
+        body: JSON.stringify({command: cmdName, params: params, confirm: confirmed})
       });
+      let res = await post(false);
+      if (res.status === 428) {
+        const need = await res.json();
+        if (!confirm(`${need.detail}\n\nSend it?`)) {
+          respBox.textContent = "Cancelled: not sent.";
+          return;
+        }
+        res = await post(true);
+      }
       const data = await res.json();
       respBox.textContent = JSON.stringify(data, null, 2);
     }

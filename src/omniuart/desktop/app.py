@@ -179,7 +179,9 @@ class OmniUARTDesktopApp(tk.Tk):
         self.status_text_var.set(f"Connecting to {config['port']}...")
         try:
             serial_config = None if config["port"] == VIRTUAL_PORT else self._serial_config(config)
-            future = self.device.connect(config["port"], config["baudrate"], serial_config, config["rts"], config["dtr"])
+            future = self.device.connect(
+                config["port"], config["baudrate"], serial_config, config["rts"], config["dtr"], config.get("read_only", False)
+            )
         except Exception as exc:  # noqa: BLE001 - invalid serial settings
             self.toolbar.set_connected(False)
             self._report_error("Connect failed", exc)
@@ -192,7 +194,9 @@ class OmniUARTDesktopApp(tk.Tk):
             self.connection_config = config
             label = "simulated device" if config["port"] == VIRTUAL_PORT else f"{config['port']} @ {config['baudrate']}"
             self.toolbar.set_connected(True, label)
-            self.status_text_var.set(f"Connected to {label}" + (" (simulation, not real hardware)" if config["port"] == VIRTUAL_PORT else ""))
+            note = " (simulation, not real hardware)" if config["port"] == VIRTUAL_PORT else ""
+            note += " [read-only]" if config.get("read_only") else ""
+            self.status_text_var.set(f"Connected to {label}{note}")
             logger.info("Serial connection opened: %s", config["port"])
         elif wanted:
             self.connection_config = {"connected": False}

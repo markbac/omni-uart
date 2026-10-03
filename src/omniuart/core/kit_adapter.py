@@ -322,9 +322,6 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
             )
 
         tags = list(cmd_data.get("tags", []))
-        cmd_name_lower = cmd_name.lower()
-        if not tags and any(kw in cmd_name_lower for kw in ("version", "status", "info", "read", "get", "poll")):
-            tags.append("dashboard")
 
         commands.append(
             CommandSpec(

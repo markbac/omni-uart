@@ -14,7 +14,7 @@ from omniuart.core.catalog import CatalogManager
 from omniuart.core.codec import CodecError
 from omniuart.core.recorder import SessionRecorder
 from omniuart.core.runner import ScriptRunner, StepStatus
-from omniuart.core.session import ExchangeStatus
+from omniuart.core.session import CommandBlockedError, ExchangeStatus
 from omniuart.ui.connection import VIRTUAL_PORT, ConnectionManager, NotConnectedError
 from omniuart.ui.models import CommandRequest, SerialConnectRequest
 from omniuart.ui.views import get_index_html
@@ -114,7 +114,7 @@ async def connect_serial(req: SerialConnectRequest) -> Dict[str, Any]:
     if req.port == VIRTUAL_PORT and (not req.protocol or not catalog.get_protocol(req.protocol)):
         raise HTTPException(status_code=422, detail="The virtual device needs a valid 'protocol' to simulate.")
     try:
-        await connection.connect(req.port, req.baudrate, req.rts, req.dtr)
+        await connection.connect(req.port, req.baudrate, req.rts, req.dtr, req.read_only)
     except Exception as exc:  # noqa: BLE001 - port missing, busy or not permitted
         raise HTTPException(status_code=400, detail=f"Cannot open port '{req.port}': {exc}") from exc
     return {"status": "success", "connection": connection.state()}
@@ -165,15 +165,23 @@ async def send_command(identifier: str, req: CommandRequest) -> Any:
     """Encode the command, transmit it on the open link and return the decoded device response.
 
     Failures are real HTTP errors: 404 unknown protocol/command, 409 not connected, 422 invalid
-    parameters, 504 no response, 502 invalid response or link failure.
+    parameters, 504 no response, 502 invalid response or link failure, 403 command refused by a
+    read-only connection, 428 a mutating or destructive command sent without ``confirm: true``.
     """
     spec, cmd = _resolve(identifier, req.command)
+    if cmd.needs_confirmation and not req.confirm and not (connection.read_only):
+        raise HTTPException(
+            status_code=428,
+            detail=f"'{cmd.name}' is {cmd.safety.value}: resend with \"confirm\": true to send it.",
+        )
     temp = SessionRecorder()
     try:
         async with connection.use(spec, temp) as session:
             exchange = await session.send(cmd, req.params)
     except NotConnectedError as exc:
         raise _not_connected(exc) from exc
+    except CommandBlockedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except CodecError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await _publish(temp.events)
@@ -257,7 +265,10 @@ async def run_script(script_name: str) -> Any:
 
 @router.get("/api/dashboard/auto-run/{identifier}")
 async def dashboard_auto_run(identifier: str) -> Dict[str, Any]:
-    """Really run every ``dashboard``-tagged command that needs no input and report each outcome."""
+    """Really run every ``dashboard``-tagged, ``read_only`` command that needs no input and report each outcome.
+
+    A dashboard command that is not marked ``safety: read_only`` is reported as skipped, never sent.
+    """
     spec = catalog.get_protocol(identifier)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
@@ -268,6 +279,9 @@ async def dashboard_auto_run(identifier: str) -> Dict[str, Any]:
     try:
         async with connection.use(spec, temp) as session:
             for cmd in dashboard_cmds:
+                if not cmd.is_read_only:
+                    results[cmd.name] = {"command_id": cmd.id, "status": "SKIPPED", "error": f"not marked safety: read_only (it is {cmd.safety.value})"}
+                    continue
                 missing = [p.name for p in cmd.parameters if p.default is None]
                 if missing:
                     results[cmd.name] = {"command_id": cmd.id, "status": "SKIPPED", "error": f"needs a value for: {', '.join(missing)}"}

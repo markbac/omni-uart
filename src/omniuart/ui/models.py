@@ -10,6 +10,7 @@ class CommandRequest(BaseModel):
     """Payload model for sending protocol command."""
     command: str
     params: Dict[str, Any] = {}
+    confirm: bool = Field(default=False, description="Must be true to send a mutating or destructive command")
 
 
 class SerialConnectRequest(BaseModel):
@@ -18,4 +19,5 @@ class SerialConnectRequest(BaseModel):
     baudrate: int = Field(default=115200, gt=0, le=4_000_000)
     rts: bool = True
     dtr: bool = True
+    read_only: bool = Field(default=False, description="Refuse every command that is not marked safety: read_only")
     protocol: Optional[str] = Field(default=None, description="Protocol the simulated device implements (required when port is 'virtual')")

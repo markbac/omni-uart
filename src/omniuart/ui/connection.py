@@ -33,6 +33,7 @@ class ConnectionManager:
         self.baudrate = 115200
         self.rts = True
         self.dtr = True
+        self.read_only = False
         self.lock = asyncio.Lock()
 
     @property
@@ -46,10 +47,11 @@ class ConnectionManager:
             "baudrate": self.baudrate,
             "rts": self.rts,
             "dtr": self.dtr,
+            "read_only": self.read_only,
             "simulated": self.virtual,
         }
 
-    async def connect(self, port: str, baudrate: int, rts: bool, dtr: bool) -> None:
+    async def connect(self, port: str, baudrate: int, rts: bool, dtr: bool, read_only: bool = False) -> None:
         """Open ``port`` (replacing any open link). Raises on failure and leaves the manager disconnected."""
         await self.disconnect()
         if port == VIRTUAL_PORT:
@@ -63,7 +65,7 @@ class ConnectionManager:
             except Exception:  # noqa: BLE001 - not every port or URL handler supports modem lines
                 pass
             self.transport = transport
-        self.port, self.baudrate, self.rts, self.dtr = port, baudrate, rts, dtr
+        self.port, self.baudrate, self.rts, self.dtr, self.read_only = port, baudrate, rts, dtr, read_only
 
     async def disconnect(self) -> None:
         if self.transport is not None:
@@ -73,14 +75,15 @@ class ConnectionManager:
                 self.transport = None
         self.virtual = False
         self.port = None
+        self.read_only = False
 
     def session(self, spec: ProtocolSpec, recorder: Optional[SessionRecorder] = None) -> DeviceSession:
         """A session for ``spec`` on the current link."""
         if self.virtual:
-            return DeviceSession(spec, VirtualTransport(spec, latency_ms=1.0, jitter_ms=0.0), recorder=recorder)
+            return DeviceSession(spec, VirtualTransport(spec, latency_ms=1.0, jitter_ms=0.0), recorder=recorder, read_only=self.read_only)
         if self.transport is None or not self.transport.is_open:
             raise NotConnectedError("No serial connection. Connect a port first (POST /api/serial/connect).")
-        return DeviceSession(spec, self.transport, recorder=recorder)
+        return DeviceSession(spec, self.transport, recorder=recorder, read_only=self.read_only)
 
     @asynccontextmanager
     async def use(self, spec: ProtocolSpec, recorder: Optional[SessionRecorder] = None) -> AsyncIterator[DeviceSession]:

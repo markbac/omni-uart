@@ -66,6 +66,8 @@ omni-uart send binary_sensor_node get_readings --params channel=1 --dry-run
 ```
 Encodes the command with the protocol's framing and CRC, transmits it, waits for the response (the command's `response.timeout_ms`, or `--timeout`), and prints the decoded fields. Choose a transport with `--port` (any PySerial port name or URL, with `--baudrate` to override the protocol default) or `--virtual`; with neither and without `--dry-run`, the command refuses to run.
 
+Commands declare a `safety` level in the protocol (`read_only`, `idempotent`, `mutating` (the default) or `destructive`). `--read-only` refuses anything that is not `read_only`, and a `destructive` command is sent only with `--yes`. `run` also accepts `--read-only`. The web and desktop toolbars have a *Read-only* option, and both ask before sending a `mutating` or `destructive` command. See the [protocol specification](../specs/protocol-schema-specification.md#51-command-safety).
+
 | Exit status | Meaning |
 | :--- | :--- |
 | `0` | Frame sent and, when the command defines a response, a valid response was decoded (or `--dry-run`). |
@@ -135,7 +137,7 @@ The desktop app drives the same session, codec and script runner as the CLI and 
 2. **Sending**: Commands from the Command Catalog are encoded by the protocol codec, written to the open link and answered with a decoded response. The Comms Streamer logs the bytes actually sent (TX), the bytes received (RX) with decoded fields, and any timeout or invalid response (ERR). Sending while disconnected transmits nothing.
 3. **Script Runner**: Runs the selected script with the shared runner and shows the real PASSED, FAILED, ERROR or SKIPPED result per step, with each assertion's expected and actual value, and an overall result.
 4. **Telemetry Plotter**: Plots only numeric fields decoded from valid RX frames (the first two numeric fields become Ch1 and Ch2). Transmitted bytes are never plotted and the axis shows real values. Text responses such as AT replies are shown in the Comms Streamer but not plotted.
-5. **Auto-Poll**: Only commands tagged `dashboard` that expect a response and whose parameters all have defaults can be polled. Polling stops if the link is lost, and a new poll is not sent while the previous one is still waiting.
+5. **Auto-Poll**: Only commands marked `safety: read_only` that expect a response and whose parameters all have defaults can be polled. Polling stops if the link is lost, and a new poll is not sent while the previous one is still waiting.
 6. **Raw Send**: Hex or ASCII typed in the Comms Streamer is written unmodified and any reply is logged. The built-in AT and Modbus macro buttons were removed because they sent fixed bytes to whatever device was connected.
 
 ---
@@ -144,7 +146,7 @@ The desktop app drives the same session, codec and script runner as the CLI and 
 
 1. **Protocol Dropdown Selector**: Switch between any discovered hardware protocol interactively.
 2. **Tag-Based Dynamic Tabs**: Generates tabs based on tags in protocol definitions.
-3. **Auto-Run Dashboard Tab**: Automatically executes `dashboard`-tagged diagnostic commands on protocol switch to query hardware firmware version and uptime.
+3. **Auto-Run Dashboard Tab**: Automatically executes diagnostic commands that are tagged `dashboard` and marked `safety: read_only` on protocol switch to query hardware firmware version and uptime.
 4. **60 FPS Real-Time WebSocket Comms Monitor**: Side-by-side visualization of raw hex frames and decoded key-value semantic byte trees.
 5. **Theme Toggle & High-Density Compact Mode**:
    - `🌓 Theme`: Toggle between Dark, Light, and High-Contrast terminal modes.

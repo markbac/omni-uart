@@ -17,6 +17,10 @@ from omniuart.core.recorder import SessionRecorder
 from omniuart.core.transport import AsyncTransport, HardwareSerialTransport, VirtualTransport
 
 
+class CommandBlockedError(CodecError):
+    """The session is read-only and the command is not marked ``read_only``; nothing was sent."""
+
+
 class ExchangeStatus(str, Enum):
     """Result of one request/response exchange."""
 
@@ -62,10 +66,17 @@ async def read_available(transport: AsyncTransport, timeout_ms: int, gap_ms: int
 class DeviceSession:
     """A protocol bound to an open (or openable) transport."""
 
-    def __init__(self, spec: ProtocolSpec, transport: AsyncTransport, recorder: Optional[SessionRecorder] = None) -> None:
+    def __init__(
+        self,
+        spec: ProtocolSpec,
+        transport: AsyncTransport,
+        recorder: Optional[SessionRecorder] = None,
+        read_only: bool = False,
+    ) -> None:
         self.spec = spec
         self.transport = transport
         self.recorder = recorder
+        self.read_only = read_only
         self.codec = FrameCodec(spec)
 
     async def __aenter__(self) -> "DeviceSession":
@@ -100,10 +111,14 @@ class DeviceSession:
     ) -> Exchange:
         """Transmit ``command`` and wait for its response.
 
-        Invalid parameters raise :class:`CodecError` before anything is written. Failures on the
+        Invalid parameters raise :class:`CodecError`, and a non-``read_only`` command in a read-only session raises :class:`CommandBlockedError`, before anything is written. Failures on the
         link or in the response are reported through the returned :class:`Exchange` instead.
         """
         cmd = self.resolve(command)
+        if self.read_only and not cmd.is_read_only:
+            raise CommandBlockedError(
+                f"read-only session: '{cmd.name}' is {cmd.safety.value}, only read_only commands may be sent"
+            )
         request = self.codec.encode_command(cmd, params or {})
         exchange = Exchange(command=cmd.name, request=request)
         loop = asyncio.get_running_loop()

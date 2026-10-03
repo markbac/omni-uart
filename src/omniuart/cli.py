@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.models import CommandSpec, ProtocolSpec, load_protocol, load_script
+from omniuart.core.models import CommandSafety, CommandSpec, ProtocolSpec, load_protocol, load_script
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -50,6 +50,8 @@ def build_parser() -> argparse.ArgumentParser:
     send_parser.add_argument("--virtual", action="store_true", help="Transmit to the built-in simulated device instead of a serial port")
     send_parser.add_argument("--timeout", type=int, help="Response timeout in milliseconds (default: from the protocol)")
     send_parser.add_argument("--dry-run", action="store_true", help="Only build and print the frame; transmit nothing")
+    send_parser.add_argument("--read-only", action="store_true", help="Refuse any command not marked safety: read_only")
+    send_parser.add_argument("--yes", "-y", action="store_true", help="Confirm sending a destructive command")
 
     # 4. run (Run Automation Script)
     run_parser = subparsers.add_parser("run", help="Execute an automated sequence test script")
@@ -58,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate override (default: from the protocol)")
     run_parser.add_argument("--virtual", action="store_true", help="Run against the built-in simulated device instead of a serial port")
     run_parser.add_argument("--protocol", help="Protocol name or file to use instead of the one named in the script")
+    run_parser.add_argument("--read-only", action="store_true", help="Refuse any step whose command is not marked safety: read_only")
     run_parser.add_argument("--record", help="Write every transmitted and received frame to this .jsonl file")
     run_parser.add_argument("--report", help="Write a machine-readable JSON result report to this file")
 
@@ -174,6 +177,13 @@ def _send_command(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any], 
         return 2
     print(f"  Request   : {frame.hex(' ').upper()} ({len(frame)} bytes)")
 
+    if args.read_only and not cmd.is_read_only:
+        print(f"Error: read-only mode: '{cmd.name}' is {cmd.safety.value}, only read_only commands may be sent.", file=sys.stderr)
+        return 2
+    if cmd.safety is CommandSafety.DESTRUCTIVE and not args.dry_run and not args.yes:
+        print(f"Error: '{cmd.name}' is marked destructive. Repeat with --yes to send it.", file=sys.stderr)
+        return 2
+
     if args.dry_run:
         print("  Status    : DRY-RUN (nothing transmitted)")
         return 0
@@ -184,7 +194,7 @@ def _send_command(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any], 
         return 2
 
     async def _run():
-        async with DeviceSession(spec, transport) as session:
+        async with DeviceSession(spec, transport, read_only=args.read_only) as session:
             return await session.send(cmd, params, timeout_ms=args.timeout)
 
     try:
@@ -240,7 +250,7 @@ def _run_script(args: argparse.Namespace, catalog: CatalogManager) -> int:
     try:
         transport = create_transport(spec, port=args.port, baudrate=args.baudrate, virtual=args.virtual)
         recorder = SessionRecorder() if args.record else None
-        session = DeviceSession(spec, transport, recorder=recorder)
+        session = DeviceSession(spec, transport, recorder=recorder, read_only=args.read_only)
     except CodecError as exc:
         print(f"Error: cannot use protocol '{spec.metadata.name}': {exc}", file=sys.stderr)
         return EXIT_INVALID

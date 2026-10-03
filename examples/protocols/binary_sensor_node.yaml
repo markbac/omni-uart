@@ -30,6 +30,8 @@ commands:
   - name: "ping"
     id: 0x01
     description: "Echo / ping command to check device presence"
+    safety: "read_only"
+    tags: ["dashboard"]
     parameters: []
     response:
       id: 0x81
@@ -43,6 +45,8 @@ commands:
   - name: "get_readings"
     id: 0x02
     description: "Query latest sensor measurements"
+    safety: "read_only"
+    tags: ["dashboard"]
     parameters:
       - name: "channel"
         type: "uint8"
@@ -71,6 +75,7 @@ commands:
   - name: "set_sampling_rate"
     id: 0x03
     description: "Configure sensor update frequency"
+    safety: "idempotent"
     parameters:
       - name: "rate_hz"
         type: "enum"
