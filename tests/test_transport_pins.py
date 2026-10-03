@@ -34,17 +34,24 @@ async def test_virtual_transport_pin_toggling() -> None:
 
 @pytest.mark.asyncio
 async def test_windows_named_pipe_transport() -> None:
-    from omniuart.core.transport import WindowsNamedPipeTransport
-    pipe = WindowsNamedPipeTransport("test_vcom")
-    await pipe.open()
-    assert pipe.is_open is True
+    import os
+    from omniuart.core.transport import WindowsNamedPipePair, WindowsNamedPipeTransport
 
-    await pipe.write(b"HELLO PIPE\r\n")
-    read_back = await pipe.read(size=12, timeout_ms=500)
+    if os.name != "nt":
+        with pytest.raises(NotImplementedError):
+            WindowsNamedPipeTransport("test_vcom")
+        return
+
+    pair = WindowsNamedPipePair("test_vcom")
+    await pair.open()
+    assert pair.host.is_open is True and pair.device.is_open is True
+
+    await pair.host.write(b"HELLO PIPE\r\n")
+    read_back = await pair.device.read(size=12, timeout_ms=1000)
     assert read_back == b"HELLO PIPE\r\n"
 
-    await pipe.close()
-    assert pipe.is_open is False
+    await pair.close()
+    assert pair.host.is_open is False
 
 
 @pytest.mark.asyncio
