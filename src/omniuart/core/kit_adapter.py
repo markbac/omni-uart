@@ -220,8 +220,15 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
         fields = cmd_data.get("fields", [])
         for f in fields:
             field_spec = resolve_field_type(f)
-            if f.get("role") == "discriminator" or "constValue" in f:
+            is_discriminator = f.get("role") == "discriminator" or "constValue" in f
+            if is_discriminator:
                 cmd_id = f.get("constValue", cmd_id)
+                if "constValue" in f:
+                    field_spec.default = f["constValue"]
+                if framing_type is FramingType.DELIMITED:
+                    # On a delimited line the discriminator *is* the command text, so it is
+                    # carried by the command id and must not be asked for as a parameter.
+                    continue
             params.append(field_spec)
 
         response_spec = None
