@@ -9,12 +9,22 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Mapping, Optional, Union
+from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec
 from omniuart.core.models import CommandSpec, ProtocolSpec
 from omniuart.core.recorder import SessionRecorder
 from omniuart.core.transport import AsyncTransport, HardwareSerialTransport, VirtualTransport
+
+
+# Decides whether a received frame answers a request: (command, request values, frame) -> bool.
+ResponseMatcher = Callable[[CommandSpec, Mapping[str, Any], DecodedFrame], bool]
+
+
+def _same_value(sent: Any, received: Any) -> bool:
+    if isinstance(sent, (int, float)) and isinstance(received, (int, float)) and not isinstance(sent, bool):
+        return abs(float(sent) - float(received)) <= 1e-9 * max(1.0, abs(float(sent)))
+    return bool(sent == received) or str(sent) == str(received)
 
 
 class CommandBlockedError(CodecError):
@@ -42,6 +52,7 @@ class Exchange:
     latency_ms: float = 0.0
     error: Optional[str] = None
     frames: List[DecodedFrame] = field(default_factory=list)
+    unsolicited: List[DecodedFrame] = field(default_factory=list)  # telemetry and responses that were not this command's answer
 
     @property
     def ok(self) -> bool:
@@ -72,7 +83,17 @@ class DeviceSession:
         transport: AsyncTransport,
         recorder: Optional[SessionRecorder] = None,
         read_only: bool = False,
+        matcher: Optional[ResponseMatcher] = None,
+        on_unsolicited: Optional[Callable[[DecodedFrame], None]] = None,
     ) -> None:
+        """``matcher`` replaces the built-in correlation (command name plus the ``correlate`` fields).
+
+        Frames that are not the awaited response (telemetry, or a response whose correlation fields
+        differ) never end the wait: they are collected in ``Exchange.unsolicited`` and passed to
+        ``on_unsolicited``.
+        """
+        self.matcher = matcher
+        self.on_unsolicited = on_unsolicited
         self.spec = spec
         self.transport = transport
         self.recorder = recorder
@@ -108,6 +129,7 @@ class DeviceSession:
         command: Union[str, CommandSpec],
         params: Optional[Mapping[str, Any]] = None,
         timeout_ms: Optional[int] = None,
+        matcher: Optional[ResponseMatcher] = None,
     ) -> Exchange:
         """Transmit ``command`` and wait for its response.
 
@@ -130,7 +152,7 @@ class DeviceSession:
             if cmd.response is None:
                 return exchange
             wait_ms = timeout_ms if timeout_ms is not None else cmd.response.timeout_ms
-            await self._await_response(cmd, exchange, wait_ms)
+            await self._await_response(cmd, exchange, wait_ms, self._request_values(cmd, params), matcher or self.matcher)
         except Exception as exc:  # noqa: BLE001 - any link failure is reported on the exchange
             exchange.status = ExchangeStatus.TRANSPORT_ERROR
             exchange.error = f"{type(exc).__name__}: {exc}"
@@ -147,7 +169,32 @@ class DeviceSession:
             )
         return exchange
 
-    async def _await_response(self, cmd: CommandSpec, exchange: Exchange, timeout_ms: int) -> None:
+    @staticmethod
+    def _request_values(cmd: CommandSpec, params: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+        given = params or {}
+        return {p.name: given.get(p.name, p.default) for p in cmd.parameters}
+
+    def _matches(self, cmd: CommandSpec, values: Mapping[str, Any], frame: DecodedFrame, matcher: Optional[ResponseMatcher]) -> bool:
+        if matcher is not None:
+            return matcher(cmd, values, frame)
+        return all(
+            name in frame.fields and _same_value(values.get(name), frame.fields[name])
+            for name in self.spec.correlation_fields(cmd)
+        )
+
+    def _unsolicited(self, exchange: Exchange, frame: DecodedFrame) -> None:
+        exchange.unsolicited.append(frame)
+        if self.on_unsolicited:
+            self.on_unsolicited(frame)
+
+    async def _await_response(
+        self,
+        cmd: CommandSpec,
+        exchange: Exchange,
+        timeout_ms: int,
+        values: Mapping[str, Any],
+        matcher: Optional[ResponseMatcher] = None,
+    ) -> None:
         loop = asyncio.get_running_loop()
         if not self.codec.is_binary:
             data = await read_available(self.transport, timeout_ms)
@@ -176,13 +223,20 @@ class DeviceSession:
                     exchange.status, exchange.error, exchange.response = ExchangeStatus.INVALID_RESPONSE, f"invalid response: {frame.error}", frame
                     return
                 if frame.kind == "response":
-                    if frame.name != cmd.name:
+                    if frame.name != cmd.name and matcher is None:
                         exchange.status = ExchangeStatus.INVALID_RESPONSE
                         exchange.error = f"response is for '{frame.name}', not '{cmd.name}'"
-                    exchange.response = frame
-                    return
-                # Unsolicited telemetry that arrives first is kept in ``frames``; keep waiting.
-        if exchange.response_bytes:
+                        exchange.response = frame
+                        return
+                    if self._matches(cmd, values, frame, matcher):
+                        exchange.response = frame
+                        return
+                # Telemetry, or a response whose correlation fields differ: not ours, keep waiting.
+                self._unsolicited(exchange, frame)
+        if exchange.unsolicited and not buf:
+            exchange.status = ExchangeStatus.TIMEOUT
+            exchange.error = f"no matching response to '{cmd.name}' within {timeout_ms} ms ({len(exchange.unsolicited)} other frame(s) ignored)"
+        elif exchange.response_bytes:
             exchange.status = ExchangeStatus.INVALID_RESPONSE
             exchange.error = "incomplete or unrecognised response bytes: " + exchange.response_bytes.hex(" ")
         else:

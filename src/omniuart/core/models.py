@@ -118,6 +118,21 @@ class CommandSpec(BaseModel):
     safety: CommandSafety = CommandSafety.MUTATING
     parameters: List[FieldSpec] = Field(default_factory=list)
     response: Optional[ResponseSpec] = None
+    # Request parameters whose values must equal the same-named fields of the response (a transaction id,
+    # sequence number or device address). A response that differs is not this command's answer.
+    correlate: List[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _check_correlation_fields(self) -> "CommandSpec":
+        if self.correlate:
+            if self.response is None:
+                raise ValueError(f"command '{self.name}' sets correlate but defines no response")
+            params = {p.name for p in self.parameters}
+            replies = {f.name for f in self.response.fields}
+            for name in self.correlate:
+                if name not in params or name not in replies:
+                    raise ValueError(f"command '{self.name}': correlate field '{name}' must be both a parameter and a response field")
+        return self
 
     @property
     def is_read_only(self) -> bool:
@@ -291,6 +306,18 @@ class ProtocolSpec(BaseModel):
     framing: FramingConfig
     commands: List[CommandSpec] = Field(default_factory=list)
     telemetry: List[TelemetrySpec] = Field(default_factory=list)
+    # Default ``correlate`` for every command that has all of these as both a parameter and a response field.
+    correlate: List[str] = Field(default_factory=list)
+
+    def correlation_fields(self, cmd: CommandSpec) -> List[str]:
+        """The fields that must match between ``cmd``'s request and a response for it to be accepted."""
+        if cmd.correlate:
+            return list(cmd.correlate)
+        if not self.correlate or cmd.response is None:
+            return []
+        params = {p.name for p in cmd.parameters}
+        replies = {f.name for f in cmd.response.fields}
+        return list(self.correlate) if all(n in params and n in replies for n in self.correlate) else []
 
     def get_command(self, name: str) -> Optional[CommandSpec]:
         """Lookup command by its human-readable identifier name."""
