@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.codec import FrameCodec
 from omniuart.core.models import CommandSpec, FieldSpec, FieldType, ProtocolSpec
 
-logging.disable(logging.WARNING)  # the kit adapter warns about every unsupported feature; the suite is about behaviour
 
 
 def sample_value(f: FieldSpec, which: str = "default") -> Any:
@@ -43,13 +43,24 @@ def sample_params(cmd: CommandSpec, which: str = "default") -> Dict[str, Any]:
     return {p.name: sample_value(p, which) for p in cmd.parameters}
 
 
+@contextmanager
+def quiet_loading() -> Iterator[None]:
+    """Hide the kit adapter's warnings about unsupported features while definitions load (this suite tests behaviour)."""
+    logging.disable(logging.WARNING)
+    try:
+        yield
+    finally:
+        logging.disable(logging.NOTSET)
+
+
 def catalog_protocols() -> List[Tuple[str, ProtocolSpec]]:
     catalog = CatalogManager()
     out = []
-    for path in catalog.list_protocol_files():
-        spec = catalog.get_protocol(path.name)
-        if spec is not None:
-            out.append((path.name, spec))
+    with quiet_loading():
+        for path in catalog.list_protocol_files():
+            spec = catalog.get_protocol(path.name)
+            if spec is not None:
+                out.append((path.name, spec))
     return out
 
 
