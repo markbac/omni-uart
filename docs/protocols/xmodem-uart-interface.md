@@ -18,31 +18,31 @@ File transfer over a serial link. Mixes 128/1024-byte framed data blocks (select
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `header` | `bytes` | - | - | - |
-| `blockNumber` | `bytes` | - | - | - |
-| `blockNumberComplement` | `bytes` | - | - | - |
+| `header` | `uint8` | - | - | - |
+| `blockNumber` | `uint8` | - | - | - |
+| `blockNumberComplement` | `uint8` | - | - | - |
 | `data` | `bytes` | - | - | - |
 
 #### `DataBlock1024` (Command ID: `0x02`) - Leading byte 0x02 (STX) implies a 1024-byte data field.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `header` | `bytes` | - | - | - |
-| `blockNumber` | `bytes` | - | - | - |
-| `blockNumberComplement` | `bytes` | - | - | - |
+| `header` | `uint8` | - | - | - |
+| `blockNumber` | `uint8` | - | - | - |
+| `blockNumberComplement` | `uint8` | - | - | - |
 | `data` | `bytes` | - | - | - |
 
 #### `EndOfTransmission` (Command ID: `0x04`) - A single bare byte, 0x04 -- no length field, no checksum, no envelope of any kind.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `controlByte` | `bytes` | - | - | - |
+| `controlByte` | `uint8` | - | - | - |
 
 #### `Cancel` (Command ID: `0x18`)
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `controlByte` | `bytes` | - | - | - |
+| `controlByte` | `uint8` | - | - | - |
 
 ## Device-Initiated Messages
 
@@ -50,13 +50,13 @@ File transfer over a serial link. Mixes 128/1024-byte framed data blocks (select
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `controlByte` | `bytes` | - |
+| `controlByte` | `uint8` | - |
 
 #### `Nak` (Message ID: `0x15`)
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `controlByte` | `bytes` | - |
+| `controlByte` | `uint8` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 

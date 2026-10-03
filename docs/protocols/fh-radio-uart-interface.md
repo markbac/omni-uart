@@ -18,19 +18,19 @@ NOT derived from, or a model of, any specific fielded system's published ICD -- 
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `netId` | `bytes` | - | - | - |
+| `netId` | `uint8` | - | - | - |
 
 #### `SelectHopset` (Command ID: `0x01`) - Selects a hopset/keyset by index into a locally fill-loaded table -- the index only, never the keyset contents.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `hopsetIndex` | `bytes` | - | - | - |
+| `hopsetIndex` | `uint8` | - | - | - |
 
 #### `SetTimeOfDay` (Command ID: `0x02`) - Synchronises the radio's hop-timing clock.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `secondsSinceEpoch` | `bytes` | - | - | - |
+| `secondsSinceEpoch` | `uint32` | - | - | - |
 
 ### Category: FREQUENCY-MANAGEMENT
 
@@ -44,7 +44,7 @@ NOT derived from, or a model of, any specific fielded system's published ICD -- 
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `frequencyHz` | `bytes` | - | - | - |
+| `frequencyHz` | `uint32` | - | - | - |
 
 ## Device-Initiated Messages
 

@@ -38,7 +38,7 @@ ASCII line-based instrument control (oscilloscopes, PSUs, DMMs). Baud is configu
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `voltage` | `bytes` | - | - | - |
+| `voltage` | `float32` | - | - | - |
 
 ## Device-Initiated Messages
 
@@ -46,10 +46,10 @@ ASCII line-based instrument control (oscilloscopes, PSUs, DMMs). Baud is configu
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `manufacturer` | `bytes` | - |
-| `model` | `bytes` | - |
-| `serial` | `bytes` | - |
-| `firmware` | `bytes` | - |
+| `manufacturer` | `string` | - |
+| `model` | `string` | - |
+| `serial` | `string` | - |
+| `firmware` | `string` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -184,7 +184,7 @@ components:
           const: 'SOUR:VOLT '
           description: Opcode ID for SetVoltageOutput
         voltage:
-          type: integer
+          type: number
       description: SOUR:VOLT <val> Set programmable power supply output voltage.
 
 ```

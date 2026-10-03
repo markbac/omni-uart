@@ -128,5 +128,5 @@ components:
           const: 'SOUR:VOLT '
           description: Opcode ID for SetVoltageOutput
         voltage:
-          type: integer
+          type: number
       description: SOUR:VOLT <val> Set programmable power supply output voltage.

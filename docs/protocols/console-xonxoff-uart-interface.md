@@ -18,7 +18,7 @@ Many console/CLI serial ports are wired with only TX/RX/GND -- no RTS/CTS lines 
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `text` | `bytes` | - | - | - |
+| `text` | `string` | - | - | - |
 
 ## Device-Initiated Messages
 
@@ -26,7 +26,7 @@ Many console/CLI serial ports are wired with only TX/RX/GND -- no RTS/CTS lines 
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `text` | `bytes` | - |
+| `text` | `string` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 

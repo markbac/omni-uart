@@ -18,7 +18,7 @@ Escapes any occurrence of the flag/escape bytes (and, by default, control chars 
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `control` | `bytes` | - | - | - |
+| `control` | `uint8` | - | - | - |
 | `protocol` | `uint16` | - | - | - |
 | `information` | `bytes` | - | - | - |
 

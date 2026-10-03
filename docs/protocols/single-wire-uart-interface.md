@@ -18,7 +18,7 @@ A genuine single shared data line, not just RTS/CTS omitted -- both sides' TX an
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `opcode` | `bytes` | - | - | - |
+| `opcode` | `uint8` | - | - | - |
 | `reserved` | `bytes` | - | - | - |
 
 ## Device-Initiated Messages
@@ -27,7 +27,7 @@ A genuine single shared data line, not just RTS/CTS omitted -- both sides' TX an
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `opcode` | `bytes` | - |
+| `opcode` | `uint8` | - |
 | `reserved` | `bytes` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification

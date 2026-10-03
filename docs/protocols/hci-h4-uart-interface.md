@@ -25,7 +25,7 @@ Host <-> Bluetooth radio controller link. Includes HCI_Set_AFH_Host_Channel_Clas
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `handleAndFlags` | `bytes` | - | - | - |
+| `handleAndFlags` | `uint16` | - | - | - |
 | `data` | `bytes` | - | - | - |
 
 ## Device-Initiated Messages
@@ -34,8 +34,8 @@ Host <-> Bluetooth radio controller link. Includes HCI_Set_AFH_Host_Channel_Clas
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `eventCode` | `bytes` | - |
-| `numHciCommandPackets` | `bytes` | - |
+| `eventCode` | `uint8` | - |
+| `numHciCommandPackets` | `uint8` | - |
 | `commandOpcode` | `uint16` | - |
 | `returnParameters` | `bytes` | - |
 

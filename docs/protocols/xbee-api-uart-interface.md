@@ -19,9 +19,9 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
-| `frameId` | `bytes` | - | - | - |
-| `atCommand` | `bytes` | - | - | - |
-| `parameterValue` | `bytes` | - | - | - |
+| `frameId` | `uint8` | - | - | - |
+| `atCommand` | `string` | - | - | - |
+| `parameterValue` | `uint8` | - | - | - |
 
 ### Category: DASHBOARD
 
@@ -30,9 +30,9 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
-| `frameId` | `bytes` | - | - | - |
-| `atCommand` | `bytes` | - | - | - |
-| `parameterValue` | `bytes` | - | - | - |
+| `frameId` | `uint8` | - | - | - |
+| `atCommand` | `string` | - | - | - |
+| `parameterValue` | `uint8` | - | - | - |
 
 ### Category: XBEE/TRANSMIT
 
@@ -41,11 +41,11 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
-| `frameId` | `bytes` | - | - | - |
+| `frameId` | `uint8` | - | - | - |
 | `dest64` | `bytes` | - | - | - |
-| `dest16` | `bytes` | - | - | - |
-| `broadcastRadius` | `bytes` | - | - | - |
-| `options` | `bytes` | - | - | - |
+| `dest16` | `uint16` | - | - | - |
+| `broadcastRadius` | `uint8` | - | - | - |
+| `options` | `uint8` | - | - | - |
 | `payload` | `bytes` | - | - | - |
 
 ### Category: XBEE/REMOTE_AT
@@ -55,11 +55,11 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
-| `frameId` | `bytes` | - | - | - |
+| `frameId` | `uint8` | - | - | - |
 | `dest64` | `bytes` | - | - | - |
-| `dest16` | `bytes` | - | - | - |
-| `applyOptions` | `bytes` | - | - | - |
-| `atCommand` | `bytes` | - | - | - |
+| `dest16` | `uint16` | - | - | - |
+| `applyOptions` | `uint8` | - | - | - |
+| `atCommand` | `string` | - | - | - |
 
 ## Device-Initiated Messages
 
@@ -68,9 +68,9 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
 | `frameType` | `enum` | - |
-| `frameId` | `bytes` | - |
-| `atCommand` | `bytes` | - |
-| `commandStatus` | `bytes` | - |
+| `frameId` | `uint8` | - |
+| `atCommand` | `string` | - |
+| `commandStatus` | `uint8` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 

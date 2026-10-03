@@ -185,17 +185,17 @@ components:
         timeBootMs:
           type: integer
         roll:
-          type: integer
+          type: number
         pitch:
-          type: integer
+          type: number
         yaw:
-          type: integer
+          type: number
         rollspeed:
-          type: integer
+          type: number
         pitchspeed:
-          type: integer
+          type: number
         yawspeed:
-          type: integer
+          type: number
       description: Message ID 30. Vehicle roll, pitch, and yaw angles and angular
         velocity.
     COMMAND_LONG_Request:
@@ -222,17 +222,17 @@ components:
         confirmation:
           type: integer
         param1:
-          type: integer
+          type: number
         param2:
-          type: integer
+          type: number
         param3:
-          type: integer
+          type: number
         param4:
-          type: integer
+          type: number
         param5:
-          type: integer
+          type: number
         param6:
-          type: integer
+          type: number
         param7:
-          type: integer
+          type: number
       description: Message ID 76. Generic command dispatch to vehicle autopilot.

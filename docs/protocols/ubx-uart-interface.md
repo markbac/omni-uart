@@ -18,19 +18,19 @@ GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `class` | `bytes` | - | - | - |
-| `id` | `bytes` | - | - | - |
+| `class` | `uint8` | - | - | - |
+| `id` | `uint8` | - | - | - |
 
 #### `CFG-PRT-SetBaud` (Command ID: `0x06`) - Same class=0x06, id=0x00 as CFG-PRT-Poll, but with a payload requesting a new port baud rate. The module's own ack is sent at the OLD rate; the host must reconfigure its own UART to the new rate immediately afterwards, per baudRateNegotiation.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `class` | `bytes` | - | - | - |
-| `id` | `bytes` | - | - | - |
-| `portId` | `bytes` | - | - | - |
+| `class` | `uint8` | - | - | - |
+| `id` | `uint8` | - | - | - |
+| `portId` | `uint8` | - | - | - |
 | `reserved` | `bytes` | - | - | - |
-| `mode` | `bytes` | - | - | - |
-| `baudRate` | `bytes` | - | - | - |
+| `mode` | `uint32` | - | - | - |
+| `baudRate` | `uint32` | - | - | - |
 
 ### Category: DASHBOARD
 
@@ -38,35 +38,35 @@ GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `class` | `bytes` | - | - | - |
-| `id` | `bytes` | - | - | - |
+| `class` | `uint8` | - | - | - |
+| `id` | `uint8` | - | - | - |
 
 #### `NAV-PVT` (Command ID: `0x01`) - Navigation Position Velocity Time Solution returning fix status, time accuracy, and 3D velocity.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `class` | `bytes` | - | - | - |
-| `id` | `bytes` | - | - | - |
-| `iTOW` | `bytes` | - | - | - |
-| `year` | `bytes` | - | - | - |
-| `month` | `bytes` | - | - | - |
-| `day` | `bytes` | - | - | - |
-| `hour` | `bytes` | - | - | - |
-| `min` | `bytes` | - | - | - |
-| `sec` | `bytes` | - | - | - |
-| `valid` | `bytes` | - | - | - |
-| `tAcc` | `bytes` | - | - | - |
-| `fixType` | `bytes` | - | - | - |
-| `numSV` | `bytes` | - | - | - |
-| `gSpeed` | `bytes` | - | - | - |
-| `heading` | `bytes` | - | - | - |
+| `class` | `uint8` | - | - | - |
+| `id` | `uint8` | - | - | - |
+| `iTOW` | `uint32` | - | - | - |
+| `year` | `uint16` | - | - | - |
+| `month` | `uint8` | - | - | - |
+| `day` | `uint8` | - | - | - |
+| `hour` | `uint8` | - | - | - |
+| `min` | `uint8` | - | - | - |
+| `sec` | `uint8` | - | - | - |
+| `valid` | `uint8` | - | - | - |
+| `tAcc` | `uint32` | - | - | - |
+| `fixType` | `uint8` | - | - | - |
+| `numSV` | `uint8` | - | - | - |
+| `gSpeed` | `int32` | - | - | - |
+| `heading` | `int32` | - | - | - |
 
 #### `MON-VER` (Command ID: `0x0A`) - Receiver Software and Hardware Version Poll.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `class` | `bytes` | - | - | - |
-| `id` | `bytes` | - | - | - |
+| `class` | `uint8` | - | - | - |
+| `id` | `uint8` | - | - | - |
 
 ### Category: GNSS/NAV
 
@@ -74,42 +74,42 @@ GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `class` | `bytes` | - | - | - |
-| `id` | `bytes` | - | - | - |
-| `iTOW` | `bytes` | - | - | - |
-| `lon` | `bytes` | - | - | - |
-| `lat` | `bytes` | - | - | - |
-| `height` | `bytes` | - | - | - |
-| `hMSL` | `bytes` | - | - | - |
-| `hAcc` | `bytes` | - | - | - |
-| `vAcc` | `bytes` | - | - | - |
+| `class` | `uint8` | - | - | - |
+| `id` | `uint8` | - | - | - |
+| `iTOW` | `uint32` | - | - | - |
+| `lon` | `int32` | - | - | - |
+| `lat` | `int32` | - | - | - |
+| `height` | `int32` | - | - | - |
+| `hMSL` | `int32` | - | - | - |
+| `hAcc` | `uint32` | - | - | - |
+| `vAcc` | `uint32` | - | - | - |
 
 #### `NAV-PVT` (Command ID: `0x01`) - Navigation Position Velocity Time Solution returning fix status, time accuracy, and 3D velocity.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `class` | `bytes` | - | - | - |
-| `id` | `bytes` | - | - | - |
-| `iTOW` | `bytes` | - | - | - |
-| `year` | `bytes` | - | - | - |
-| `month` | `bytes` | - | - | - |
-| `day` | `bytes` | - | - | - |
-| `hour` | `bytes` | - | - | - |
-| `min` | `bytes` | - | - | - |
-| `sec` | `bytes` | - | - | - |
-| `valid` | `bytes` | - | - | - |
-| `tAcc` | `bytes` | - | - | - |
-| `fixType` | `bytes` | - | - | - |
-| `numSV` | `bytes` | - | - | - |
-| `gSpeed` | `bytes` | - | - | - |
-| `heading` | `bytes` | - | - | - |
+| `class` | `uint8` | - | - | - |
+| `id` | `uint8` | - | - | - |
+| `iTOW` | `uint32` | - | - | - |
+| `year` | `uint16` | - | - | - |
+| `month` | `uint8` | - | - | - |
+| `day` | `uint8` | - | - | - |
+| `hour` | `uint8` | - | - | - |
+| `min` | `uint8` | - | - | - |
+| `sec` | `uint8` | - | - | - |
+| `valid` | `uint8` | - | - | - |
+| `tAcc` | `uint32` | - | - | - |
+| `fixType` | `uint8` | - | - | - |
+| `numSV` | `uint8` | - | - | - |
+| `gSpeed` | `int32` | - | - | - |
+| `heading` | `int32` | - | - | - |
 
 #### `NAV-STATUS` (Command ID: `0x01`) - Receiver Navigation Status Poll.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `class` | `bytes` | - | - | - |
-| `id` | `bytes` | - | - | - |
+| `class` | `uint8` | - | - | - |
+| `id` | `uint8` | - | - | - |
 
 ### Category: TELEMETRY
 
@@ -117,15 +117,15 @@ GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `class` | `bytes` | - | - | - |
-| `id` | `bytes` | - | - | - |
-| `iTOW` | `bytes` | - | - | - |
-| `lon` | `bytes` | - | - | - |
-| `lat` | `bytes` | - | - | - |
-| `height` | `bytes` | - | - | - |
-| `hMSL` | `bytes` | - | - | - |
-| `hAcc` | `bytes` | - | - | - |
-| `vAcc` | `bytes` | - | - | - |
+| `class` | `uint8` | - | - | - |
+| `id` | `uint8` | - | - | - |
+| `iTOW` | `uint32` | - | - | - |
+| `lon` | `int32` | - | - | - |
+| `lat` | `int32` | - | - | - |
+| `height` | `int32` | - | - | - |
+| `hMSL` | `int32` | - | - | - |
+| `hAcc` | `uint32` | - | - | - |
+| `vAcc` | `uint32` | - | - | - |
 
 ### Category: GNSS/MON
 
@@ -133,8 +133,8 @@ GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `class` | `bytes` | - | - | - |
-| `id` | `bytes` | - | - | - |
+| `class` | `uint8` | - | - | - |
+| `id` | `uint8` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 

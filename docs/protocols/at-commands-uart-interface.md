@@ -32,7 +32,7 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `rate` | `bytes` | - | - | - |
+| `rate` | `uint16` | - | - | - |
 
 #### `SetVerboseErrors` (Command ID: `AT+CMEE=2`) - AT+CMEE=2 (section 10.2) -- without this, most of the CmeError responses modeled throughout this whole file wouldn't actually be returned at all; the module would send plain ERROR instead. Worth sending early in any real integration's init sequence, right after SetEchoOff.
 
@@ -46,7 +46,7 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `time` | `bytes` | - | - | - |
+| `time` | `string` | - | - | - |
 
 ### Category: IDENTIFICATION
 
@@ -80,8 +80,8 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `format` | `bytes` | - | - | - |
-| `oper` | `bytes` | - | - | - |
+| `format` | `uint16` | - | - | - |
+| `oper` | `string` | - | - | - |
 
 #### `SetOperatorDeregister` (Command ID: `AT+COPS=2`) - AT+COPS=2 -- deregister from the network and remain deregistered until told otherwise.
 
@@ -89,48 +89,48 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `format` | `bytes` | - | - | - |
+| `format` | `uint16` | - | - | - |
 
 #### `SetOperatorManualAutomatic` (Command ID: `AT+COPS=4,`) - AT+COPS=4,<format>,<oper> -- try the given operator manually; fall back to automatic selection if that specific one can't be reached. Same AcT simplification as SetOperatorManual.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `format` | `bytes` | - | - | - |
-| `oper` | `bytes` | - | - | - |
+| `format` | `uint16` | - | - | - |
+| `oper` | `string` | - | - | - |
 
 #### `EnterPin` (Command ID: `AT+CPIN=`) - AT+CPIN=<pin> -- from the Quectel BC660K-GL manual (AT+CPIN, section 8.6): entering a plain SIM PIN. See EnterPukWithNewPin for the other shape this same command takes.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `pin` | `bytes` | - | - | - |
+| `pin` | `string` | - | - | - |
 
 #### `EnterPukWithNewPin` (Command ID: `AT+CPIN=`) - AT+CPIN=<puk>,<newpin> -- when the SIM demands PUK (not plain PIN), a second argument -- the new PIN to set -- is required. Genuinely COPS-like: same command name, argument COUNT (not a leading mode digit this time) selects which shape applies, and this schema has no way to make newpin conditionally required on pin actually being a PUK rather than a PIN -- an engine, or a human, has to know which case applies from GetPinStatus's own +CPIN: SIM PUK result first.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `puk` | `bytes` | - | - | - |
-| `newpin` | `bytes` | - | - | - |
+| `puk` | `string` | - | - | - |
+| `newpin` | `string` | - | - | - |
 
 #### `UnlockFacility` (Command ID: `AT+CLCK=`) - AT+CLCK=<fac>,0[,<passwd>] -- from the manual's AT+CLCK (section 8.5). fac is quoted, e.g. \"SC\" for the SIM facility.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `fac` | `bytes` | - | - | - |
-| `mode` | `bytes` | - | - | - |
+| `fac` | `string` | - | - | - |
+| `mode` | `uint16` | - | - | - |
 
 #### `LockFacility` (Command ID: `AT+CLCK=`) - AT+CLCK=<fac>,1[,<passwd>].
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `fac` | `bytes` | - | - | - |
-| `mode` | `bytes` | - | - | - |
+| `fac` | `string` | - | - | - |
+| `mode` | `uint16` | - | - | - |
 
 #### `QueryFacilityLock` (Command ID: `AT+CLCK=`) - AT+CLCK=<fac>,2 -- the third CLCK shape: mode=2 needs no password, and gets a genuinely different response format (FacilityLockResult lines, not a bare OK) from mode=0/1 -- but that's not actually ambiguous for this schema's dispatch algorithm, since FacilityLockResult has its own +CLCK: prefix distinguishing it from Ok. Worth including precisely because it's a case where a mode-dependent response DOESN'T need special handling, unlike G460's write-variant ambiguity.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `fac` | `bytes` | - | - | - |
-| `mode` | `bytes` | - | - | - |
+| `fac` | `string` | - | - | - |
+| `mode` | `uint16` | - | - | - |
 
 #### `SetPsmDisabled` (Command ID: `AT+CPSMS=2`) - AT+CPSMS=2 -- from the manual's AT+CPSMS (section 9.4): mode=2 is a 'special form' that takes no further parameters at all and resets everything to defaults, unlike mode=0/1 below.
 
@@ -139,9 +139,9 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `mode` | `enum` | - | - | `{'0': 'Disable', '1': 'Enable'}` |
-| `separator` | `bytes` | - | - | - |
-| `tau` | `bytes` | - | - | - |
-| `activeTime` | `bytes` | - | - | - |
+| `separator` | `string` | - | - | - |
+| `tau` | `string` | - | - | - |
+| `activeTime` | `string` | - | - | - |
 
 #### `QcfgGetDataInactTimer` (Command ID: `AT+QCFG=\"DataInactTimer\"`) - AT+QCFG=\"DataInactTimer\" -- Quectel's AT+QCFG (section 11.1) is itself a text-based sub-command dispatcher: its first argument, a quoted function name, selects an entirely different parameter set for everything after it -- the same COPS-like pattern, but keyed on a string rather than a mode digit. Modeled as separate commands per function, the same way COPS's modes are. Omitting the value here means query.
 
@@ -149,29 +149,29 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `value` | `bytes` | - | - | - |
+| `value` | `uint16` | - | - | - |
 
 #### `QcfgGpioInitialize` (Command ID: `AT+QCFG=\"GPIO\",1,`) - AT+QCFG=\"GPIO\",1,<pin>,<dir>,<pullsel>,<level> -- a SECOND, nested level of the same COPS-like pattern: within the 'GPIO' function specifically, a further <mode> digit (1/2/3) selects yet another shape. mode=1 (initialize) requires every parameter; contrast QcfgGpioQuery and QcfgGpioConfigure below, which need fewer. This is genuinely a two-level dispatch (function name, then mode within it), and it validates fine with nothing beyond the ordinary field/constValue/role mechanism already used for COPS -- no new schema capability was needed for this, just more layers of the same one.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `pin` | `bytes` | - | - | - |
-| `dir` | `bytes` | - | - | - |
-| `pullsel` | `bytes` | - | - | - |
-| `level` | `bytes` | - | - | - |
+| `pin` | `uint16` | - | - | - |
+| `dir` | `uint16` | - | - | - |
+| `pullsel` | `uint16` | - | - | - |
+| `level` | `uint16` | - | - | - |
 
 #### `QcfgGpioQuery` (Command ID: `AT+QCFG=\"GPIO\",2,`) - AT+QCFG=\"GPIO\"[,2[,<pin>]] -- mode=2 (the default if omitted entirely) with pin optional: omit it for every GPIO's status, or give one for just that pin. Modeled here as the explicit mode=2,pin form; the bare AT+QCFG=\"GPIO\" (mode and pin both omitted) is QcfgGetDataInactTimer's sibling case and isn't separately modeled to keep this set from growing unboundedly -- the pattern is established by the two variants that are here.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `pin` | `bytes` | - | - | - |
+| `pin` | `uint16` | - | - | - |
 
 #### `QcfgGpioConfigure` (Command ID: `AT+QCFG=\"GPIO\",3,`) - AT+QCFG=\"GPIO\",3,<pin>,<level> -- mode=3: set one GPIO's output level. Per the manual, 'only and must set value of a specified GPIO' -- pin and level only, no dir/pullsel, a third distinct trailing shape for the same function name.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `pin` | `bytes` | - | - | - |
-| `level` | `bytes` | - | - | - |
+| `pin` | `uint16` | - | - | - |
+| `level` | `uint16` | - | - | - |
 
 #### `GetIccidQuectel` (Command ID: `AT+QCCID`) - AT+QCCID -- correction: an earlier version of this file modeled a generic, vendor-unspecified 'AT+CCID' for this. The Quectel BC660K-GL manual's actual command (section 8.11) is AT+QCCID, an execution command with no arguments at all; response is +QCCID:, not +CCID:. Kept alongside the generic GetIccid/IccidResult below rather than replacing them, since other vendors do genuinely use the generic form -- but where you have the real target module's manual, as here, prefer the sourced command over the generic guess.
 
@@ -182,8 +182,8 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `mode` | `enum` | - | - | `{'0': 'Disable', '1': 'Enable', '2': 'EnableWithUrc'}` |
-| `actType` | `bytes` | - | - | - |
-| `requestedEdrxValue` | `bytes` | - | - | - |
+| `actType` | `uint16` | - | - | - |
+| `requestedEdrxValue` | `string` | - | - | - |
 
 #### `GetOperatorNames` (Command ID: `AT+COPN`) - AT+COPN -- dumps the modem's whole built-in numeric-to-alphanumeric operator name table. The device sends one OperatorNameResult line per known operator, then OK -- a burst of many same-shaped response frames, not one. No special modeling needed for that: each line dispatches independently like any other response, there just happen to be a lot of them in a row.
 
@@ -205,8 +205,8 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `state` | `bytes` | - | - | - |
-| `cid` | `bytes` | - | - | - |
+| `state` | `uint16` | - | - | - |
+| `cid` | `uint16` | - | - | - |
 
 #### `GetPdpAddress` (Command ID: `AT+CGPADDR`) - AT+CGPADDR (section 4.4, bare execution form) -- the IP address actually assigned to the device once its PDP context is active.
 
@@ -214,15 +214,15 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `cid` | `bytes` | - | - | - |
-| `cpdataLength` | `bytes` | - | - | - |
-| `cpdata` | `bytes` | - | - | - |
+| `cid` | `uint16` | - | - | - |
+| `cpdataLength` | `uint16` | - | - | - |
+| `cpdata` | `string` | - | - | - |
 
 #### `SetControlPlaneDataReporting` (Command ID: `AT+CRTDCP=`) - AT+CRTDCP=<reporting> (section 7.3) -- enables the +CRTDCP: URC (ControlPlaneDataReceived) for downlink data arriving the same way SendControlPlaneData sends it uplink.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `reporting` | `bytes` | - | - | - |
+| `reporting` | `uint16` | - | - | - |
 
 #### `SetGprsAttach` (Command ID: `AT+CGATT=1`) - AT+CGATT=1 -- attach to the GPRS/packet-data service, a precondition for DefinePdpContext.
 
@@ -230,15 +230,15 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `cid` | `bytes` | - | - | - |
-| `pdpType` | `bytes` | - | - | - |
-| `apn` | `bytes` | - | - | - |
+| `cid` | `uint16` | - | - | - |
+| `pdpType` | `string` | - | - | - |
+| `apn` | `string` | - | - | - |
 
 #### `Dial` (Command ID: `ATD`) - ATD<number> -- for a circuit-switched or legacy dial-up data call.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `phoneNumber` | `bytes` | - | - | - |
+| `phoneNumber` | `string` | - | - | - |
 
 #### `HangUp` (Command ID: `ATH`) - ATH.
 
@@ -252,14 +252,14 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `phoneNumber` | `bytes` | - | - | - |
-| `suffix` | `bytes` | - | - | - |
+| `phoneNumber` | `string` | - | - | - |
+| `suffix` | `string` | - | - | - |
 
 #### `SendSmsBody` (Command ID: `0x3D`) - The actual message text, sent only after SendSmsHeader's '> ' prompt. Terminated by Ctrl-Z (0x1A), NOT this interface's usual CRLF -- endDelimiterOverride exists specifically for this case. (Esc instead of Ctrl-Z cancels the send instead; not separately modeled here.)
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `messageText` | `bytes` | - | - | - |
+| `messageText` | `string` | - | - | - |
 
 ## Device-Initiated Messages
 
@@ -271,47 +271,47 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `code` | `bytes` | - |
+| `code` | `uint16` | - |
 
 #### `PinStatusResult` (Message ID: `+CPIN:`) - +CPIN: READY (no PIN needed) or +CPIN: SIM PIN (one is required), among other states.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `status` | `bytes` | - |
+| `status` | `string` | - |
 
 #### `NetworkRegistrationResult` (Message ID: `+CREG:`) - +CREG: <n>,<stat> -- n is the reporting mode previously set; stat is the registration state (1=registered home, 5=registered roaming, etc.).
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `n` | `bytes` | - |
-| `stat` | `bytes` | - |
+| `n` | `uint16` | - |
+| `stat` | `uint16` | - |
 
 #### `SignalQueryResult` (Message ID: `+CSQ:`) - +CSQ: 15,99 followed by OK, each its own CRLF-terminated line.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `rssi` | `bytes` | - |
-| `ber` | `bytes` | - |
+| `rssi` | `string` | - |
+| `ber` | `string` | - |
 
 #### `ExtendedSignalQualityResult` (Message ID: `+CESQ:`) - +CESQ: <rssi>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp> -- 6 comma-separated values, most using 99/255-style sentinels for 'not known/not detectable' on fields that don't apply to the current radio access technology.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `rssi` | `bytes` | - |
-| `ber` | `bytes` | - |
-| `rscp` | `bytes` | - |
-| `ecno` | `bytes` | - |
-| `rsrq` | `bytes` | - |
-| `rsrp` | `bytes` | - |
+| `rssi` | `uint16` | - |
+| `ber` | `uint16` | - |
+| `rscp` | `uint16` | - |
+| `ecno` | `uint16` | - |
+| `rsrq` | `uint16` | - |
+| `rsrp` | `uint16` | - |
 
 #### `OperatorResult` (Message ID: `+COPS:`) - +COPS: <mode>[,<format>,<oper>][,<AcT>] -- per the manual (section 7.2): format/oper/AcT are genuinely OPTIONAL, omitted together when no operator is selected -- modeled below as always-present for simplicity, a real gap against the manual's own read-command response shape, not fixed here. AcT on THIS module is 9 (E-UTRAN NB-S1 mode) -- an earlier version of this file used 7 (generic LTE from the wider 3GPP TS 27.007 AcT table), which is wrong for this specific module; corrected.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `mode` | `bytes` | - |
-| `format` | `bytes` | - |
-| `oper` | `bytes` | - |
-| `accessTechnology` | `bytes` | - |
+| `mode` | `uint16` | - |
+| `format` | `uint16` | - |
+| `oper` | `string` | - |
+| `accessTechnology` | `uint16` | - |
 
 #### `TestOperators` (Message ID: `AT+COPS=?`) - AT+COPS=? -- the test command form, genuinely distinct from GetOperator (AT+COPS?): scans and lists every operator the module currently sees, not just the selected one. Response (OperatorScanResult) is a compound per-operator list, not the simple mode/format/oper/AcT shape.
 
@@ -319,137 +319,137 @@ Plain text command/response lines. No length field, no CRC, and no escaping -- a
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `operatorListRaw` | `bytes` | - |
+| `operatorListRaw` | `string` | - |
 
 #### `OperatorNameResult` (Message ID: `+COPN:`) - +COPN: <numeric>,<alpha> -- one line per operator in the modem's built-in table; GetOperatorNames's own description covers the multi-line pattern this and PreferredOperatorResult both share.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `numeric` | `bytes` | - |
-| `alpha` | `bytes` | - |
+| `numeric` | `string` | - |
+| `alpha` | `string` | - |
 
 #### `PreferredListSelectionResult` (Message ID: `+CPLS:`) - +CPLS: <list>
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `list` | `bytes` | - |
+| `list` | `uint16` | - |
 
 #### `PreferredOperatorResult` (Message ID: `+CPOL:`) - +CPOL: <index>,<format>,<oper> -- one line per stored preferred-operator entry.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `index` | `bytes` | - |
-| `format` | `bytes` | - |
-| `oper` | `bytes` | - |
+| `index` | `uint16` | - |
+| `format` | `uint16` | - |
+| `oper` | `string` | - |
 
 #### `ImsiResult` (Message ID: `ImsiResult`) - Raw IMSI digit string, no +CIMI: prefix -- unlike almost every other query response here, so nothing to use as role=discriminator. Worth flagging: IMSI and IMEI (SerialNumberLegacyResult) are both commonly 15 prefix-less digits, so if their lengths coincide, this schema's dispatch algorithm genuinely cannot tell them apart by content alone -- real disambiguation relies entirely on which request (GetImsi vs GetSerialNumberLegacy) is outstanding, the same correlation problem noted for G460's AckResponse.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `imsi` | `bytes` | - |
+| `imsi` | `string` | - |
 
 #### `IccidResult` (Message ID: `+CCID:`) - +CCID: <iccid> as modeled here (vendor-specific -- see GetIccid).
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `iccid` | `bytes` | - |
+| `iccid` | `string` | - |
 
 #### `IccidQuectelResult` (Message ID: `+QCCID:`) - +QCCID: <ICCID> -- the Quectel BC660K-GL manual's actual response to AT+QCCID (GetIccidQuectel), with its own distinct prefix from the generic IccidResult above.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `iccid` | `bytes` | - |
+| `iccid` | `string` | - |
 
 #### `FacilityLockResult` (Message ID: `+CLCK:`) - +CLCK: <status>[,<class>] -- QueryFacilityLock's response. class is optional and omitted here for simplicity; a real implementation may see it, or several repeated lines for different classes.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `status` | `bytes` | - |
+| `status` | `uint16` | - |
 
 #### `DataInactTimerResult` (Message ID: `+QCFG:\"DataInactTimer\",`) - +QCFG: "DataInactTimer",<value> -- QcfgGetDataInactTimer's response.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `value` | `bytes` | - |
+| `value` | `uint16` | - |
 
 #### `GpioStatusResult` (Message ID: `+QCFG:\"GPIO\",`) - +QCFG: "GPIO",<level>[,<level>,<level>,<level>] -- QcfgGpioQuery's response: one level if a specific pin was queried, four (comma-joined) if all were. Modeled as a single variable-length string covering however many comma-separated levels are actually present, rather than as separate optional fields -- this schema has no clean way to say 'either 1 or 4 of this field, never 2 or 3.'
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `levels` | `bytes` | - |
+| `levels` | `string` | - |
 
 #### `FirmwareRevisionResult` (Message ID: `Revision:`) - Revision: <revision> -- see GetFirmwareRevision for why this doesn't follow the usual '+CGMR:' shape.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `revision` | `bytes` | - |
+| `revision` | `string` | - |
 
 #### `BaudRateResult` (Message ID: `+IPR:`) - +IPR: <rate> -- GetBaudRate's response.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `rate` | `bytes` | - |
+| `rate` | `uint16` | - |
 
 #### `PdpAddressResult` (Message ID: `+CGPADDR:`) - +CGPADDR: <cid>,<address> -- GetPdpAddress's response.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `cid` | `bytes` | - |
-| `address` | `bytes` | - |
+| `cid` | `uint16` | - |
+| `address` | `string` | - |
 
 #### `ControlPlaneDataReceived` (Message ID: `+CRTDCP:`) - +CRTDCP: <cid>,<cpdataLength>,<cpdata> -- an unsolicited result code (URC), not a reply to any specific command: arrives whenever the network sends downlink data via the control plane, once SetControlPlaneDataReporting has enabled it.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `cid` | `bytes` | - |
-| `cpdataLength` | `bytes` | - |
-| `cpdata` | `bytes` | - |
+| `cid` | `uint16` | - |
+| `cpdataLength` | `uint16` | - |
+| `cpdata` | `string` | - |
 
 #### `NonIpDataReceived` (Message ID: `+RECVNONIP:`) - +RECVNONIP: <cid>,<dataLength>,<data> -- a second, distinct URC for incoming non-IP data, via the user plane rather than SendControlPlaneData/ControlPlaneDataReceived's control-plane path.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `cid` | `bytes` | - |
-| `dataLength` | `bytes` | - |
-| `data` | `bytes` | - |
+| `cid` | `uint16` | - |
+| `dataLength` | `uint16` | - |
+| `data` | `string` | - |
 
 #### `BatteryVoltageResult` (Message ID: `+CBC:`) - +CBC: <voltage> in mV -- GetBatteryVoltage's response.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `voltage` | `bytes` | - |
+| `voltage` | `uint16` | - |
 
 #### `ClockResult` (Message ID: `+CCLK:`) - +CCLK: <time> -- GetClock's response.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `time` | `bytes` | - |
+| `time` | `string` | - |
 
 #### `SerialNumberLegacyResult` (Message ID: `SerialNumberLegacyResult`) - Raw IMEI digit string, no prefix -- same shape as ImsiResult; see its description for the resulting dispatch ambiguity when lengths coincide.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `imei` | `bytes` | - |
+| `imei` | `string` | - |
 
 #### `GprsRegistrationResult` (Message ID: `+CGREG:`) - +CGREG: <n>,<stat> -- same stat encoding as NetworkRegistrationResult, for packet-switched registration.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `n` | `bytes` | - |
-| `stat` | `bytes` | - |
+| `n` | `uint16` | - |
+| `stat` | `uint16` | - |
 
 #### `EpsRegistrationResult` (Message ID: `+CEREG:`) - +CEREG: <n>,<stat> -- same shape again, for LTE/EPS registration.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `n` | `bytes` | - |
-| `stat` | `bytes` | - |
+| `n` | `uint16` | - |
+| `stat` | `uint16` | - |
 
 #### `SmsSentResult` (Message ID: `+CMGS:`) - +CMGS: <messageReference> -- confirms SendSmsBody's message was actually sent, with a reference number for delivery-status tracking.
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `messageReference` | `bytes` | - |
+| `messageReference` | `uint16` | - |
 
 #### `Connect` (Message ID: `CONNECT`) - Sent instead of OK for EnterDataMode: confirms the switch, after which every byte on the wire is PPP, not AT text, until the link drops back to command mode.
 

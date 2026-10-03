@@ -11,6 +11,7 @@ import yaml
 
 from omniuart.core.crc import normalize_algorithm_name
 from omniuart.core.models import (
+    CommandSafety,
     CommandIdSpec,
     CommandSpec,
     FieldSpec,
@@ -253,7 +254,9 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
         name = field_def.get("name", "unnamed")
         type_ref = field_def.get("type", "")
         type_info = field_types.get(type_ref, {}) if type_ref in field_types else {}
-        base_type = type_info.get("baseType") or field_def.get("baseType") or "bytes"
+        # ``type`` is either a name from ``fieldTypes`` or (per the kit schema) a baseType keyword itself.
+        keyword = type_ref if type_ref and type_ref not in field_types else None
+        base_type = type_info.get("baseType") or field_def.get("baseType") or keyword or "bytes"
         size_bytes = type_info.get("sizeBytes") or field_def.get("sizeBytes")
         
         ftype = _map_field_type(base_type, size_bytes)
@@ -266,12 +269,18 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
         elif "enumValues" in field_def:
             options_dict = field_def["enumValues"]
 
+        ext = field_def.get("x-omniuart") or {}  # OmniUART-specific settings the kit schema has no place for
         return FieldSpec(
             name=name,
+            min=ext.get("min"),
+            max=ext.get("max"),
+            scale=ext.get("scale"),
+            default=ext.get("default"),
             type=ftype,
             endian=endian_str,
             unit=field_def.get("units") or type_info.get("units"),
             options=options_dict,
+            length=size_bytes if ftype in (FieldType.STRING, FieldType.BYTES) and size_bytes else None,
         )
 
     def build_message(msg: Dict[str, Any], index: int, kind: str) -> Tuple[Union[int, str], List[FieldSpec]]:
@@ -329,6 +338,7 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
                 id=cmd_id,
                 description=cmd_data.get("description"),
                 tags=tags,
+                safety=(cmd_data.get("x-omniuart") or {}).get("safety", CommandSafety.MUTATING),
                 parameters=params,
                 response=response_spec,
             )

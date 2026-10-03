@@ -18,8 +18,8 @@ Same async HDLC framing as plain PPP, but hardware flow control isn't optional h
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `control` | `bytes` | - | - | - |
-| `protocol` | `bytes` | - | - | - |
+| `control` | `uint8` | - | - | - |
+| `protocol` | `uint16` | - | - | - |
 | `information` | `bytes` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
