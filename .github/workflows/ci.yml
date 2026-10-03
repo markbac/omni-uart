@@ -132,6 +132,16 @@ jobs:
         run: |
           python -m pytest
 
+      - name: Summarise failures as annotations
+        if: failure()
+        shell: bash
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m pytest -q --tb=short -p no:cacheprovider 2>&1 | grep -v "^SKIPPED" | tail -60 > pytest-failures.txt || true
+          msg=$(python -c "print(open('pytest-failures.txt', errors='replace').read().replace('%','%25').replace('\r','').replace('\n','%0A')[:3500])")
+          echo "::error title=pytest failures::$msg"
+
   verify-standalone-binaries:
     name: Build & Verify PyInstaller Standalone Binaries (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
