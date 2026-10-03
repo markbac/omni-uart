@@ -13,6 +13,20 @@ The schema governs:
 
 ---
 
+## Resource limits
+
+Untrusted definitions, scripts, captures and streams are bounded. Defaults, each overridable with the environment variable `OMNIUART_MAX_<NAME>` (a non-positive or non-numeric value is ignored with a warning):
+
+| Limit | Default | Applies to |
+|---|---|---|
+| `DEFINITION_BYTES` | 1048576 | size of a protocol or script file or text; a document nested too deeply to parse is also an error |
+| `FRAME_BYTES` | 1048576 | largest frame the codec waits for (a longer declared length is treated as a false header) and largest declared field `length` |
+| `SCRIPT_STEPS` | 10000 | steps in a script |
+| `SCRIPT_DURATION_S` | 3600 | wall-clock time of one script run; later steps are reported as an error then skipped |
+| `REPLAY_DURATION_S` | 3600 | total waiting time of a session replay |
+| `FUZZ_VECTORS` | 10000 | vectors in one fuzz campaign |
+| `RETRIES` | 10 | retries of a telemetry webhook |
+
 ## Authoritative definition
 
 The Pydantic models in `omniuart.core.models` are the canonical definition of the native protocol and script formats. `schemas/protocol.schema.json` and `schemas/script.schema.json` are generated from them (`python -m omniuart.schema_export`) and a test fails if the committed files drift. A JSON Schema cannot express every rule the models enforce (for example the CRC width and polynomial checks or the discriminator rules), so the models, and `omni-uart lint`, decide validity; the schema is for editor completion and early structural checks. The kit format (`uart-interface.schema.json`) is a separate, externally defined schema read through the kit adapter.

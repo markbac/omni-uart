@@ -13,6 +13,7 @@ import urllib.request
 from urllib.parse import urlparse
 from typing import Dict, Optional, Tuple
 
+from omniuart.core.limits import get_limits
 from omniuart.core.recorder import PacketEvent
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class TelemetryBridge:
     ) -> None:
         self.mqtt_broker = mqtt_broker
         self.webhook_url = webhook_url
-        self.retries = max(0, retries)
+        self.retries = min(max(0, retries), get_limits().retries)
         self.backoff_s = backoff_s
         self.errors: Dict[str, str] = {}
 

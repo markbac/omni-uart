@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
+from omniuart.core.limits import get_limits
 from omniuart.core.codec import CodecError, FrameCodec, default_value, encode_value
 from omniuart.core.session import read_available
 from omniuart.core.models import CommandSpec, FieldSpec, FieldType, ProtocolSpec
@@ -208,7 +209,7 @@ class ProtocolFuzzer:
         """
         per_command = [self.generate_vectors_for_command(cmd) for cmd in self.spec.commands]
         interleaved = [v for group in zip_longest(*per_command) for v in group if v is not None]
-        return interleaved[:max_vectors]
+        return interleaved[: min(max_vectors, get_limits().fuzz_vectors)]
 
     # ------------------------------------------------------------------ execution
     def _probe(self) -> Optional[Tuple[CommandSpec, bytes]]:
