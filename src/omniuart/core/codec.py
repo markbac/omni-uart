@@ -20,6 +20,7 @@ import struct
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
+from omniuart.core.limits import get_limits
 from omniuart.core.crc import (
     byte_order,
     algorithm_width,
@@ -285,6 +286,7 @@ class FrameCodec:
         self.framing = spec.framing
         self.is_binary = self.framing.type is FramingType.BINARY
         self._header = _as_bytes(self.framing.header) if self.is_binary else b""
+        self._max_frame = get_limits().frame_bytes
         self._footer = _as_bytes(self.framing.footer) if self.is_binary else b""
         self._crc_bits = self._resolve_integrity_width() if self.is_binary else 0
         self._integrity_width = self._crc_bits // 8  # bytes on the wire
@@ -496,10 +498,14 @@ class FrameCodec:
                     return -1
             else:
                 total = head + length_size + id_size + value + trailer
+            if total > self._max_frame:
+                return -1  # a declared length beyond the limit is treated as a false header
             return total if len(buf) >= total else None
         if self._footer:
             idx = buf.find(self._footer, head + id_size + self._integrity_width)
-            return None if idx < 0 else idx + len(self._footer)
+            if idx < 0:
+                return -1 if len(buf) > self._max_frame else None
+            return idx + len(self._footer)
         if len(buf) < head + id_size:
             return None
         message = self._lookup(int.from_bytes(buf[head : head + id_size], byte_order(self._id_endian())), "any")

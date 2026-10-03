@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from omniuart.core.limits import get_limits
 from omniuart.core.crc import TRANSFORMS, CrcAlgorithm, CrcModel, resolve_algorithm
 
 logger = logging.getLogger(__name__)
@@ -85,6 +86,14 @@ class FieldSpec(BaseModel):
         if low not in ("little", "big"):
             raise ValueError(f"Endian must be 'little' or 'big', got '{v}'")
         return low
+
+    @field_validator("length")
+    @classmethod
+    def validate_length(cls, v: Optional[int]) -> Optional[int]:
+        limit = get_limits().frame_bytes
+        if v is not None and not 0 <= v <= limit:
+            raise ValueError(f"field length {v} is outside 0..{limit} (OMNIUART_MAX_FRAME_BYTES)")
+        return v
 
 
 class ResponseSpec(BaseModel):
@@ -373,24 +382,46 @@ def _is_existing_file(text: str) -> bool:
         return False
 
 
+def _check_definition_size(size: int, what: str) -> None:
+    limit = get_limits().definition_bytes
+    if size > limit:
+        raise ValueError(f"{what} is {size} bytes, over the {limit}-byte limit (OMNIUART_MAX_DEFINITION_BYTES)")
+
+
+def _read_limited(path: Path) -> str:
+    _check_definition_size(path.stat().st_size, f"'{path.name}'")
+    return path.read_text(encoding="utf-8")
+
+
+def _parse_document(raw: str, is_yaml: bool) -> Any:
+    """Parse YAML or JSON; a document nested too deeply to parse is a ``ValueError``, not a crash."""
+    try:
+        return yaml.safe_load(raw) if is_yaml else json.loads(raw)
+    except RecursionError:
+        raise ValueError("definition is nested too deeply to parse") from None
+    except (yaml.YAMLError, json.JSONDecodeError) as exc:
+        raise ValueError(f"cannot parse definition: {exc}") from exc
+
+
 def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
     """Load and validate a ProtocolSpec from a file path or raw text string."""
     source_name = None
     if isinstance(source, Path):
         source_name = source.name
-        raw = source.read_text(encoding="utf-8")
-        data = yaml.safe_load(raw) if source.suffix.lower() in (".yaml", ".yml") else json.loads(raw)
+        raw = _read_limited(source)
+        data = _parse_document(raw, source.suffix.lower() in (".yaml", ".yml"))
     elif isinstance(source, str) and _is_existing_file(source):
         path = Path(source)
         source_name = path.name
-        raw = path.read_text(encoding="utf-8")
-        data = yaml.safe_load(raw) if path.suffix.lower() in (".yaml", ".yml") else json.loads(raw)
+        raw = _read_limited(path)
+        data = _parse_document(raw, path.suffix.lower() in (".yaml", ".yml"))
     else:
         raw_text = str(source)
+        _check_definition_size(len(raw_text.encode("utf-8")), "definition text")
         try:
-            data = yaml.safe_load(raw_text)
-        except Exception:
-            data = json.loads(raw_text)
+            data = _parse_document(raw_text, True)
+        except ValueError:
+            data = _parse_document(raw_text, False)
 
     if isinstance(data, dict) and ("physicalLayer" in data or "commandResponseModel" in data or "integrityCheck" in data):
         from omniuart.core.kit_adapter import parse_kit_protocol
@@ -404,23 +435,28 @@ def load_script(source: Union[str, Path]) -> ScriptSpec:
     source_name = None
     if isinstance(source, Path):
         source_name = source.name
-        raw = source.read_text(encoding="utf-8")
-        data = yaml.safe_load(raw) if source.suffix.lower() in (".yaml", ".yml") else json.loads(raw)
+        raw = _read_limited(source)
+        data = _parse_document(raw, source.suffix.lower() in (".yaml", ".yml"))
     elif isinstance(source, str) and _is_existing_file(source):
         path = Path(source)
         source_name = path.name
-        raw = path.read_text(encoding="utf-8")
-        data = yaml.safe_load(raw) if path.suffix.lower() in (".yaml", ".yml") else json.loads(raw)
+        raw = _read_limited(path)
+        data = _parse_document(raw, path.suffix.lower() in (".yaml", ".yml"))
     else:
         raw_text = str(source)
+        _check_definition_size(len(raw_text.encode("utf-8")), "definition text")
         try:
-            data = yaml.safe_load(raw_text)
-        except Exception:
-            data = json.loads(raw_text)
+            data = _parse_document(raw_text, True)
+        except ValueError:
+            data = _parse_document(raw_text, False)
 
     if isinstance(data, dict) and ("interfaceRef" in data or "onSequenceFailure" in data):
         from omniuart.core.sequence_adapter import parse_kit_sequence
         return parse_kit_sequence(data, source_name=source_name)
 
-    return ScriptSpec.model_validate(data)
+    script = ScriptSpec.model_validate(data)
+    max_steps = get_limits().script_steps
+    if len(script.steps) > max_steps:
+        raise ValueError(f"script has {len(script.steps)} steps, over the limit of {max_steps} (OMNIUART_MAX_SCRIPT_STEPS)")
+    return script
 

@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
+from omniuart.core.limits import get_limits
 from omniuart.core.codec import CodecError
 from omniuart.core.models import ScriptSpec, ScriptStep, StepAssertion
 from omniuart.core.session import CommandBlockedError, DeviceSession, Exchange, ExchangeStatus
@@ -183,7 +184,9 @@ class ScriptRunner:
         variables: Optional[Dict[str, Any]] = None,
         on_step: Optional[Callable[[StepResult], None]] = None,
         on_log: Optional[Callable[[str], None]] = None,
+        max_duration_s: Optional[float] = None,
     ) -> None:
+        self.max_duration_s = max_duration_s if max_duration_s is not None else get_limits().script_duration_s
         self.script = script
         self.session = session
         self.variables: Dict[str, Any] = {**script.variables, **(variables or {})}
@@ -202,9 +205,13 @@ class ScriptRunner:
         result = ScriptResult(name=self.script.meta.name)
         aborted = False
         steps = self.script.steps
+        deadline = time.monotonic() + self.max_duration_s
         for index, step in enumerate(steps, 1):
             name = step.name or step.command or f"Step {index}"
-            if aborted:
+            if not aborted and time.monotonic() > deadline:
+                step_result = StepResult(index, name, StepStatus.ERROR, f"script exceeded its {self.max_duration_s:g} s duration limit")
+                aborted = True
+            elif aborted:
                 step_result = StepResult(index, name, StepStatus.SKIPPED, "skipped after an earlier failure")
             else:
                 if index > 1 and self.script.config.inter_step_delay_ms:

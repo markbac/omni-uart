@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Union
 
+from omniuart.core.limits import get_limits
 from omniuart.core.recorder import PacketEvent
 from omniuart.core.transport import AsyncTransport
 
@@ -20,7 +21,8 @@ logger = logging.getLogger(__name__)
 class SessionReplayer:
     """Replays transaction logs onto a target UART transport."""
 
-    def __init__(self, transport: AsyncTransport, speed_multiplier: float = 1.0) -> None:
+    def __init__(self, transport: AsyncTransport, speed_multiplier: float = 1.0, max_duration_s: Optional[float] = None) -> None:
+        self.max_duration_s = max_duration_s if max_duration_s is not None else get_limits().replay_duration_s
         self.transport = transport
         self.speed_multiplier = max(0.1, speed_multiplier)
 
@@ -46,12 +48,17 @@ class SessionReplayer:
 
         count = 0
         prev_ts: Optional[float] = None
+        waited = 0.0
 
         for event in events:
             if prev_ts is not None:
-                delay = (event.timestamp - prev_ts) / self.speed_multiplier
+                delay = min((event.timestamp - prev_ts) / self.speed_multiplier, 5.0)  # cap a single gap at 5 s
                 if delay > 0:
-                    await asyncio.sleep(min(delay, 5.0))  # Cap single sleep delay at 5s
+                    if waited + delay > self.max_duration_s:
+                        logger.warning("Replay stopped after %d frame(s): it would exceed the %g s duration limit", count, self.max_duration_s)
+                        break
+                    await asyncio.sleep(delay)
+                    waited += delay
 
             prev_ts = event.timestamp
             hex_clean = event.raw_hex.replace(" ", "")
