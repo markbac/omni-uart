@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from omniuart.core.crc import CrcModel
+from omniuart.core.crc import TRANSFORMS, CrcAlgorithm, CrcModel, resolve_algorithm
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +140,23 @@ class IntegritySpec(BaseModel):
     endian: str = "little"
     check: Optional[Union[int, str]] = None
     covers: str = "after_header"
+    transform: str = "none"  # final transform of a checksum: none, twos_complement, ones_complement
+    carry_wrap: bool = False  # end-around-carry summation for sum8 (LIN enhanced checksum)
+
+    @field_validator("transform")
+    @classmethod
+    def validate_transform(cls, v: str) -> str:
+        if v not in TRANSFORMS:
+            raise ValueError(f"transform must be one of {', '.join(TRANSFORMS)}, got '{v}'")
+        return v
+
+    @model_validator(mode="after")
+    def validate_runtime(self) -> "IntegritySpec":
+        """Fail at load time when the algorithm is unknown or a custom model is incomplete or inconsistent."""
+        algo = resolve_algorithm(self.algorithm)
+        if algo is CrcAlgorithm.CUSTOM:
+            self.to_crc_model()
+        return self
 
     @field_validator("covers")
     @classmethod
@@ -150,7 +167,7 @@ class IntegritySpec(BaseModel):
 
     def to_crc_model(self) -> Optional[CrcModel]:
         """Convert custom integrity parameters into a CrcModel instance."""
-        if self.algorithm.lower() != "custom":
+        if resolve_algorithm(self.algorithm) is not CrcAlgorithm.CUSTOM:
             return None
 
         if self.width is None or self.poly is None or self.init is None:

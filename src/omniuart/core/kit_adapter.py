@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import yaml
 
+from omniuart.core.crc import normalize_algorithm_name
 from omniuart.core.models import (
     CommandIdSpec,
     CommandSpec,
@@ -64,19 +66,66 @@ def _map_field_type(base_type: str, size_bytes: Optional[int] = None) -> FieldTy
         return FieldType.BYTES
     return FieldType.BYTES
 
+logger = logging.getLogger(__name__)
+
 
 def _map_algorithm_name(algo: str) -> str:
-    """Map kit schema integrity algorithm to OmniUART algorithm string."""
-    algo_clean = algo.lower().replace("-", "_").replace(" ", "_")
-    mappings = {
-        "crc_16_modbus": "crc16_modbus",
-        "crc_16_ccitt": "crc16_ccitt",
-        "crc_32": "crc32",
-        "sum_8": "sum8",
-        "xor_8": "xor8",
-        "crc_8": "crc8",
-    }
-    return mappings.get(algo_clean, algo_clean)
+    """Map a kit schema integrity algorithm name to the OmniUART algorithm name."""
+    return normalize_algorithm_name(algo)
+
+
+_COVERAGE = {
+    "payload-only": "payload_only",
+    "whole-frame-excluding-check": "full_frame",
+    "length-to-payload-inclusive": "after_header",
+}
+_TRANSFORMS = {"twosComplement": "twos_complement", "onesComplement": "ones_complement"}
+
+
+def _first(params: Dict[str, Any], *names: str, default: Any = None) -> Any:
+    """First present key: the kit schema names (``widthBits``) or the short Rocksoft names (``width``)."""
+    for name in names:
+        if name in params:
+            return params[name]
+    return default
+
+
+def _parse_integrity(raw: Dict[str, Any], source_name: Optional[str]) -> IntegritySpec:
+    """Build an IntegritySpec from a kit ``integrityCheck`` block, warning about anything not modelled."""
+    algo = _map_algorithm_name(raw["algorithm"])
+    custom = raw.get("customParameters") or {}
+    kwargs: Dict[str, Any] = {}
+    if algo == "custom":
+        kwargs.update(
+            width=_first(custom, "widthBits", "width"),
+            poly=_first(custom, "polynomial", "poly"),
+            init=_first(custom, "initialValue", "init"),
+            refin=bool(_first(custom, "reflectInput", "refin", default=False)),
+            refout=bool(_first(custom, "reflectOutput", "refout", default=False)),
+            xorout=_first(custom, "finalXor", "xorout", default=0),
+            check=_first(custom, "check", "checkValue"),
+            endian=custom.get("endian", "little"),
+        )
+    where = source_name or "kit protocol"
+    coverage = raw.get("coverage")
+    if coverage is not None:
+        if coverage in _COVERAGE:
+            kwargs["covers"] = _COVERAGE[coverage]
+        else:
+            logger.warning("%s: unknown integrity coverage %r, using the default", where, coverage)
+    transform = raw.get("finalTransform")
+    if transform is not None:
+        if transform in _TRANSFORMS:
+            kwargs["transform"] = _TRANSFORMS[transform]
+        else:
+            logger.warning("%s: unknown integrity finalTransform %r ignored", where, transform)
+    if raw.get("summationMode") == "carry-wrapped":
+        kwargs["carry_wrap"] = True
+    if raw.get("valueEncoding") not in (None, "binary"):
+        logger.warning("%s: integrity valueEncoding %r is not supported by the codec", where, raw["valueEncoding"])
+    if "coverageEndMarker" in raw:
+        logger.warning("%s: integrity coverageEndMarker is not supported by the codec", where)
+    return IntegritySpec(algorithm=algo, **kwargs)
 
 
 def _parse_baud(value: Any, source_name: str) -> int:
@@ -172,18 +221,7 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
     integrity_raw = data.get("integrityCheck", {})
     integrity_spec = None
     if integrity_raw and "algorithm" in integrity_raw:
-        algo = _map_algorithm_name(integrity_raw["algorithm"])
-        custom_params = integrity_raw.get("customParameters", {})
-        integrity_spec = IntegritySpec(
-            algorithm=algo,
-            width=custom_params.get("width"),
-            poly=custom_params.get("poly"),
-            init=custom_params.get("init"),
-            refin=custom_params.get("refin", False),
-            refout=custom_params.get("refout", False),
-            xorout=custom_params.get("xorout", 0),
-            endian=custom_params.get("endian", "little"),
-        )
+        integrity_spec = _parse_integrity(integrity_raw, source_name)
 
     framing_config = FramingConfig(
         type=framing_type,

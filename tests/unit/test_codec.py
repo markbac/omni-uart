@@ -197,6 +197,6 @@ commands:
 
 
 def test_unsupported_integrity_algorithm_is_an_error(sensor):
-    sensor.framing.integrity.algorithm = "xor8"
-    with pytest.raises(CodecError, match="Unsupported integrity"):
+    sensor.framing.integrity.algorithm = "crc-99-bogus"
+    with pytest.raises(CodecError, match="Unsupported CRC algorithm"):
         FrameCodec(sensor)
