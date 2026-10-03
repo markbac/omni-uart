@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the optional `framing.integrity.covers` setting (`after_header`, `full_frame`, `payload_only`) to the protocol schema (#189).
 - Documented the normative wire format in the protocol schema specification (#189).
 
+### Fixed
+- Desktop and CLI frame builder now uses `FrameCodec`: it writes the real configured CRC instead of a 16-bit byte sum, honours the declared length field width, encodes `uint64` and `int64` as binary, and rejects invalid or out-of-range parameters instead of clamping them or sending `0x00` (#255).
+- Kit-format commands no longer expose their discriminator (for example AT command text) as a required parameter on delimited protocols; constant fields now carry their `constValue` as the default (#255).
+
 ## [2.0.0] - 2026-09-27
 
 ### Added

@@ -377,10 +377,18 @@ class FrameCodec:
         frame.extend(self._footer)
         return bytes(frame)
 
+    def _suffix(self) -> str:
+        """Line terminator of a delimited frame: ``suffix``, else a declared ``footer``, else CRLF."""
+        if self.framing.suffix is not None:
+            return self.framing.suffix
+        if self.framing.footer:
+            return _as_bytes(self.framing.footer).decode("utf-8", errors="replace")
+        return "\r\n"
+
     def _encode_delimited(self, message_id: Union[int, str], params: List[str]) -> bytes:
         framing = self.framing
         delimiter = framing.delimiter if framing.delimiter is not None else ","
-        suffix = framing.suffix if framing.suffix is not None else "\r\n"
+        suffix = self._suffix()
         text = (framing.prefix or "") + str(message_id)
         if params:
             text += delimiter + delimiter.join(params)
@@ -543,7 +551,7 @@ class FrameCodec:
         return frame
 
     def _extract_delimited(self, data: bytes, direction: str) -> Tuple[List[DecodedFrame], bytes]:
-        suffix = (self.framing.suffix if self.framing.suffix is not None else "\r\n").encode("utf-8")
+        suffix = self._suffix().encode("utf-8")
         frames: List[DecodedFrame] = []
         buf = data
         while suffix and (idx := buf.find(suffix)) >= 0:

@@ -11,114 +11,18 @@ from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional
 
 from omniuart.core.catalog import CatalogManager
+from omniuart.core.codec import FrameCodec
 from omniuart.core.models import CommandSpec, ProtocolSpec
 from omniuart.core.transport import list_available_ports
 
 
 def build_frame_payload(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any]) -> bytes:
-    """Build raw frame byte payload for a command according to protocol framing spec."""
-    payload_buf = bytearray()
+    """Build the raw wire frame for a command using the shared schema-driven codec.
 
-    # Append opcode/discriminator if present
-    disc_val = getattr(cmd, "discriminator", None)
-    if disc_val is not None:
-        payload_buf.append(int(disc_val) & 0xFF)
-
-    # Encode parameters into payload
-    for param in cmd.parameters:
-        val = params.get(param.name, param.default if param.default is not None else 0)
-        try:
-            # Enforce range bounds if defined (#132)
-            if param.min is not None and isinstance(val, (int, float)) and val < param.min:
-                val = param.min
-            if param.max is not None and isinstance(val, (int, float)) and val > param.max:
-                val = param.max
-
-            if param.type.value in ("uint8", "int8", "enum"):
-                int_val = int(val)
-                fmt = ">B" if param.endian == "big" else "<B"
-                payload_buf.extend(struct.pack(fmt, int_val & 0xFF))
-            elif param.type.value in ("uint16", "int16"):
-                int_val = int(val)
-                fmt = ">H" if param.endian == "big" else "<H"
-                payload_buf.extend(struct.pack(fmt, int_val & 0xFFFF))
-            elif param.type.value in ("uint32", "int32"):
-                int_val = int(val)
-                fmt = ">I" if param.endian == "big" else "<I"
-                payload_buf.extend(struct.pack(fmt, int_val & 0xFFFFFFFF))
-            elif param.type.value in ("float", "float32"):
-                flt_val = float(val)
-                fmt = ">f" if param.endian == "big" else "<f"
-                payload_buf.extend(struct.pack(fmt, flt_val))
-            elif param.type.value in ("double", "float64"):
-                flt_val = float(val)
-                fmt = ">d" if param.endian == "big" else "<d"
-                payload_buf.extend(struct.pack(fmt, flt_val))
-            elif param.type.value == "bool":
-                bool_val = 1 if bool(val) else 0
-                payload_buf.append(bool_val)
-            else:
-                str_val = str(val).encode("utf-8")
-                payload_buf.extend(str_val)
-        except Exception:
-            payload_buf.extend(b"\x00")
-
-    # Construct complete frame envelope
-    frame = bytearray()
-    framing = spec.framing
-
-    if framing.type.value == "delimited":
-        prefix = (framing.prefix or "").encode("utf-8")
-        delimiter = (framing.delimiter or " ").encode("utf-8")
-        suffix = (framing.suffix or "\r\n").encode("utf-8")
-
-        frame.extend(prefix)
-        frame.extend(str(cmd.id).encode("utf-8"))
-        if payload_buf:
-            frame.extend(delimiter)
-            frame.extend(payload_buf)
-        frame.extend(suffix)
-
-    else:
-        # Binary framing
-        if framing.header:
-            if isinstance(framing.header, list):
-                frame.extend(bytes(framing.header))
-            elif isinstance(framing.header, str):
-                frame.extend(bytes.fromhex(framing.header.replace(" ", "")))
-
-        # Command ID / Opcode
-        if isinstance(cmd.id, int):
-            cmd_id_spec = framing.command_id
-            endian = cmd_id_spec.endian if cmd_id_spec else "little"
-            if cmd_id_spec and cmd_id_spec.type == "uint16":
-                fmt = ">H" if endian == "big" else "<H"
-                frame.extend(struct.pack(fmt, cmd.id))
-            else:
-                frame.append(cmd.id & 0xFF)
-
-        # Length field if required
-        if framing.length:
-            length_val = len(payload_buf)
-            fmt = ">H" if framing.length.endian == "big" else "<H"
-            frame.extend(struct.pack(fmt, length_val))
-
-        frame.extend(payload_buf)
-
-        # Integrity Checksum / CRC
-        if framing.integrity:
-            crc_sum = sum(frame) & 0xFFFF
-            fmt = ">H" if framing.integrity.endian == "big" else "<H"
-            frame.extend(struct.pack(fmt, crc_sum))
-
-        # Footer
-        if framing.footer:
-            if isinstance(framing.footer, list):
-                frame.extend(bytes(framing.footer))
-            elif isinstance(framing.footer, str):
-                frame.extend(bytes.fromhex(framing.footer.replace(" ", "")))
-
-    return bytes(frame)
+    Raises :class:`omniuart.core.codec.CodecError` for missing, unknown, out-of-range or
+    otherwise invalid parameters instead of transmitting a guessed value.
+    """
+    return FrameCodec(spec).encode_command(cmd, params)
 
 
 class ConnectionToolbar(ttk.Frame):
