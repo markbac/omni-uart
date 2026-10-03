@@ -73,7 +73,7 @@ telemetry: []
 ### 3.2 `serial_config`
 | Field | Type | Default | Permitted Values |
 | :--- | :--- | :--- | :--- |
-| `baudrate` | integer | `115200` | Standard baud rates (9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600). |
+| `baudrate` | integer | `115200` | Any positive integer. Rates outside the common set (1200 to 921600, plus 250000) log a warning but are accepted. |
 | `bytesize` | integer | `8` | `5`, `6`, `7`, `8`. |
 | `parity` | string | `"none"` | `"none"`, `"even"`, `"odd"`, `"mark"`, `"space"`. |
 | `stopbits` | number | `1` | `1`, `1.5`, `2`. |

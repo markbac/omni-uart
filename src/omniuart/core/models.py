@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -12,7 +13,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from omniuart.core.crc import CrcModel
 
-ALLOWED_BAUDRATES = {9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600}
+logger = logging.getLogger(__name__)
+
+# Common rates for UI drop-downs and documentation. Any positive integer rate is valid; a rate outside
+# this set only produces a warning (some hardware needs 250000 for DMX512, 76800, 1000000 and so on).
+STANDARD_BAUDRATES = (1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 250000, 460800, 921600)
 
 
 class FieldType(str, Enum):
@@ -205,8 +210,10 @@ class SerialConfig(BaseModel):
     @field_validator("baudrate")
     @classmethod
     def validate_baud(cls, v: int) -> int:
-        if v not in ALLOWED_BAUDRATES:
-            raise ValueError(f"Baudrate {v} not in standard set: {sorted(ALLOWED_BAUDRATES)}")
+        if v <= 0:
+            raise ValueError(f"Baudrate must be a positive integer, got {v}")
+        if v not in STANDARD_BAUDRATES:
+            logger.warning("Non-standard baud rate %d: check that the hardware supports it", v)
         return v
 
 

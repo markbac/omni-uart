@@ -51,9 +51,9 @@ def test_load_all_example_scripts() -> None:
 
 
 def test_invalid_baudrate_rejection() -> None:
-    """Verify that unsupported baud rates raise validation errors."""
+    """Verify that non-positive baud rates raise validation errors (non-standard positive rates are allowed)."""
     with pytest.raises(ValidationError) as exc_info:
-        SerialConfig(baudrate=12345)
+        SerialConfig(baudrate=0)
     assert "baudrate" in str(exc_info.value).lower()
 
 
