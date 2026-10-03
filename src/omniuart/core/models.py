@@ -65,7 +65,7 @@ class FramingType(str, Enum):
 class FieldSpec(BaseModel):
     """Specification for an individual payload or response field."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     type: FieldType
@@ -90,7 +90,7 @@ class FieldSpec(BaseModel):
 class ResponseSpec(BaseModel):
     """Expected response structure corresponding to an outbound command."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     id: Optional[Union[int, str]] = None
     timeout_ms: int = 1000
@@ -100,7 +100,7 @@ class ResponseSpec(BaseModel):
 class CommandSpec(BaseModel):
     """Definition of an outbound command and its parameter signature."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     id: Union[int, str]
@@ -123,7 +123,7 @@ class CommandSpec(BaseModel):
 class TelemetrySpec(BaseModel):
     """Definition of an unsolicited broadcast or periodic sensor frame."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     id: Union[int, str]
@@ -135,7 +135,7 @@ class TelemetrySpec(BaseModel):
 class LengthSpec(BaseModel):
     """Dynamic frame length field configuration."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     type: str = "uint16"
     endian: str = "little"
@@ -145,7 +145,7 @@ class LengthSpec(BaseModel):
 class CommandIdSpec(BaseModel):
     """Opcode/Command ID field descriptor."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     type: str = "uint8"
     endian: str = "little"
@@ -154,7 +154,7 @@ class CommandIdSpec(BaseModel):
 class IntegritySpec(BaseModel):
     """Checksum or CRC calculation specification."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     algorithm: str
     width: Optional[int] = None
@@ -225,7 +225,7 @@ class IntegritySpec(BaseModel):
 class FramingConfig(BaseModel):
     """Envelope framing parameters for binary or delimited stream protocols."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     type: FramingType
     header: Optional[Union[List[int], str]] = None
@@ -241,7 +241,7 @@ class FramingConfig(BaseModel):
 class SerialConfig(BaseModel):
     """Default physical hardware serial communication settings."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     baudrate: int
     bytesize: int = 8
@@ -263,7 +263,7 @@ class SerialConfig(BaseModel):
 class ProtocolMeta(BaseModel):
     """Metadata block for a protocol definition."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     version: str
@@ -274,7 +274,7 @@ class ProtocolMeta(BaseModel):
 class ProtocolSpec(BaseModel):
     """Root model for an OmniUART protocol specification."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     schema_version: str = "1.0.0"
     metadata: ProtocolMeta
@@ -308,7 +308,7 @@ class ProtocolSpec(BaseModel):
 class StepAssertion(BaseModel):
     """Condition asserted against response payload fields."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     field: str
     op: str
@@ -319,7 +319,7 @@ class StepAssertion(BaseModel):
 class ScriptStep(BaseModel):
     """Individual action step in an automated test sequence."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     name: Optional[str] = None
     command: Optional[str] = None
@@ -335,7 +335,7 @@ class ScriptStep(BaseModel):
 class ScriptConfig(BaseModel):
     """Global execution settings for an automated test script."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     abort_on_error: bool = True
     default_timeout_ms: int = 1000
@@ -345,7 +345,7 @@ class ScriptConfig(BaseModel):
 class ScriptMeta(BaseModel):
     """Metadata block for an automation script."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     name: str
     protocol: str
@@ -356,7 +356,7 @@ class ScriptMeta(BaseModel):
 class ScriptSpec(BaseModel):
     """Root model for an OmniUART automated test script."""
 
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="forbid")
 
     version: str = "1.0.0"
     meta: ScriptMeta

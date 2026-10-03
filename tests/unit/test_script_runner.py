@@ -157,10 +157,11 @@ async def test_invalid_parameters_and_unknown_variables_are_errors(rig):
 
 
 @pytest.mark.asyncio
-async def test_unsupported_step_type_is_not_silently_passed(rig):
-    session, _ = rig
-    result = await ScriptRunner(script([{"repeat": 3, "steps": []}]), session).run()
-    assert result.steps[0].status is StepStatus.ERROR
+async def test_unsupported_step_type_is_rejected_when_the_script_loads(rig):
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="repeat"):
+        script([{"repeat": 3, "steps": []}])
 
 
 @pytest.mark.asyncio
