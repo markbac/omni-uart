@@ -9,10 +9,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.models import ProtocolSpec, load_protocol, load_script
+from omniuart.core.models import CommandSpec, ProtocolSpec, load_protocol, load_script
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -45,7 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
     send_parser.add_argument("protocol", help="Protocol name or filename")
     send_parser.add_argument("command", help="Command name or ID")
     send_parser.add_argument("--params", "-p", nargs="*", help="Key=value parameters (e.g. channel=1 speed=50)")
-    send_parser.add_argument("--dry-run", action="store_true", default=True, help="Simulate framing & CRC without serial port")
+    send_parser.add_argument("--port", "-P", help="Serial port to transmit on (e.g. COM3, /dev/ttyUSB0, or a PySerial URL such as loop://)")
+    send_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate override (default: from the protocol)")
+    send_parser.add_argument("--virtual", action="store_true", help="Transmit to the built-in simulated device instead of a serial port")
+    send_parser.add_argument("--timeout", type=int, help="Response timeout in milliseconds (default: from the protocol)")
+    send_parser.add_argument("--dry-run", action="store_true", help="Only build and print the frame; transmit nothing")
 
     # 4. run (Run Automation Script)
     run_parser = subparsers.add_parser("run", help="Execute an automated sequence test script")
@@ -135,6 +139,57 @@ def format_protocol_help(spec: ProtocolSpec) -> str:
     return "\n".join(lines)
 
 
+def _send_command(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any], args: argparse.Namespace) -> int:
+    """Encode, transmit and report one command. Exit codes: 0 ok, 1 no valid response, 2 bad input, 3 transport error."""
+    import asyncio
+
+    from omniuart.core.codec import CodecError, FrameCodec
+    from omniuart.core.session import DeviceSession, ExchangeStatus, create_transport
+
+    print(f"Command '{cmd.name}' (ID: {cmd.id}) on protocol '{spec.metadata.name}'")
+    try:
+        frame = FrameCodec(spec).encode_command(cmd, params)
+    except CodecError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    print(f"  Request   : {frame.hex(' ').upper()} ({len(frame)} bytes)")
+
+    if args.dry_run:
+        print("  Status    : DRY-RUN (nothing transmitted)")
+        return 0
+    try:
+        transport = create_transport(spec, port=args.port, baudrate=args.baudrate, virtual=args.virtual)
+    except ValueError as exc:
+        print(f"Error: {exc}. Use --port <port>, --virtual, or --dry-run.", file=sys.stderr)
+        return 2
+
+    async def _run():
+        async with DeviceSession(spec, transport) as session:
+            return await session.send(cmd, params, timeout_ms=args.timeout)
+
+    try:
+        exchange = asyncio.run(_run())
+    except Exception as exc:  # noqa: BLE001 - opening the port failed
+        print(f"Error: cannot use transport: {exc}", file=sys.stderr)
+        return 3
+
+    if exchange.status is ExchangeStatus.TRANSPORT_ERROR:
+        print(f"  Status    : TRANSPORT ERROR - {exchange.error}", file=sys.stderr)
+        return 3
+    if exchange.response_bytes:
+        print(f"  Response  : {exchange.response_bytes.hex(' ').upper()} ({len(exchange.response_bytes)} bytes, {exchange.latency_ms:.1f} ms)")
+    if not exchange.ok:
+        print(f"  Status    : FAILED - {exchange.error}", file=sys.stderr)
+        return 1
+    if exchange.response is None:
+        print("  Status    : SENT (command defines no response)")
+        return 0
+    for name, value in exchange.fields.items():
+        print(f"    {name} = {value}")
+    print("  Status    : OK")
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint."""
     from omniuart.core.logger import setup_logging
@@ -178,24 +233,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 1
 
         params_dict = {}
-        if args.params:
-            for item in args.params:
-                if "=" in item:
-                    k, v = item.split("=", 1)
-                    try:
-                        params_dict[k.strip()] = int(v.strip())
-                    except ValueError:
-                        try:
-                            params_dict[k.strip()] = float(v.strip())
-                        except ValueError:
-                            params_dict[k.strip()] = v.strip()
+        for item in args.params or []:
+            if "=" not in item:
+                print(f"Error: parameter '{item}' must be written key=value.", file=sys.stderr)
+                return 2
+            key, value = item.split("=", 1)
+            params_dict[key.strip()] = value.strip()
 
-        print(f"Executing command '{cmd.name}' (ID: {cmd.id}) on protocol '{spec.metadata.name}'...")
-        print(f"  Parameters: {params_dict}")
-        print("  Status    : [DRY-RUN SIMULATION OK]")
-        if cmd.response:
-            print(f"  Response  : Expected '{cmd.response.fields}' within {cmd.response.timeout_ms}ms")
-        return 0
+        return _send_command(spec, cmd, params_dict, args)
 
     elif args.subcommand == "run":
         script = catalog.get_script(args.script)

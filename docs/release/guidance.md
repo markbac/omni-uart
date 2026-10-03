@@ -55,9 +55,23 @@ Displays baud rate, bytesize, framing rules, CRC integrity algorithm, parameters
 
 #### 3. `send`: Format & Dispatch Command
 ```bash
-omni-uart send binary_sensor_node.yaml get_readings --params channel=1
+# Transmit on a real serial port and decode the response
+omni-uart send binary_sensor_node get_readings --params channel=1 --port /dev/ttyUSB0
+
+# Transmit to the built-in simulated device (no hardware needed)
+omni-uart send binary_sensor_node get_readings --params channel=1 --virtual
+
+# Only build and print the frame; nothing is transmitted
+omni-uart send binary_sensor_node get_readings --params channel=1 --dry-run
 ```
-Formats header framing, packs fields, computes CRC, and decodes MCU response.
+Encodes the command with the protocol's framing and CRC, transmits it, waits for the response (the command's `response.timeout_ms`, or `--timeout`), and prints the decoded fields. Choose a transport with `--port` (any PySerial port name or URL, with `--baudrate` to override the protocol default) or `--virtual`; with neither and without `--dry-run`, the command refuses to run.
+
+| Exit status | Meaning |
+| :--- | :--- |
+| `0` | Frame sent and, when the command defines a response, a valid response was decoded (or `--dry-run`). |
+| `1` | No response before the timeout, or the response was invalid (bad CRC, wrong command, malformed). |
+| `2` | Invalid input: unknown parameter, missing or out-of-range value, or no transport selected. |
+| `3` | The serial port could not be opened or failed while transmitting. |
 
 #### 4. `run`: Execute Automated Test Sequence Script
 ```bash

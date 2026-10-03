@@ -8,13 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added `DeviceSession` (`omniuart.core.session`) which encodes a command, transmits it, and decodes the response with timeouts, recording and typed outcomes; used by the CLI and shared with future clients (#192).
 - Added `FrameCodec` (`omniuart.core.codec`), a schema-driven frame encoder, decoder and stream resynchroniser shared by every component, with strict value encoding for all field types, `uint8`/`uint16`/`uint32` length fields honouring `includes`, and real CRC integrity (#189).
 - Added the optional `framing.integrity.covers` setting (`after_header`, `full_frame`, `payload_only`) to the protocol schema (#189).
 - Documented the normative wire format in the protocol schema specification (#189).
 
+### Changed
+- **BREAKING:** `omni-uart send` now really transmits. Pick a transport with `--port <port>` or `--virtual`; `--dry-run` is an explicit option and no longer the default, and running `send` with none of them is an error. Exit status is 0 on success, 1 for no or invalid response, 2 for invalid input, 3 for transport failure (#192).
+
 ### Fixed
 - Desktop and CLI frame builder now uses `FrameCodec`: it writes the real configured CRC instead of a 16-bit byte sum, honours the declared length field width, encodes `uint64` and `int64` as binary, and rejects invalid or out-of-range parameters instead of clamping them or sending `0x00` (#255).
 - Kit-format commands no longer expose their discriminator (for example AT command text) as a required parameter on delimited protocols; constant fields now carry their `constValue` as the default (#255).
+- `HardwareSerialTransport` applies the protocol's byte size, parity, stop bits and flow control, accepts PySerial URLs, and honours per-read timeouts (#192).
 - Generic binary simulator and `VirtualTransport` no longer assume the command ID is at byte 4 or reply with a fixed frame: requests are parsed and identified by `FrameCodec`, responses are built from the protocol's `response` definitions, invalid or unanswerable frames are ignored, and the simulator replies once per frame instead of once per received byte (#190).
 - Fuzzer now builds vectors with `FrameCodec` and reports explicit outcomes (`ACCEPTED`, `CORRECTLY_REJECTED`, `UNEXPECTEDLY_ACCEPTED`, `MALFORMED_RESPONSE`, `TIMEOUT`, `HANG`, `TRANSPORT_ERROR`) using a liveness probe to detect hangs; the `fuzz` CLI command exits non-zero unless every vector was handled correctly (#191).
 - `VirtualTransport.read` keeps surplus bytes for the next read instead of discarding them, and the simulator ignores out-of-range parameters and abandons incomplete frames after an idle timeout (#191).

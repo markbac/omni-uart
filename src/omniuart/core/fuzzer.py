@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field
 
 from omniuart.core.codec import CodecError, FrameCodec, default_value, encode_value
+from omniuart.core.session import read_available
 from omniuart.core.models import CommandSpec, FieldSpec, FieldType, ProtocolSpec
 from omniuart.core.transport import AsyncTransport
 
@@ -197,16 +198,6 @@ class ProtocolFuzzer:
         return vectors
 
     # ------------------------------------------------------------------ execution
-    async def _collect(self, transport: AsyncTransport, timeout_ms: int, gap_ms: int = 30) -> bytes:
-        """Read whatever the device sends: wait ``timeout_ms`` for the first byte, then until a quiet gap."""
-        data = bytearray(await transport.read(size=1, timeout_ms=timeout_ms))
-        while data:
-            more = await transport.read(size=1, timeout_ms=gap_ms)
-            if not more:
-                break
-            data.extend(more)
-        return bytes(data)
-
     def _probe(self) -> Optional[Tuple[CommandSpec, bytes]]:
         """A valid request the device must always answer, used to detect lock-ups."""
         for cmd in self.spec.commands:
@@ -229,7 +220,7 @@ class ProtocolFuzzer:
         expects_response = cmd is not None and cmd.response is not None
         try:
             await transport.write(vec.raw_payload)
-            resp = await self._collect(transport, timeout_ms)
+            resp = await read_available(transport, timeout_ms)
         except Exception as exc:  # noqa: BLE001 - any transport failure is a result, not a crash of the campaign
             return FuzzResult(vector=vec, status=FuzzOutcome.TRANSPORT_ERROR, response_bytes=b"", latency_ms=0.0, detail=f"{type(exc).__name__}: {exc}")
         latency = (loop.time() - start) * 1000.0
@@ -246,7 +237,7 @@ class ProtocolFuzzer:
             probe_cmd, probe_frame = probe
             try:
                 await transport.write(probe_frame)
-                alive = await self._collect(transport, timeout_ms)
+                alive = await read_available(transport, timeout_ms)
             except Exception as exc:  # noqa: BLE001
                 return FuzzResult(vector=vec, status=FuzzOutcome.TRANSPORT_ERROR, response_bytes=resp, latency_ms=latency, detail=f"probe failed: {exc}")
             if not self._is_valid_response(alive):
