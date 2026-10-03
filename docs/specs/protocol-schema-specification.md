@@ -116,6 +116,34 @@ The `length` object defines how frame length is determined:
 
 [[CAPTION:Table]] Delimited framing specification fields.
 
+#### 3.3.3 Wire Format (Normative)
+All OmniUART components build and parse frames through one codec (`omniuart.core.codec.FrameCodec`), so the rules below apply identically to the CLI, web API, desktop GUI, simulator, fuzzer and script runner.
+
+A binary frame is laid out in this order. Every part except the payload is optional and present only when the matching `framing` key is declared:
+
+```text
+header | length | command_id | payload | integrity | footer
+```
+
+- **Length**: encoded with the declared `length.type` (`uint8`, `uint16`, `uint32`) and `length.endian`. `includes` selects what the value counts: the payload only, the payload plus command ID, or the whole frame.
+- **Command ID**: `command_id.type` (`uint8`, `uint16`, `uint32`) and `command_id.endian`.
+- **Payload**: fields in declaration order, each encoded with its own `endian`. Integers use their natural width, `uint64`/`int64` are 8 bytes (not text), `bool` and `enum` are one byte, `string` and `bytes` use `length` when declared (shorter values are zero padded, longer values are rejected) and otherwise consume the rest of the payload, so they must be the last field.
+- **Integrity**: the checksum is sized by the algorithm (`crc8`, `sum8`, `xor` are 1 byte, 16-bit algorithms are 2, `crc32` is 4, `custom` uses `width`) and written with `integrity.endian`. `integrity.covers` selects the bytes it is calculated over:
+
+| `covers` | Bytes covered |
+| :--- | :--- |
+| `after_header` (default) | Everything after the header up to the integrity field (length, command ID and payload). |
+| `full_frame` | The header and everything after it up to the integrity field. |
+| `payload_only` | The payload only. |
+
+- **Footer**: appended verbatim.
+
+Delimited frames are `prefix`, the command ID, each parameter preceded by `delimiter`, then `suffix`. Integrity on delimited frames is not applied.
+
+> **Important:** Encoding is strict. A missing parameter without a `default`, an unknown parameter name, a value outside `min`/`max`, a value that does not fit the field type, or an `enum` value not listed in `options` is an error. Values are never clamped or replaced with `0x00`. The `scale` attribute is informational and is not applied by the codec.
+
+When decoding a byte stream the codec discards bytes before a header (resynchronisation), keeps partial frames until more bytes arrive, and reports a frame with a bad integrity value, unknown ID or malformed payload as an invalid frame rather than dropping it silently.
+
 ### 3.4 Supported Data Types
 Individual command parameters and response fields support the following primitive types:
 

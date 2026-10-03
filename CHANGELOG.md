@@ -5,6 +5,13 @@ All notable changes to the OmniUART project will be documented in this file.
 The format is based on [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Added `FrameCodec` (`omniuart.core.codec`), a schema-driven frame encoder, decoder and stream resynchroniser shared by every component, with strict value encoding for all field types, `uint8`/`uint16`/`uint32` length fields honouring `includes`, and real CRC integrity (#189).
+- Added the optional `framing.integrity.covers` setting (`after_header`, `full_frame`, `payload_only`) to the protocol schema (#189).
+- Documented the normative wire format in the protocol schema specification (#189).
+
 ## [2.0.0] - 2026-09-27
 
 ### Added
