@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Desktop and CLI frame builder now uses `FrameCodec`: it writes the real configured CRC instead of a 16-bit byte sum, honours the declared length field width, encodes `uint64` and `int64` as binary, and rejects invalid or out-of-range parameters instead of clamping them or sending `0x00` (#255).
 - Kit-format commands no longer expose their discriminator (for example AT command text) as a required parameter on delimited protocols; constant fields now carry their `constValue` as the default (#255).
+- Generic binary simulator and `VirtualTransport` no longer assume the command ID is at byte 4 or reply with a fixed frame: requests are parsed and identified by `FrameCodec`, responses are built from the protocol's `response` definitions, invalid or unanswerable frames are ignored, and the simulator replies once per frame instead of once per received byte (#190).
 
 ## [2.0.0] - 2026-09-27
 

@@ -90,9 +90,12 @@ flowchart LR
 [[CAPTION:Figure]] Virtual MCU loopback internal pipeline.
 
 ### 4.1 Response Rule Engine
-The virtual engine matches incoming command opcodes and returns predetermined responses defined in the protocol:
-- **Automatic Echo / Ping Response**: Automatically responds to standard discovery/ping opcodes.
-- **Stateful Memory Bank**: Stores simulated device registers (e.g. `set_temperature` updates a virtual sensor register; subsequent `get_temperature` queries return the updated value).
+Both `VirtualTransport` (given a protocol) and `BaseDeviceSimulator` identify requests with the protocol's `FrameCodec`. No byte offsets or response layouts are hard-coded:
+- **Request parsing**: Requests are located in the byte stream by header, length and footer, validated against the integrity field, and matched to a command by its ID. Frames split across writes are reassembled, and several frames in one write each get an answer.
+- **Schema-built responses**: A command that declares a `response` is answered with a frame built from that definition (response ID, field order, endianness and integrity). Response fields use their declared `default`, else the smallest legal value.
+- **Silence is a valid answer**: Frames with a bad integrity value, an unknown ID, a malformed payload or a command without a `response` are not answered, like a real device. `BaseDeviceSimulator` counts them in `rx_errors`.
+- **Explicit behaviour**: Subclasses override `BaseDeviceSimulator.handle_command(cmd, params)` to return response field values (or `None` to stay silent), which is how stateful devices are modelled. `VirtualTransport.register_response(command_id, raw_bytes)` registers a fixed raw reply for a command ID.
+- **No protocol**: `VirtualTransport()` without a protocol is a plain loopback that echoes written bytes.
 - **Simulated Latency**: Configurable response delay (e.g. 5ms to 50ms) to model real-world microcontroller processing intervals.
 
 ### 4.2 Fault & Resilience Injection
