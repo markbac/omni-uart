@@ -67,6 +67,19 @@ def generate_markdown_docs(spec: ProtocolSpec, safe_stem: Optional[str] = None) 
                     lines.append(f"| `{rf.name}` | `{rf.type.value}` | {rf_unit} |")
                 lines.append("")
 
+    if spec.telemetry:
+        lines.append("## Device-Initiated Messages\n")
+        for msg in spec.telemetry:
+            desc = f" - {msg.description}" if msg.description else ""
+            msg_id_str = f"0x{msg.id:02X}" if isinstance(msg.id, int) else str(msg.id)
+            lines.append(f"#### `{msg.name}` (Message ID: `{msg_id_str}`){desc}\n")
+            if msg.fields:
+                lines.append("| Field Name | Type | Unit |")
+                lines.append("| :--- | :--- | :--- |")
+                for f in msg.fields:
+                    lines.append(f"| `{f.name}` | `{f.type.value}` | {f.unit or '-'} |")
+                lines.append("")
+
     lines.append("## Formal AsyncAPI 2.6.0 Specification\n")
     lines.append("```yaml")
     lines.append(export_asyncapi_yaml(spec))

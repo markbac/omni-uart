@@ -36,7 +36,7 @@ def test_load_all_kit_protocols_and_scripts() -> None:
         spec = catalog.get_protocol(p_summary["filename"])
         assert spec is not None
         assert spec.metadata.name
-        assert spec.commands
+        assert spec.commands or spec.telemetry  # stream-only protocols (NMEA, COBS, M-Bus) have no commands
 
     for s_summary in summary["scripts"]:
         script = catalog.get_script(s_summary["filename"])
