@@ -48,6 +48,8 @@ Standard test vectors must match established IEEE and industrial specifications:
 - **Partial Frame Splitting**: Frames are delivered to the decoder in 1-byte increments over multiple read cycles. The parser must buffer the fragments and yield the frame once the footer is received.
 - **Corrupted CRC Rejection & Diagnostics**: Frames with corrupted checksum bytes must be flagged with `crc_valid=False`, with diagnostic payload highlighting the mismatched byte offset and expected vs received CRC.
 - **Byte Dissection Slices**: Verifies that every byte slice in a frame (Header, Length, Command ID, Payload, CRC, Footer) is accurately delineated with zero off-by-one errors.
+- **Property-Based Tests** (`test_codec_properties.py`, Hypothesis): for three framing layouts, a random chunking of a frame stream never changes the frames found; any strict prefix of a frame yields no frame; any single bit flip yields no valid frame; arbitrary bytes never raise and never grow the pending buffer; frames survive leading garbage.
+- **Simulator Stream Safety** (`test_simulator_stream.py`): a request split at every possible point, delivered byte by byte, split in the header, several frames in one read, corrupt-then-valid frames and garbage prefixes each produce exactly the expected responses, and the pending buffer stays bounded.
 
 ### 3.3 Session Recorder & Data Persistence (`test_recorder.py`)
 - Verifies real-time event buffering of bidirectional traffic (`tx` / `rx`) with microsecond timestamp fidelity.
