@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING:** `omni-uart send` now really transmits. Pick a transport with `--port <port>` or `--virtual`; `--dry-run` is an explicit option and no longer the default, and running `send` with none of them is an error. Exit status is 0 on success, 1 for no or invalid response, 2 for invalid input, 3 for transport failure (#192).
 
 ### Fixed
+- Transport reads now share one contract: `timeout_ms=0` polls instead of blocking forever (it did on `VirtualTransport` and `PipeTransport`), `None` waits, deadlines are absolute rather than restarted per chunk, partial data survives a timeout, and surplus bytes are kept. `HardwareSerialTransport.read` honours the per-call timeout, is cancellation-safe and flushes writes, and unknown `set_pin_state` names raise `ValueError` on every transport (#196, #265, #266).
 - `load_protocol` and `load_script` no longer fail with `OSError: File name too long` when given a long inline JSON/YAML document (#193).
 - Desktop and CLI frame builder now uses `FrameCodec`: it writes the real configured CRC instead of a 16-bit byte sum, honours the declared length field width, encodes `uint64` and `int64` as binary, and rejects invalid or out-of-range parameters instead of clamping them or sending `0x00` (#255).
 - Kit-format commands no longer expose their discriminator (for example AT command text) as a required parameter on delimited protocols; constant fields now carry their `constValue` as the default (#255).

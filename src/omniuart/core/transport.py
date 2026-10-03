@@ -30,6 +30,18 @@ def list_available_ports() -> List[Dict[str, str]]:
     return ports_info
 
 
+_READ_SLICE_S = 0.05
+_PINS = ("dtr", "rts")
+
+
+def _pin_key(pin: str) -> str:
+    """Normalise a control-line name; every transport rejects the same unknown names."""
+    key = str(pin).lower()
+    if key not in _PINS:
+        raise ValueError(f"Unsupported pin: {pin!r} (expected one of {', '.join(_PINS)})")
+    return key
+
+
 class AsyncTransport(abc.ABC):
     """Abstract Base Class for UART hardware and virtual transports."""
 
@@ -50,8 +62,13 @@ class AsyncTransport(abc.ABC):
 
     @abc.abstractmethod
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
-        """Read up to `size` bytes from the transport."""
-        pass
+        """Read up to ``size`` bytes, waiting at most ``timeout_ms`` in total.
+
+        Contract shared by every transport: ``None`` waits until ``size`` bytes arrive, ``0`` is a
+        non-blocking poll, and any other value is an absolute deadline (never multiplied by the
+        number of chunks). On timeout the bytes that did arrive are returned, never discarded, and
+        bytes beyond ``size`` stay buffered for the next read.
+        """
 
     @property
     @abc.abstractmethod
@@ -61,8 +78,8 @@ class AsyncTransport(abc.ABC):
 
     @abc.abstractmethod
     async def set_pin_state(self, pin: str, state: bool) -> None:
-        """Set DTR or RTS control pin state."""
-        pass
+        """Set DTR or RTS control pin state; unknown pin names raise ``ValueError`` on every transport."""
+        _pin_key(pin)
 
     async def pulse_pins(self, pin_sequence: List[Dict[str, Any]]) -> None:
         """Pulse pin sequence, e.g. [{'pin': 'dtr', 'state': True, 'duration_ms': 100}]."""
@@ -95,9 +112,7 @@ class VirtualTransport(AsyncTransport):
         self.fault_crc_flip = fault_crc_flip
         self.fault_drop_rate = fault_drop_rate
 
-        self._tx_queue: asyncio.Queue[bytes] = asyncio.Queue()
-        self._rx_queue: asyncio.Queue[bytes] = asyncio.Queue()
-        self._rx_buffer = bytearray()
+        self._rx = _ReadBuffer()
         self._is_open = False
         self._rule_responses: Dict[int, bytes] = {}
         self.pin_states: Dict[str, bool] = {"dtr": False, "rts": False}
@@ -118,10 +133,8 @@ class VirtualTransport(AsyncTransport):
 
     async def set_pin_state(self, pin: str, state: bool) -> None:
         """Set virtual DTR or RTS pin state."""
-        pin_key = pin.lower()
-        if pin_key in self.pin_states:
-            self.pin_states[pin_key] = state
-            logger.info(f"Virtual pin '{pin_key}' set to {state}")
+        self.pin_states[_pin_key(pin)] = state
+        logger.info(f"Virtual pin '{pin.lower()}' set to {state}")
 
     def register_response(self, command_id: int, response_payload: bytes) -> None:
         """Register custom raw response bytes for a specific command ID."""
@@ -147,31 +160,14 @@ class VirtualTransport(AsyncTransport):
             resp_bytes = resp_bytes[:-1] + bytes([resp_bytes[-1] ^ 0xFF])
 
         if resp_bytes:
-            await self._rx_queue.put(resp_bytes)
+            self._rx.feed(resp_bytes)
         return len(data)
 
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
-        """Read up to ``size`` bytes from the RX queue; surplus bytes stay buffered for the next read."""
+        """Read up to ``size`` bytes; see :class:`_ReadBuffer` for timeout semantics."""
         if not self._is_open:
             raise RuntimeError("VirtualTransport is not open.")
-
-        end_time = (time.monotonic() + timeout_ms / 1000.0) if timeout_ms else None
-        while len(self._rx_buffer) < size:
-            try:
-                if end_time is None:
-                    chunk = await self._rx_queue.get()
-                else:
-                    remaining = end_time - time.monotonic()
-                    if remaining <= 0:
-                        break
-                    chunk = await asyncio.wait_for(self._rx_queue.get(), timeout=remaining)
-            except asyncio.TimeoutError:
-                break
-            self._rx_buffer.extend(chunk)
-
-        result = bytes(self._rx_buffer[:size])
-        del self._rx_buffer[:size]
-        return result
+        return await self._rx.read(size, timeout_ms, lambda: self._is_open)
 
     def _generate_response(self, request_bytes: bytes) -> bytes:
         """Simulate the device side of the link.
@@ -223,6 +219,8 @@ class HardwareSerialTransport(AsyncTransport):
         self.timeout = timeout
         self.serial_config = serial_config
         self._serial: Optional[serial.Serial] = None
+        self._inflight: Optional["asyncio.Future[bytes]"] = None
+        self._carry = bytearray()
 
     def _serial_kwargs(self) -> Dict[str, Any]:
         cfg = self.serial_config
@@ -262,27 +260,72 @@ class HardwareSerialTransport(AsyncTransport):
     def is_open(self) -> bool:
         return self._serial is not None and self._serial.is_open
 
+    def _write_and_flush(self, data: bytes) -> int:
+        assert self._serial is not None
+        written = self._serial.write(data)
+        self._serial.flush()
+        return written or 0
+
     async def write(self, data: bytes) -> int:
         if not self.is_open or not self._serial:
             raise RuntimeError("HardwareSerialTransport is not open.")
-        return await asyncio.to_thread(self._serial.write, data)
+        return await asyncio.to_thread(self._write_and_flush, data)
+
+    def _read_slice(self, size: int, seconds: float) -> bytes:
+        serial_port = self._serial
+        if serial_port is None or not serial_port.is_open:
+            return b""
+        serial_port.timeout = seconds
+        return serial_port.read(size)
 
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
+        """Read up to ``size`` bytes with the same timeout meaning as every transport.
+
+        ``None`` waits forever, ``0`` polls, otherwise an absolute deadline applies. The blocking
+        PySerial read is done in short slices so a cancelled caller never leaves a thread blocked
+        for the whole timeout.
+        """
         if not self.is_open or not self._serial:
             raise RuntimeError("HardwareSerialTransport is not open.")
-        self._serial.timeout = self.timeout if timeout_ms is None else timeout_ms / 1000.0
-        return await asyncio.to_thread(self._serial.read, size)
+        await self._harvest_inflight()
+        deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000.0
+        data = bytearray()
+        while True:
+            take = min(size - len(data), len(self._carry))
+            if take:
+                data.extend(self._carry[:take])
+                del self._carry[:take]
+            if len(data) >= size or not self.is_open:
+                break
+            if deadline is None:
+                slice_s = _READ_SLICE_S
+            else:
+                slice_s = min(_READ_SLICE_S, max(0.0, deadline - time.monotonic()))
+            self._inflight = asyncio.ensure_future(asyncio.to_thread(self._read_slice, size - len(data), slice_s))
+            # If this caller is cancelled the slice still finishes; its bytes are kept for the next read.
+            self._carry.extend(await asyncio.shield(self._inflight))
+            self._inflight = None
+            if deadline is not None and time.monotonic() >= deadline and not self._carry:
+                break
+        return bytes(data)
+
+    async def _harvest_inflight(self) -> None:
+        """Collect bytes read by a slice whose caller was cancelled."""
+        pending, self._inflight = self._inflight, None
+        if pending is not None:
+            try:
+                self._carry.extend(await pending)
+            except Exception:  # noqa: BLE001 - port closed underneath the slice
+                pass
 
     async def set_pin_state(self, pin: str, state: bool) -> None:
         if not self.is_open or not self._serial:
             raise RuntimeError("HardwareSerialTransport is not open.")
-        pin_key = pin.lower()
+        pin_key = _pin_key(pin)
         if pin_key == "dtr":
             self._serial.dtr = state
-        elif pin_key == "rts":
-            self._serial.rts = state
         else:
-            raise ValueError(f"Unsupported pin: {pin}")
+            self._serial.rts = state
 
 
 class PipeTransport(AsyncTransport):
@@ -290,10 +333,10 @@ class PipeTransport(AsyncTransport):
 
     def __init__(self, port_name: str = "VIRTUAL_COM1") -> None:
         self.port_name = port_name
-        self._rx_queue: asyncio.Queue[bytes] = asyncio.Queue()
-        self._buffer = bytearray()
+        self._rx = _ReadBuffer()
         self._peer: Optional[PipeTransport] = None
         self._is_open = False
+        self.pin_states: Dict[str, bool] = {"dtr": False, "rts": False}
 
     def connect_peer(self, peer: PipeTransport) -> None:
         self._peer = peer
@@ -311,36 +354,17 @@ class PipeTransport(AsyncTransport):
     async def write(self, data: bytes) -> int:
         if not self._is_open or not self._peer:
             raise RuntimeError("PipeTransport is not open or connected to peer.")
-        await self._peer._rx_queue.put(data)
+        self._peer._rx.feed(data)
         return len(data)
 
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
         if not self._is_open:
             raise RuntimeError("PipeTransport is not open.")
 
-        timeout_sec = (timeout_ms / 1000.0) if timeout_ms else None
-        end_time = (time.monotonic() + timeout_sec) if timeout_sec is not None else None
-
-        while len(self._buffer) < size:
-            if end_time is not None:
-                remaining = end_time - time.monotonic()
-                if remaining <= 0:
-                    break
-                try:
-                    chunk = await asyncio.wait_for(self._rx_queue.get(), timeout=remaining)
-                    self._buffer.extend(chunk)
-                except asyncio.TimeoutError:
-                    break
-            else:
-                chunk = await self._rx_queue.get()
-                self._buffer.extend(chunk)
-
-        result = bytes(self._buffer[:size])
-        self._buffer = self._buffer[size:]
-        return result
+        return await self._rx.read(size, timeout_ms, lambda: self._is_open)
 
     async def set_pin_state(self, pin: str, state: bool) -> None:
-        pass
+        self.pin_states[_pin_key(pin)] = state
 
 
 class VirtualSerialPair:
@@ -541,7 +565,8 @@ class PtyTransport(AsyncTransport):
         return await self._rx.read(size, timeout_ms, lambda: self._is_open)
 
     async def set_pin_state(self, pin: str, state: bool) -> None:
-        """A pty has no modem control lines; the request is accepted and ignored."""
+        """A pty has no modem control lines; known pins are accepted and ignored."""
+        _pin_key(pin)
 
 
 class PtySerialPair:
@@ -725,7 +750,8 @@ class WindowsNamedPipeTransport(AsyncTransport):
         return await self._rx.read(size, timeout_ms, lambda: self._is_open)
 
     async def set_pin_state(self, pin: str, state: bool) -> None:
-        """A named pipe has no modem control lines; the request is accepted and ignored."""
+        """A named pipe has no modem control lines; known pins are accepted and ignored."""
+        _pin_key(pin)
 
 
 class WindowsNamedPipePair:
