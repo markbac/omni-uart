@@ -88,12 +88,12 @@ def test_custom_rocksoft_model() -> None:
 
 
 def test_empty_bytes() -> None:
-    """Verify calculation on empty byte sequences."""
+    """Empty input follows the model (init/xorout); only checksums and ``none`` are 0 (#204)."""
     assert calculate_crc(b"", CrcAlgorithm.NONE) == 0
     assert calculate_crc(b"", CrcAlgorithm.SUM8) == 0
     assert calculate_crc(b"", CrcAlgorithm.SUM16) == 0
     assert calculate_crc(b"", CrcAlgorithm.XOR) == 0
-    assert calculate_crc(b"", CrcAlgorithm.CRC16_MODBUS) == 0
+    assert calculate_crc(b"", CrcAlgorithm.CRC16_MODBUS) == 0xFFFF
     assert calculate_crc(b"", CrcAlgorithm.CRC32) == 0
 
 

@@ -21,8 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from omniuart.core.crc import (
-    CrcAlgorithm,
-    PRESET_MODELS,
+    algorithm_width,
     calculate_crc,
     format_crc_bytes,
     parse_crc_bytes,
@@ -50,15 +49,6 @@ _FLOAT_FORMATS: Dict[FieldType, Tuple[str, int]] = {
     FieldType.FLOAT64: ("d", 8),
 }
 _LENGTH_SIZES = {"uint8": 1, "uint16": 2, "uint32": 4}
-_CRC_WIDTHS = {
-    CrcAlgorithm.SUM8: 8,
-    CrcAlgorithm.XOR: 8,
-    CrcAlgorithm.CRC8: 8,
-    CrcAlgorithm.SUM16: 16,
-    CrcAlgorithm.CRC16_MODBUS: 16,
-    CrcAlgorithm.CRC16_CCITT: 16,
-    CrcAlgorithm.CRC32: 32,
-}
 INTEGRITY_COVERAGE = ("after_header", "full_frame", "payload_only")
 
 
@@ -315,17 +305,9 @@ class FrameCodec:
         if integrity is None or integrity.algorithm.lower() == "none":
             return 0
         try:
-            algo = CrcAlgorithm(integrity.algorithm.lower())
-        except ValueError:
-            raise CodecError(f"Unsupported integrity algorithm '{integrity.algorithm}'") from None
-        if algo is CrcAlgorithm.CUSTOM:
-            try:
-                model = integrity.to_crc_model()
-            except ValueError as exc:
-                raise CodecError(str(exc)) from None
-            assert model is not None
-            return model.width
-        return _CRC_WIDTHS.get(algo, PRESET_MODELS[algo].width if algo in PRESET_MODELS else 0)
+            return algorithm_width(integrity.algorithm, integrity.to_crc_model())
+        except ValueError as exc:
+            raise CodecError(str(exc)) from None
 
     def _integrity_bytes(self, body_start: int, frame: bytes) -> bytes:
         integrity = self.framing.integrity
@@ -338,8 +320,13 @@ class FrameCodec:
         else:
             data = frame[len(self._header) :]
         try:
-            algo = CrcAlgorithm(integrity.algorithm.lower())
-            value = calculate_crc(data, algo, custom_model=integrity.to_crc_model())
+            value = calculate_crc(
+                data,
+                integrity.algorithm,
+                custom_model=integrity.to_crc_model(),
+                transform=integrity.transform,
+                carry_wrap=integrity.carry_wrap,
+            )
         except ValueError as exc:
             raise CodecError(str(exc)) from None
         return format_crc_bytes(value, self._crc_bits, integrity.endian)

@@ -176,10 +176,22 @@ The following named presets can be declared directly:
 | `xor` | 8-bit longitudinal redundancy check | N/A | `0x00` | No | No | `0x00` | N/A |
 | `crc8` | Standard CRC-8 (SMBus) | `0x07` | `0x00` | False | False | `0x00` | N/A |
 | `crc16_modbus` | Modbus RTU CRC-16 (Reflected) | `0x8005` | `0xFFFF` | True | True | `0x0000` | `little` |
-| `crc16_ccitt` | X.25 / CCITT-False | `0x1021` | `0xFFFF` | False | False | `0x0000` | `big` |
+| `crc16_ccitt` | CRC-16/CCITT-FALSE (alias of `crc16_ccitt_false`) | `0x1021` | `0xFFFF` | False | False | `0x0000` | `big` |
+| `crc16_ccitt_false` | CRC-16/CCITT-FALSE | `0x1021` | `0xFFFF` | False | False | `0x0000` | `big` |
+| `crc16_arc` | CRC-16/ARC | `0x8005` | `0x0000` | True | True | `0x0000` | `little` |
+| `crc16_dnp` | CRC-16/DNP (DNP3) | `0x3D65` | `0x0000` | True | True | `0xFFFF` | `little` |
+| `fletcher16` | Fletcher-16 (two running sums modulo 255, value `sum2 << 8 \| sum1`) | N/A | N/A | No | No | N/A | `little` / `big` |
 | `crc32` | Standard IEEE 802.3 CRC-32 | `0x04C11DB7` | `0xFFFFFFFF` | True | True | `0xFFFFFFFF` | `little` |
 
 [[CAPTION:Table]] Supported preset CRC and checksum algorithms.
+
+Names are case-insensitive, and `-` and `_` are interchangeable. These spellings also resolve: `checksum-8`, `checksum8`, `sum-8` (all `sum8`), `xor8` and `xor-8` (`xor`), `crc-16-modbus`, `crc-16-dnp`, `crc-16-arc`, `crc-16-ccitt-false`, `crc-8`, `crc-32` and `fletcher-16`. An unknown algorithm is an error when the protocol is loaded (and therefore in `lint`), not when the first frame is built.
+
+#### 4.1.1 Checksum options
+`sum8`, `sum16` and `xor` accept two optional settings under `integrity`: `transform` (`none`, `twos_complement` or `ones_complement`, applied to the final value) and, for `sum8`, `carry_wrap: true` for end-around-carry summation (the LIN enhanced checksum).
+
+#### 4.1.2 Empty input
+The CRC of an empty byte string is computed like any other: it follows `init`, reflection and `xorout` (for example `crc16_modbus` of nothing is `0xFFFF`). Checksums (`sum8`, `sum16`, `xor`, `fletcher16`) and `none` are `0`. Having no integrity field is expressed with `algorithm: none`, never as a CRC result.
 
 ### 4.2 Custom Parametric CRC (Rocksoft Parameter Model)
 Protocols requiring custom or proprietary polynomial algorithms can define the CRC parameters explicitly using the **Rocksoft Model**:
@@ -190,7 +202,7 @@ framing:
   header: [0xAA, 0x55]
   integrity:
     algorithm: "custom"
-    width: 16              # Bit width: 8, 16, 24, 32
+    width: 16              # Bit width: a multiple of 8, from 8 to 64
     poly: 0x1021           # Generator polynomial (hex or integer)
     init: 0xFFFF           # Initial register value
     refin: false           # Reflect input bytes (true = LSB first)
@@ -202,14 +214,20 @@ framing:
 [[CAPTION:Figure]] Custom Rocksoft CRC definition in protocol specification.
 
 #### 4.2.1 Parameter Breakdown
-- **`width`**: The bit width of the CRC register (`8`, `16`, `24`, or `32`).
+- **`width`**: The bit width of the CRC register: a multiple of 8 from 8 to 64.
 - **`poly`**: The unreflected polynomial coefficients without the implicit leading high bit (e.g. `0x1021` for \(x^{16} + x^{12} + x^5 + 1\)).
 - **`init`**: Initial internal register value prior to processing the first byte.
 - **`refin`**: Boolean flag. When `true`, each byte is reflected bit-order (LSB first) prior to feeding into the calculation.
 - **`refout`**: Boolean flag. When `true`, the final register state is reflected before the `xorout` stage.
 - **`xorout`**: Hexadecimal or integer mask XORed with the final value before transmission.
 - **`endian`**: Byte order when serializing the CRC into the frame (`little` or `big`).
-- **`check`**: Optional test vector value computed over ASCII `"123456789"` used by OmniUART to automatically validate the formula on startup.
+- **`check`**: Optional test vector value computed over ASCII `"123456789"` verified when the protocol is loaded: a mismatch is an error.
+
+#### 4.2.2 Validation
+A custom model is rejected when `width` is not a multiple of 8 between 8 and 64, when `poly`, `init`, `xorout` or `check` is not an integer that fits in `width` bits, when `poly` is `0`, when `refin` or `refout` is not a boolean, or when `endian` is not `little` or `big`.
+
+#### 4.2.3 Kit protocol mapping
+The uart-interface-schema-kit `customParameters` keys `widthBits`, `polynomial`, `initialValue`, `reflectInput`, `reflectOutput` and `finalXor` map to `width`, `poly`, `init`, `refin`, `refout` and `xorout`. Kit `coverage` maps to `covers` (`payload-only` to `payload_only`, `whole-frame-excluding-check` to `full_frame`, `length-to-payload-inclusive` to `after_header`), `finalTransform` (`twosComplement`, `onesComplement`) to `transform`, and `summationMode: carry-wrapped` to `carry_wrap`. `valueEncoding` other than `binary` and `coverageEndMarker` are not supported by the codec and are reported with a warning.
 
 ---
 

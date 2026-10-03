@@ -7,6 +7,7 @@ defined according to the Rocksoft Parameter Model.
 
 from __future__ import annotations
 
+import re
 import struct
 from dataclasses import dataclass
 from enum import Enum
@@ -20,11 +21,48 @@ class CrcAlgorithm(str, Enum):
     SUM8 = "sum8"
     SUM16 = "sum16"
     XOR = "xor"
+    FLETCHER16 = "fletcher16"
     CRC8 = "crc8"
     CRC16_MODBUS = "crc16_modbus"
     CRC16_CCITT = "crc16_ccitt"
+    CRC16_CCITT_FALSE = "crc16_ccitt_false"
+    CRC16_ARC = "crc16_arc"
+    CRC16_DNP = "crc16_dnp"
     CRC32 = "crc32"
     CUSTOM = "custom"
+
+
+_ALIASES = {
+    "checksum8": "sum8",
+    "sum_8": "sum8",
+    "checksum_8": "sum8",
+    "checksum16": "sum16",
+    "sum_16": "sum16",
+    "checksum_16": "sum16",
+    "xor8": "xor",
+    "xor_8": "xor",
+    "fletcher_16": "fletcher16",
+}
+
+TRANSFORMS = ("none", "twos_complement", "ones_complement")
+
+
+def normalize_algorithm_name(name: str) -> str:
+    """Canonical lower-case name: ``crc-16-modbus`` -> ``crc16_modbus``, ``checksum-8`` -> ``sum8``, ``xor-8`` -> ``xor``."""
+    key = re.sub(r"[\s-]+", "_", str(name).strip().lower())
+    key = re.sub(r"^crc_(\d+)", r"crc\1", key)
+    return _ALIASES.get(key, key)
+
+
+def resolve_algorithm(name: Union["CrcAlgorithm", str]) -> "CrcAlgorithm":
+    """Look up an algorithm by any accepted spelling; raises ``ValueError`` listing the supported names."""
+    if isinstance(name, CrcAlgorithm):
+        return name
+    try:
+        return CrcAlgorithm(normalize_algorithm_name(name))
+    except ValueError:
+        supported = ", ".join(a.value for a in CrcAlgorithm)
+        raise ValueError(f"Unsupported CRC algorithm: '{name}' (supported: {supported})") from None
 
 
 @dataclass(frozen=True)
@@ -41,55 +79,33 @@ class CrcModel:
     check: Optional[int] = None
 
     def __post_init__(self) -> None:
-        if self.width not in (8, 16, 24, 32):
-            raise ValueError(f"CRC width must be 8, 16, 24, or 32 bits, got {self.width}")
+        if not isinstance(self.width, int) or self.width < 8 or self.width > 64 or self.width % 8:
+            raise ValueError(f"CRC width must be a multiple of 8 between 8 and 64 bits, got {self.width!r}")
         if self.endian not in ("little", "big"):
             raise ValueError(f"Endianness must be 'little' or 'big', got '{self.endian}'")
+        mask = (1 << self.width) - 1
+        for name in ("poly", "init", "xorout"):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ValueError(f"CRC {name} must be an integer, got {value!r}")
+            if not 0 <= value <= mask:
+                raise ValueError(f"CRC {name} 0x{value:X} does not fit in {self.width} bits")
+        if self.poly == 0:
+            raise ValueError("CRC polynomial must be non-zero")
+        if not isinstance(self.refin, bool) or not isinstance(self.refout, bool):
+            raise ValueError("CRC refin and refout must be booleans")
+        if self.check is not None:
+            if not isinstance(self.check, int) or not 0 <= self.check <= mask:
+                raise ValueError(f"CRC check {self.check!r} does not fit in {self.width} bits")
+            computed = calculate_custom_crc(CHECK_INPUT, self)
+            if computed != self.check:
+                raise ValueError(
+                    f"CRC model check value mismatch: declared 0x{self.check:0{self.width // 4}X}, "
+                    f"computed 0x{computed:0{self.width // 4}X} for b'123456789'"
+                )
 
 
-# Standard Named Presets
-PRESET_MODELS: Dict[CrcAlgorithm, CrcModel] = {
-    CrcAlgorithm.CRC8: CrcModel(
-        width=8,
-        poly=0x07,
-        init=0x00,
-        refin=False,
-        refout=False,
-        xorout=0x00,
-        endian="big",
-        check=0xF4,
-    ),
-    CrcAlgorithm.CRC16_MODBUS: CrcModel(
-        width=16,
-        poly=0x8005,
-        init=0xFFFF,
-        refin=True,
-        refout=True,
-        xorout=0x0000,
-        endian="little",
-        check=0x4B37,
-    ),
-    CrcAlgorithm.CRC16_CCITT: CrcModel(
-        width=16,
-        poly=0x1021,
-        init=0xFFFF,
-        refin=False,
-        refout=False,
-        xorout=0x0000,
-        endian="big",
-        check=0x29B1,
-    ),
-    CrcAlgorithm.CRC32: CrcModel(
-        width=32,
-        poly=0x04C11DB7,
-        init=0xFFFFFFFF,
-        refin=True,
-        refout=True,
-        xorout=0xFFFFFFFF,
-        endian="little",
-        check=0xCBF43926,
-    ),
-}
+CHECK_INPUT = b"123456789"
 
 # Precomputed lookup tables cache for high-throughput calculation
 _TABLE_CACHE: Dict[CrcModel, List[int]] = {}
@@ -140,10 +156,10 @@ def _get_crc_table(model: CrcModel) -> List[int]:
 
 
 def calculate_custom_crc(data: bytes, model: CrcModel) -> int:
-    """Calculate CRC over data bytes using arbitrary Rocksoft Model parameters."""
-    if not data:
-        return 0
+    """Calculate CRC over data bytes using arbitrary Rocksoft Model parameters.
 
+    Empty input is not special: the result follows from ``init``, reflection and ``xorout``.
+    """
     width = model.width
     mask = (1 << width) - 1
     table = _get_crc_table(model)
@@ -167,47 +183,99 @@ def calculate_custom_crc(data: bytes, model: CrcModel) -> int:
     return (reg ^ model.xorout) & mask
 
 
+def _fletcher16(data: bytes) -> int:
+    sum1 = sum2 = 0
+    for byte in data:
+        sum1 = (sum1 + byte) % 255
+        sum2 = (sum2 + sum1) % 255
+    return (sum2 << 8) | sum1
+
+
+def _carry_wrapped_sum8(data: bytes) -> int:
+    """Sum with the carry added back in (end-around carry), as used by LIN's enhanced checksum."""
+    total = 0
+    for byte in data:
+        total += byte
+        if total > 0xFF:
+            total -= 0xFF
+    return total
+
+
+def apply_transform(value: int, width: int, transform: str) -> int:
+    """Final transform applied to a checksum: none, twos_complement or ones_complement."""
+    mask = (1 << width) - 1
+    if transform == "none":
+        return value & mask
+    if transform == "ones_complement":
+        return (~value) & mask
+    if transform == "twos_complement":
+        return (-value) & mask
+    raise ValueError(f"Unknown checksum transform '{transform}' (expected one of {', '.join(TRANSFORMS)})")
+
+
 def calculate_crc(
     data: bytes,
     algorithm: Union[CrcAlgorithm, str],
     custom_model: Optional[CrcModel] = None,
+    transform: str = "none",
+    carry_wrap: bool = False,
 ) -> int:
-    """Calculate checksum or CRC over bytes using named preset or custom model."""
-    if isinstance(algorithm, str):
-        try:
-            algo_enum = CrcAlgorithm(algorithm.lower())
-        except ValueError:
-            raise ValueError(f"Unsupported CRC algorithm: '{algorithm}'")
-    else:
-        algo_enum = algorithm
+    """Calculate a checksum or CRC over ``data`` using a named preset or a custom model.
 
-    if algo_enum == CrcAlgorithm.NONE:
+    ``transform`` (checksums only) applies a final one's or two's complement and ``carry_wrap`` selects
+    end-around-carry summation for ``sum8``. Empty input is calculated like any other input.
+    """
+    algo = resolve_algorithm(algorithm)
+    if transform not in TRANSFORMS:
+        raise ValueError(f"Unknown checksum transform '{transform}' (expected one of {', '.join(TRANSFORMS)})")
+
+    if algo is CrcAlgorithm.NONE:
         return 0
-
-    if not data:
-        return 0
-
-    if algo_enum == CrcAlgorithm.SUM8:
-        return sum(data) & 0xFF
-
-    if algo_enum == CrcAlgorithm.SUM16:
-        return sum(data) & 0xFFFF
-
-    if algo_enum == CrcAlgorithm.XOR:
+    if algo is CrcAlgorithm.SUM8:
+        raw = _carry_wrapped_sum8(data) if carry_wrap else sum(data) & 0xFF
+        return apply_transform(raw, 8, transform)
+    if algo is CrcAlgorithm.SUM16:
+        return apply_transform(sum(data) & 0xFFFF, 16, transform)
+    if algo is CrcAlgorithm.XOR:
         res = 0
         for b in data:
             res ^= b
-        return res & 0xFF
-
-    if algo_enum == CrcAlgorithm.CUSTOM:
+        return apply_transform(res, 8, transform)
+    if algo is CrcAlgorithm.FLETCHER16:
+        return _fletcher16(data)
+    if algo is CrcAlgorithm.CUSTOM:
         if custom_model is None:
             raise ValueError("custom_model parameter must be provided when algorithm is 'custom'")
         return calculate_custom_crc(data, custom_model)
+    if algo in PRESET_MODELS:
+        return calculate_custom_crc(data, PRESET_MODELS[algo])
+    raise ValueError(f"Unhandled CRC algorithm: {algo}")
 
-    if algo_enum in PRESET_MODELS:
-        return calculate_custom_crc(data, PRESET_MODELS[algo_enum])
 
-    raise ValueError(f"Unhandled CRC algorithm: {algo_enum}")
+def algorithm_width(algorithm: Union[CrcAlgorithm, str], custom_model: Optional[CrcModel] = None) -> int:
+    """Width in bits of the integrity field the algorithm produces (0 for ``none``)."""
+    algo = resolve_algorithm(algorithm)
+    if algo is CrcAlgorithm.NONE:
+        return 0
+    if algo is CrcAlgorithm.CUSTOM:
+        if custom_model is None:
+            raise ValueError("custom_model parameter must be provided when algorithm is 'custom'")
+        return custom_model.width
+    if algo in PRESET_MODELS:
+        return PRESET_MODELS[algo].width
+    return {CrcAlgorithm.SUM8: 8, CrcAlgorithm.XOR: 8, CrcAlgorithm.SUM16: 16, CrcAlgorithm.FLETCHER16: 16}[algo]
+
+
+# Standard named presets. Each model is verified against its published check value on import.
+PRESET_MODELS: Dict[CrcAlgorithm, CrcModel] = {
+    CrcAlgorithm.CRC8: CrcModel(width=8, poly=0x07, init=0x00, refin=False, refout=False, xorout=0x00, endian="big", check=0xF4),
+    CrcAlgorithm.CRC16_MODBUS: CrcModel(width=16, poly=0x8005, init=0xFFFF, refin=True, refout=True, xorout=0x0000, endian="little", check=0x4B37),
+    CrcAlgorithm.CRC16_CCITT: CrcModel(width=16, poly=0x1021, init=0xFFFF, refin=False, refout=False, xorout=0x0000, endian="big", check=0x29B1),
+    CrcAlgorithm.CRC16_CCITT_FALSE: CrcModel(width=16, poly=0x1021, init=0xFFFF, refin=False, refout=False, xorout=0x0000, endian="big", check=0x29B1),
+    CrcAlgorithm.CRC16_ARC: CrcModel(width=16, poly=0x8005, init=0x0000, refin=True, refout=True, xorout=0x0000, endian="little", check=0xBB3D),
+    CrcAlgorithm.CRC16_DNP: CrcModel(width=16, poly=0x3D65, init=0x0000, refin=True, refout=True, xorout=0xFFFF, endian="little", check=0xEA82),
+    CrcAlgorithm.CRC32: CrcModel(width=32, poly=0x04C11DB7, init=0xFFFFFFFF, refin=True, refout=True, xorout=0xFFFFFFFF, endian="little", check=0xCBF43926),
+}
 
 
 def format_crc_bytes(val: int, width: int, endian: str = "little") -> bytes:
