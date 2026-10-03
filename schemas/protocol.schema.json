@@ -89,6 +89,13 @@
             }
           ],
           "default": null
+        },
+        "correlate": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Correlate",
+          "type": "array"
         }
       },
       "required": [
@@ -692,6 +699,13 @@
         "$ref": "#/$defs/TelemetrySpec"
       },
       "title": "Telemetry",
+      "type": "array"
+    },
+    "correlate": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Correlate",
       "type": "array"
     }
   },
