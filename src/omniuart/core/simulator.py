@@ -12,6 +12,7 @@ import random
 import time
 from typing import Any, Dict, List, Optional, Union
 
+from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec
 from omniuart.core.crc import calculate_crc
 from omniuart.core.models import CommandSpec, FramingConfig, ProtocolMeta, ProtocolSpec, SerialConfig, load_protocol
 from omniuart.core.transport import AsyncTransport, VirtualTransport
@@ -36,7 +37,8 @@ class BaseDeviceSimulator:
 
         self._running = False
         self._task: Optional[asyncio.Task] = None
-        self._state: Dict[str, Any] = {"power": True, "rx_count": 0, "tx_count": 0}
+        self._state: Dict[str, Any] = {"power": True, "rx_count": 0, "rx_errors": 0, "tx_count": 0}
+        self.codec = FrameCodec(spec)
 
     async def start(self) -> None:
         """Start the virtual device simulator background processing loop."""
@@ -73,7 +75,6 @@ class BaseDeviceSimulator:
                 buf.extend(chunk)
                 resp = self.process_incoming_bytes(buf)
                 if resp:
-                    buf.clear()
                     if self.latency_ms > 0:
                         await asyncio.sleep(self.latency_ms / 1000.0)
                     if random.random() >= self.fault_drop_rate:
@@ -86,26 +87,62 @@ class BaseDeviceSimulator:
                 await asyncio.sleep(0.05)
 
     def process_incoming_bytes(self, buf: bytearray) -> Optional[bytes]:
-        """Parse frame buffer and return calculated spec-compliant response bytes."""
+        """Consume complete request frames from ``buf`` and return the concatenated responses.
+
+        Bytes that belong to an incomplete frame stay in ``buf`` until more arrive. Binary
+        requests are located, validated and identified by the protocol's :class:`FrameCodec`.
+        """
         if not buf:
             return None
 
-        self._state["rx_count"] += 1
-        raw_text = buf.decode("utf-8", errors="ignore")
         framing_type = getattr(self.spec.framing.type, "value", self.spec.framing.type)
 
         # Handle delimited ASCII protocols (e.g. AT commands)
         if str(framing_type).lower() == "delimited":
+            raw_text = buf.decode("utf-8", errors="ignore")
             if "\n" in raw_text or "\r" in raw_text or len(buf) > 128:
                 cmd_str = raw_text.strip()
                 buf.clear()
+                self._state["rx_count"] += 1
                 return self.handle_delimited_command(cmd_str)
             return None
 
-        # Handle binary protocols
-        payload = bytes(buf)
-        buf.clear()
-        return self.handle_binary_command(payload)
+        frames, rest = self.codec.extract_frames(bytes(buf), direction="request")
+        buf[:] = rest[-self.MAX_PENDING_BYTES :]
+        responses = bytearray()
+        for frame in frames:
+            self._state["rx_count"] += 1
+            if not frame.ok:
+                # A device ignores frames it cannot validate; it does not answer them.
+                self._state["rx_errors"] += 1
+                logger.debug("Ignoring invalid request frame: %s", frame.error)
+                continue
+            responses.extend(self.handle_frame(frame))
+        return bytes(responses) or None
+
+    MAX_PENDING_BYTES = 4096
+
+    def handle_frame(self, frame: DecodedFrame) -> bytes:
+        """Answer one valid request frame; returns ``b""`` when the command has no response."""
+        cmd = self.spec.get_command(frame.name or "")
+        if cmd is None or cmd.response is None:
+            return b""
+        values = self.handle_command(cmd, frame.fields)
+        if values is None:
+            return b""
+        try:
+            return self.codec.encode_response(cmd, values)
+        except CodecError as exc:
+            logger.error("Cannot encode response for '%s': %s", cmd.name, exc)
+            return b""
+
+    def handle_command(self, cmd: CommandSpec, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Behaviour hook: return response field values for ``cmd``, or ``None`` to stay silent.
+
+        The default answers every command that declares a response using the declared field
+        defaults. Subclasses override this to model device state.
+        """
+        return {}
 
     def handle_delimited_command(self, cmd_str: str) -> bytes:
         """Handle ASCII delimited text command string."""
@@ -117,14 +154,6 @@ class BaseDeviceSimulator:
             return f"OK{suffix}".encode("utf-8")
 
         return f"OK{suffix}".encode("utf-8")
-
-    def handle_binary_command(self, data: bytes) -> bytes:
-        """Handle binary byte array command frame."""
-        cmd_id = data[4] if len(data) > 4 else 0x01
-        resp = bytearray([0xAA, 0x55, 0x02, 0x00, cmd_id, 0x00])
-        crc = calculate_crc(resp[2:], "crc16_modbus")
-        resp.extend(crc.to_bytes(2, "little"))
-        return bytes(resp)
 
 
 class ATModemSimulator(BaseDeviceSimulator):

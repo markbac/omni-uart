@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import serial
 import serial.tools.list_ports
 
-from omniuart.core.crc import calculate_crc
+from omniuart.core.codec import FrameCodec
 from omniuart.core.models import ProtocolSpec, SerialConfig
 
 logger = logging.getLogger(__name__)
@@ -145,7 +145,8 @@ class VirtualTransport(AsyncTransport):
             # Corrupt last byte for CRC bit-flip test
             resp_bytes = resp_bytes[:-1] + bytes([resp_bytes[-1] ^ 0xFF])
 
-        await self._rx_queue.put(resp_bytes)
+        if resp_bytes:
+            await self._rx_queue.put(resp_bytes)
         return len(data)
 
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
@@ -167,15 +168,32 @@ class VirtualTransport(AsyncTransport):
             return bytes()
 
     def _generate_response(self, request_bytes: bytes) -> bytes:
-        """Simulate MCU frame processing and generate valid/mock response frame."""
-        cmd_id = request_bytes[4] if len(request_bytes) > 4 else 0x01
-        if cmd_id in self._rule_responses:
-            return self._rule_responses[cmd_id]
+        """Simulate the device side of the link.
 
-        resp = bytearray([0xAA, 0x55, 0x02, 0x00, cmd_id, 0x00])
-        crc = calculate_crc(resp[2:], "crc16_modbus")
-        resp.extend(crc.to_bytes(2, "little"))
-        return bytes(resp)
+        With a protocol, the request is decoded by the protocol's codec and answered with the
+        command's declared response (or a rule registered with :meth:`register_response`);
+        frames that are invalid, unknown or have no response are not answered. Without a
+        protocol the transport is a plain loopback and echoes the bytes back.
+        """
+        if self.protocol is None:
+            return request_bytes
+
+        codec = FrameCodec(self.protocol)
+        frames, _ = codec.extract_frames(request_bytes, direction="request")
+        out = bytearray()
+        for frame in frames:
+            if not frame.ok:
+                continue
+            if not codec.is_binary:
+                out.extend(("OK" + codec.line_terminator()).encode("utf-8"))
+                continue
+            if frame.message_id in self._rule_responses:
+                out.extend(self._rule_responses[frame.message_id])
+                continue
+            cmd = self.protocol.get_command(frame.name or "")
+            if cmd is not None and cmd.response is not None:
+                out.extend(codec.encode_response(cmd))
+        return bytes(out)
 
 
 class HardwareSerialTransport(AsyncTransport):

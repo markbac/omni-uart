@@ -251,6 +251,26 @@ def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
     return out
 
 
+def default_value(spec: FieldSpec) -> Any:
+    """A valid placeholder value for a field: its declared default, else the smallest legal value."""
+    if spec.default is not None:
+        return spec.default
+    if spec.type is FieldType.BOOL:
+        return False
+    if spec.type is FieldType.ENUM:
+        return next(iter(spec.options), 0) if spec.options else 0
+    if spec.type is FieldType.STRING:
+        return ""
+    if spec.type is FieldType.BYTES:
+        return b"\x00" * (spec.length or 0)
+    value = 0.0
+    if spec.min is not None and value < spec.min:
+        value = spec.min
+    if spec.max is not None and value > spec.max:
+        value = spec.max
+    return int(value) if spec.type in _INT_FORMATS else float(value)
+
+
 class FrameCodec:
     """Encode and decode frames for one :class:`ProtocolSpec`."""
 
@@ -316,11 +336,16 @@ class FrameCodec:
         return self.encode_message(cmd.id, payload, params=[str(v) for v in self._text_params(cmd, params or {})])
 
     def encode_response(self, command: Union[str, CommandSpec], values: Optional[Mapping[str, Any]] = None) -> bytes:
-        """Build the wire frame a device sends in answer to ``command``."""
+        """Build the wire frame a device sends in answer to ``command``.
+
+        Response fields missing from ``values`` fall back to :func:`default_value`.
+        """
         cmd = self._command(command)
         if cmd.response is None:
             raise CodecError(f"Command '{cmd.name}' defines no response")
-        payload = encode_fields(cmd.response.fields, values or {})
+        merged = {f.name: default_value(f) for f in cmd.response.fields}
+        merged.update(values or {})
+        payload = encode_fields(cmd.response.fields, merged)
         message_id = cmd.response.id if cmd.response.id is not None else cmd.id
         return self.encode_message(message_id, payload)
 
@@ -377,7 +402,7 @@ class FrameCodec:
         frame.extend(self._footer)
         return bytes(frame)
 
-    def _suffix(self) -> str:
+    def line_terminator(self) -> str:
         """Line terminator of a delimited frame: ``suffix``, else a declared ``footer``, else CRLF."""
         if self.framing.suffix is not None:
             return self.framing.suffix
@@ -388,7 +413,7 @@ class FrameCodec:
     def _encode_delimited(self, message_id: Union[int, str], params: List[str]) -> bytes:
         framing = self.framing
         delimiter = framing.delimiter if framing.delimiter is not None else ","
-        suffix = self._suffix()
+        suffix = self.line_terminator()
         text = (framing.prefix or "") + str(message_id)
         if params:
             text += delimiter + delimiter.join(params)
@@ -551,7 +576,7 @@ class FrameCodec:
         return frame
 
     def _extract_delimited(self, data: bytes, direction: str) -> Tuple[List[DecodedFrame], bytes]:
-        suffix = self._suffix().encode("utf-8")
+        suffix = self.line_terminator().encode("utf-8")
         frames: List[DecodedFrame] = []
         buf = data
         while suffix and (idx := buf.find(suffix)) >= 0:
