@@ -107,15 +107,25 @@ class BaseDeviceSimulator:
 
         framing_type = getattr(self.spec.framing.type, "value", self.spec.framing.type)
 
-        # Handle delimited ASCII protocols (e.g. AT commands)
+        # Handle delimited ASCII protocols (e.g. AT commands): one command per line, and the
+        # empty line left by a CR LF terminator pair is not a command.
         if str(framing_type).lower() == "delimited":
             raw_text = buf.decode("utf-8", errors="ignore")
-            if "\n" in raw_text or "\r" in raw_text or len(buf) > 128:
-                cmd_str = raw_text.strip()
-                buf.clear()
+            responses = bytearray()
+            while True:
+                end = next((i for i, ch in enumerate(raw_text) if ch in "\r\n"), -1)
+                if end < 0:
+                    break
+                line, raw_text = raw_text[:end].strip(), raw_text[end + 1 :]
+                if line:
+                    self._state["rx_count"] += 1
+                    responses.extend(self.handle_delimited_command(line))
+            if len(raw_text) > 128:  # no terminator in sight: treat the overlong input as one command
                 self._state["rx_count"] += 1
-                return self.handle_delimited_command(cmd_str)
-            return None
+                responses.extend(self.handle_delimited_command(raw_text.strip()))
+                raw_text = ""
+            buf[:] = raw_text.encode("utf-8")
+            return bytes(responses) or None
 
         frames, rest = self.codec.extract_frames(bytes(buf), direction="request")
         buf[:] = rest[-self.MAX_PENDING_BYTES :]
@@ -194,28 +204,35 @@ class ATModemSimulator(BaseDeviceSimulator):
         self.battery_mv = 3850
         self.creg_status = 1  # 1 = Registered, home network
 
+    @staticmethod
+    def _final(result: str) -> bytes:
+        """V.250 framing: ``<CR><LF>result<CR><LF>``."""
+        return f"\r\n{result}\r\n".encode("utf-8")
+
+    def _info(self, line: str) -> bytes:
+        return f"\r\n{line}\r\n".encode("utf-8") + self._final("OK")
+
     def handle_delimited_command(self, cmd_str: str) -> bytes:
         cmd = cmd_str.strip().upper()
-        suffix = "\r\n"
-
-        if cmd in ("AT", "AT\r", "AT\n"):
-            return f"OK{suffix}".encode("utf-8")
-        elif cmd.startswith("AT+CSQ"):
-            return f"+CSQ: {self.signal_quality},99{suffix}{suffix}OK{suffix}".encode("utf-8")
-        elif cmd.startswith("AT+CBC"):
-            return f"+CBC: 0,{self.battery_mv}{suffix}{suffix}OK{suffix}".encode("utf-8")
-        elif cmd.startswith("AT+CREG?"):
-            return f"+CREG: 0,{self.creg_status}{suffix}{suffix}OK{suffix}".encode("utf-8")
-        elif cmd.startswith("AT+CGREG?"):
-            return f"+CGREG: 0,1{suffix}{suffix}OK{suffix}".encode("utf-8")
-        elif cmd.startswith("AT+GSN") or cmd.startswith("AT+CGSN"):
-            return f"867530901234567{suffix}{suffix}OK{suffix}".encode("utf-8")
-        elif cmd.startswith("ATD") or "ENTERDATAMODE" in cmd:
-            return f"CONNECT 115200{suffix}".encode("utf-8")
-        elif cmd.startswith("AT+CMGS="):
-            return f"> ".encode("utf-8")
-
-        return f"OK{suffix}".encode("utf-8")
+        if not cmd:
+            return b""  # an empty line is not a command
+        if cmd == "AT":
+            return self._final("OK")
+        if cmd.startswith("AT+CSQ"):
+            return self._info(f"+CSQ: {self.signal_quality},99")
+        if cmd.startswith("AT+CBC"):
+            return self._info(f"+CBC: 0,{self.battery_mv}")
+        if cmd.startswith("AT+CREG?"):
+            return self._info(f"+CREG: 0,{self.creg_status}")
+        if cmd.startswith("AT+CGREG?"):
+            return self._info("+CGREG: 0,1")
+        if cmd.startswith("AT+GSN") or cmd.startswith("AT+CGSN"):
+            return self._info("867530901234567")
+        if cmd.startswith("ATD") or "ENTERDATAMODE" in cmd:
+            return self._final("CONNECT 115200")
+        if cmd.startswith("AT+CMGS="):
+            return b"\r\n> "
+        return self._final("ERROR")  # unknown command, so typos do not pass silently
 
 
 class IoTSensorSimulator(BaseDeviceSimulator):
@@ -293,33 +310,39 @@ class ModbusRtuSimulator(BaseDeviceSimulator):
         self.slave_address = slave_address
         self.holding_registers: Dict[int, int] = {0: 1234, 1: 5678, 2: 9012, 3: 4321}
 
+    MAX_READ_REGISTERS = 125  # Modbus limit for function 0x03
+
+    def _with_crc(self, body: bytes) -> bytes:
+        return body + calculate_crc(body, "crc16_modbus").to_bytes(2, "little")
+
+    def _exception(self, func: int, code: int) -> bytes:
+        return self._with_crc(bytes([self.slave_address, func | 0x80, code]))
+
     def process_incoming_bytes(self, buf: bytearray) -> Optional[bytes]:
         if len(buf) < 8:
             return None
 
-        addr = buf[0]
-        func = buf[1]
-        reg_addr = int.from_bytes(buf[2:4], "big")
-        count = int.from_bytes(buf[4:6], "big")
-        buf.clear()
+        frame = bytes(buf[:8])
+        buf.clear()  # a request is exactly 8 bytes for the one function we implement
+        if calculate_crc(frame[:6], "crc16_modbus") != int.from_bytes(frame[6:8], "little"):
+            self._state["rx_errors"] += 1
+            return None  # a bad checksum is silently dropped, as on a real bus
 
+        addr, func = frame[0], frame[1]
         if addr != self.slave_address:
-            return None
+            return None  # not for us (broadcast address 0 gets no reply either)
 
-        if func == 0x03:  # Read Holding Registers
-            byte_count = count * 2
+        if func != 0x03:
+            return self._exception(func, 0x01)  # Illegal Function
 
-            resp = bytearray([self.slave_address, 0x03, byte_count])
-            for i in range(count):
-                val = self.holding_registers.get(reg_addr + i, 0)
-                resp.extend(val.to_bytes(2, "big"))
+        reg_addr = int.from_bytes(frame[2:4], "big")
+        count = int.from_bytes(frame[4:6], "big")
+        if not 1 <= count <= self.MAX_READ_REGISTERS:
+            return self._exception(func, 0x03)  # Illegal Data Value
+        if reg_addr + count > 0x10000:
+            return self._exception(func, 0x02)  # Illegal Data Address
 
-            crc = calculate_crc(resp, "crc16_modbus")
-            resp.extend(crc.to_bytes(2, "little"))
-            return bytes(resp)
-
-        # Standard exception response (Illegal Function)
-        err_resp = bytearray([self.slave_address, func | 0x80, 0x01])
-        crc = calculate_crc(err_resp, "crc16_modbus")
-        err_resp.extend(crc.to_bytes(2, "little"))
-        return bytes(err_resp)
+        body = bytearray([self.slave_address, 0x03, count * 2])
+        for i in range(count):
+            body.extend(self.holding_registers.get(reg_addr + i, 0).to_bytes(2, "big"))
+        return self._with_crc(bytes(body))
