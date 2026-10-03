@@ -10,7 +10,7 @@ from omniuart.core.transport import VirtualTransport
 async def test_virtual_transport_pin_toggling() -> None:
     transport = VirtualTransport()
     await transport.open()
-    
+
     assert transport.pin_states["dtr"] is False
     assert transport.pin_states["rts"] is False
 

@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
+from typing import List
+
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.simulator import ATModemSimulator, IoTSensorSimulator, ModbusRtuSimulator
+from omniuart.core.simulator import BaseDeviceSimulator, ATModemSimulator, IoTSensorSimulator, ModbusRtuSimulator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -28,7 +30,7 @@ async def main_async() -> int:
     iot_spec = catalog.get_protocol("binary_sensor_node.yaml")
     modbus_spec = catalog.get_protocol("modbus_rtu_device.yaml")
 
-    sims = []
+    sims: List[BaseDeviceSimulator] = []
     if at_spec:
         sims.append(ATModemSimulator(spec=at_spec))
     if iot_spec:

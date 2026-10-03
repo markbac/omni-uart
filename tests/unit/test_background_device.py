@@ -32,7 +32,7 @@ def test_send_requires_a_connection(device: BackgroundDevice, spec: ProtocolSpec
 
 
 def test_connect_failure_is_raised_and_leaves_device_disconnected(device: BackgroundDevice) -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(Exception, match=r"."):
         device.connect("/dev/does-not-exist", 115200).result(timeout=5)
     assert device.connected is False
 

@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 from omniuart.core.crc import (
+    byte_order,
     algorithm_width,
     calculate_crc,
     format_crc_bytes,
@@ -387,7 +388,7 @@ class FrameCodec:
             number = _as_int(message_id, "Command id")
             if not 0 <= number < 1 << (8 * id_size):
                 raise CodecError(f"Command id {number} does not fit {id_size} byte(s)")
-            id_bytes = number.to_bytes(id_size, id_spec.endian if id_spec else "little")
+            id_bytes = number.to_bytes(id_size, byte_order(id_spec.endian if id_spec else "little"))
 
         length_bytes = b""
         length_spec = self.framing.length
@@ -405,7 +406,7 @@ class FrameCodec:
                 value = len(payload)
             if value >= 1 << (8 * size):
                 raise CodecError(f"Length {value} does not fit {length_spec.type}")
-            length_bytes = value.to_bytes(size, length_spec.endian)
+            length_bytes = value.to_bytes(size, byte_order(length_spec.endian))
 
         frame = bytearray(self._header + length_bytes + id_bytes + payload)
         if self._integrity_width:
@@ -483,7 +484,7 @@ class FrameCodec:
         if self.framing.length is not None:
             if len(buf) < head + length_size:
                 return None
-            value = int.from_bytes(buf[head : head + length_size], self.framing.length.endian)
+            value = int.from_bytes(buf[head : head + length_size], byte_order(self.framing.length.endian))
             includes = self.framing.length.includes
             if includes == "full_frame":
                 total = value
@@ -501,7 +502,7 @@ class FrameCodec:
             return None if idx < 0 else idx + len(self._footer)
         if len(buf) < head + id_size:
             return None
-        message = self._lookup(int.from_bytes(buf[head : head + id_size], self._id_endian()), "any")
+        message = self._lookup(int.from_bytes(buf[head : head + id_size], byte_order(self._id_endian())), "any")
         size = self._fixed_payload_size(message[1]) if message else None
         if size is None:
             return -1
@@ -558,7 +559,7 @@ class FrameCodec:
         body = raw[head + length_size : len(raw) - trailer_crc - footer_len]
         if len(body) < id_size:
             return DecodedFrame(raw=raw, error="frame too short")
-        message_id: Union[int, str] = int.from_bytes(body[:id_size], self._id_endian())
+        message_id: Union[int, str] = int.from_bytes(body[:id_size], byte_order(self._id_endian()))
         payload = body[id_size:]
         frame = DecodedFrame(raw=raw, message_id=message_id, payload=payload)
 
@@ -606,7 +607,7 @@ class FrameCodec:
             if cmd is not None:
                 frame.name = cmd.name
                 values = rest.split(delimiter) if rest else []
-                frame.fields = {p.name: v for p, v in zip(cmd.parameters, values)}
+                frame.fields = {p.name: v for p, v in zip(cmd.parameters, values, strict=False)}
             frames.append(frame)
         return frames, buf
 

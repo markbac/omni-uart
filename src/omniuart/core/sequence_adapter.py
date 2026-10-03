@@ -21,7 +21,7 @@ EXCLUDED_SEQUENCES = {"g460", "g460-smoke-test-sequence", "g460-smoke-test-seque
 
 def parse_kit_sequence(data: Dict[str, Any], source_name: Optional[str] = None) -> ScriptSpec:
     """Parse a uart-message-sequence.schema.json dictionary into an OmniUART ScriptSpec.
-    
+
     Explicitly excludes G460 sequence files.
     """
     title = data.get("title") or data.get("name") or "Unnamed Sequence"
@@ -54,7 +54,7 @@ def parse_kit_sequence(data: Dict[str, Any], source_name: Optional[str] = None) 
     for idx, step_data in enumerate(raw_steps):
         step_name = step_data.get("name", f"Step {idx + 1}")
         action = step_data.get("action", "send")
-        
+
         delay_ms = step_data.get("delayBeforeMs")
         if delay_ms is None and "delayRangeBeforeMs" in step_data:
             rng = step_data["delayRangeBeforeMs"]

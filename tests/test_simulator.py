@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
 import pytest
 from omniuart.core.simulator import (
     ATModemSimulator,
-    BaseDeviceSimulator,
     IoTSensorSimulator,
     ModbusRtuSimulator,
 )

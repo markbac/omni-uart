@@ -1,10 +1,8 @@
 """Unit tests for CLI commands and FastAPI Dynamic Web UI endpoints."""
 
 from fastapi.testclient import TestClient
-import pytest
 
-from omniuart.cli import format_protocol_help, main as cli_main
-from omniuart.core.catalog import CatalogManager
+from omniuart.cli import main as cli_main
 from omniuart.ui.app import app
 
 client = TestClient(app)

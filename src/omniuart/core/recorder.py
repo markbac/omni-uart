@@ -172,7 +172,7 @@ class SessionRecorder:
                 hex_clean = event.raw_hex.replace(" ", "")
                 data = bytes.fromhex(hex_clean) if hex_clean else b""
                 pkt_len = len(data)
-                
+
                 # Align packet data to 32-bit boundary
                 pad_len = (4 - (pkt_len % 4)) % 4
                 padded_data = data + b"\x00" * pad_len

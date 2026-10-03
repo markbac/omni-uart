@@ -7,7 +7,7 @@ import asyncio
 import logging
 import random
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional
 
 import serial
 import serial.tools.list_ports
@@ -94,7 +94,7 @@ class AsyncTransport(abc.ABC):
 
 class VirtualTransport(AsyncTransport):
     """In-memory virtual MCU transport simulating hardware UART over async queues.
-    
+
     Supports offline loopback, latency jitter, fault injection, and simulated DTR/RTS pins.
     """
 
@@ -552,7 +552,7 @@ class PtyTransport(AsyncTransport):
     async def _wait_writable(self) -> None:
         assert self._loop is not None and self._fd is not None
         ready: asyncio.Future[None] = self._loop.create_future()
-        self._loop.add_writer(self._fd, lambda: ready.done() or ready.set_result(None))
+        self._loop.add_writer(self._fd, lambda: None if ready.done() else ready.set_result(None))
         try:
             await ready
         finally:
@@ -703,7 +703,7 @@ class WindowsNamedPipeTransport(AsyncTransport):
             deadline = time.monotonic() + self.connect_timeout_s
             while True:
                 try:
-                    await loop.create_pipe_connection(self._protocol, self.pipe_name)
+                    await loop.create_pipe_connection(self._protocol, self.pipe_name)  # type: ignore[attr-defined]  # Windows ProactorEventLoop only
                     break
                 except (FileNotFoundError, OSError) as exc:
                     # ERROR_FILE_NOT_FOUND: server not created yet; ERROR_PIPE_BUSY (231): all instances in use

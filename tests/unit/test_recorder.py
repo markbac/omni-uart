@@ -2,9 +2,8 @@
 
 import tempfile
 from pathlib import Path
-import pytest
 
-from omniuart.core.recorder import PacketEvent, SessionRecorder
+from omniuart.core.recorder import SessionRecorder
 
 
 def test_session_recorder_and_exporters() -> None:

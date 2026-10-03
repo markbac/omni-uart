@@ -6,7 +6,6 @@ import pytest
 
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.models import ScriptSpec, load_script
-from omniuart.core.sequence_adapter import load_kit_sequence, parse_kit_sequence
 
 KIT_SEQUENCES_DIR = Path("../uart-interface-schema-kit/kit/examples/sequences")
 

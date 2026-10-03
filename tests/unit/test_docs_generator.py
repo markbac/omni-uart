@@ -2,7 +2,6 @@
 
 import tempfile
 from pathlib import Path
-import pytest
 
 from omniuart.cli import main as cli_main
 from omniuart.core.catalog import CatalogManager
@@ -33,7 +32,7 @@ def test_build_site_documentation() -> None:
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         site_dir = build_site_documentation(tmp_path)
-        
+
         assert site_dir.exists()
         assert (site_dir / "index.html").exists()
 

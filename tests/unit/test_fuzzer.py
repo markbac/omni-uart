@@ -1,6 +1,5 @@
 """Unit tests for ProtocolFuzzer and CLI fuzz subcommand."""
 
-import asyncio
 from pathlib import Path
 import pytest
 

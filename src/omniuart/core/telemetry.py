@@ -11,7 +11,7 @@ import logging
 import time
 import urllib.request
 from urllib.parse import urlparse
-from typing import Any, Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from omniuart.core.recorder import PacketEvent
 
@@ -22,7 +22,7 @@ ALLOWED_WEBHOOK_SCHEMES = ("http", "https")
 WEBHOOK_TIMEOUT_S = 2.0
 
 
-def _parse_broker(broker: str) -> tuple:
+def _parse_broker(broker: str) -> Tuple[str, int]:
     """Split ``host``, ``host:port`` or ``mqtt://host:port`` into (host, port)."""
     parsed = urlparse(broker if "://" in broker else f"mqtt://{broker}")
     if not parsed.hostname:
@@ -63,7 +63,7 @@ class TelemetryBridge:
         for attempt in range(self.retries + 1):
             try:
                 req = urllib.request.Request(
-                    self.webhook_url, data=data, headers={"Content-Type": "application/json"}, method="POST"
+                    self.webhook_url or "", data=data, headers={"Content-Type": "application/json"}, method="POST"
                 )
                 with urllib.request.urlopen(req, timeout=WEBHOOK_TIMEOUT_S) as resp:
                     if 200 <= resp.status < 300:
@@ -77,7 +77,7 @@ class TelemetryBridge:
 
     def _publish_mqtt(self, topic: str, data: bytes) -> None:
         try:
-            import paho.mqtt.publish as publish
+            import paho.mqtt.publish as publish  # type: ignore[import-untyped,import-not-found,unused-ignore]
         except ImportError as exc:
             raise RuntimeError("MQTT needs the optional 'paho-mqtt' package (pip install omni-uart[mqtt])") from exc
         host, port = _parse_broker(self.mqtt_broker or "")

@@ -6,13 +6,12 @@ import pytest
 from omniuart.core.models import ProtocolSpec, load_protocol
 from omniuart.core.kit_adapter import load_kit_protocol
 
-KIT_EXAMPLES_DIR = Path("../uart-interface-schema-kit/kit/examples")
+KIT_EXAMPLES_DIR = Path(__file__).resolve().parents[2] / "examples" / "protocols"
 
 
 def test_load_all_kit_examples_except_g460() -> None:
     """Verify that all kit protocol examples load successfully into ProtocolSpec except g460."""
-    if not KIT_EXAMPLES_DIR.exists():
-        pytest.skip("KIT_EXAMPLES_DIR directory not present on runner")
+    assert KIT_EXAMPLES_DIR.exists(), "examples/protocols is part of the repository"
     json_files = list(KIT_EXAMPLES_DIR.glob("*.json"))
     assert len(json_files) >= 25, "Expected at least 25 kit example protocol files"
 
@@ -27,7 +26,7 @@ def test_load_all_kit_examples_except_g460() -> None:
             assert isinstance(proto, ProtocolSpec)
             assert proto.metadata.name
             assert proto.serial_config.baudrate > 0
-            assert len(proto.commands) >= 1
+            assert proto.commands or proto.telemetry  # stream-only protocols have no commands
             loaded_count += 1
 
     assert loaded_count >= 28, f"Expected at least 28 valid kit protocols, loaded {loaded_count}"

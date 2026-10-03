@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import yaml
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator  # type: ignore[import-untyped]
 
 from omniuart.core.models import ProtocolSpec, load_protocol
 from omniuart.utils.resources import get_resource_path
@@ -26,12 +26,13 @@ def load_kit_schema(is_kit_format: bool = False) -> Dict[str, Any]:
         schema_path = get_resource_path("schemas/protocol.schema.json")
 
     raw = schema_path.read_text(encoding="utf-8")
-    return json.loads(raw)
+    schema: Dict[str, Any] = json.loads(raw)
+    return schema
 
 
 def lint_protocol_file(file_path: Union[str, Path]) -> Tuple[bool, List[str]]:
     """Lint and validate a YAML/JSON protocol definition file against JSON Schema.
-    
+
     Returns (is_valid, error_messages).
     """
     path = Path(file_path)

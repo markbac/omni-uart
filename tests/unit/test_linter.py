@@ -2,7 +2,6 @@
 
 import tempfile
 from pathlib import Path
-import pytest
 
 from omniuart.cli import main as cli_main
 from omniuart.linter import convert_protocol_to_kit, lint_protocol_file

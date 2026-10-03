@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import html
-import json
 import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from omniuart.core.asyncapi_exporter import export_asyncapi_yaml
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.models import ProtocolSpec, load_protocol
+from omniuart.core.models import ProtocolSpec
 
 
 def generate_markdown_docs(spec: ProtocolSpec, safe_stem: Optional[str] = None) -> str:
@@ -37,7 +36,7 @@ def generate_markdown_docs(spec: ProtocolSpec, safe_stem: Optional[str] = None) 
 
     lines.append("## Command Catalog & Message Signatures\n")
 
-    tag_map = {}
+    tag_map: Dict[str, List[Any]] = {}
     for cmd in spec.commands:
         tags = cmd.tags if cmd.tags else ["general"]
         for tag in tags:
@@ -156,7 +155,7 @@ def _compile_asyncapi_html(yaml_path: Path, html_path: Path, root_dir: Path, asy
                 tmp_out_dir = asyncapi_docs_dir / f"tmp_{safe_stem}"
                 tmp_out_dir.mkdir(exist_ok=True)
                 env = {**os.environ, "CI": "true", "RPM_INTERACTIVE": "false"}
-                res = subprocess.run(
+                subprocess.run(
                     [npx_bin, "--yes", "asyncapi", "generate", "fromTemplate", str(yaml_path), "@asyncapi/html-template", "-o", str(tmp_out_dir), "--param", "singleFile=true", "--force-write"],
                     cwd=str(root_dir),
                     capture_output=True,

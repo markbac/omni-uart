@@ -95,8 +95,10 @@ def test_mqtt_not_reported_sent_without_client(monkeypatch) -> None:
 def test_mqtt_publishes_with_client(monkeypatch) -> None:
     publish = ModuleType("paho.mqtt.publish")
     publish.single = MagicMock()
-    mqtt = ModuleType("paho.mqtt"); mqtt.publish = publish
-    paho = ModuleType("paho"); paho.mqtt = mqtt
+    mqtt = ModuleType("paho.mqtt")
+    mqtt.publish = publish
+    paho = ModuleType("paho")
+    paho.mqtt = mqtt
     monkeypatch.setitem(sys.modules, "paho", paho)
     monkeypatch.setitem(sys.modules, "paho.mqtt", mqtt)
     monkeypatch.setitem(sys.modules, "paho.mqtt.publish", publish)
@@ -109,8 +111,10 @@ def test_mqtt_publishes_with_client(monkeypatch) -> None:
 def test_mqtt_broker_error_is_reported(monkeypatch) -> None:
     publish = ModuleType("paho.mqtt.publish")
     publish.single = MagicMock(side_effect=OSError("refused"))
-    mqtt = ModuleType("paho.mqtt"); mqtt.publish = publish
-    paho = ModuleType("paho"); paho.mqtt = mqtt
+    mqtt = ModuleType("paho.mqtt")
+    mqtt.publish = publish
+    paho = ModuleType("paho")
+    paho.mqtt = mqtt
     for name, mod in (("paho", paho), ("paho.mqtt", mqtt), ("paho.mqtt.publish", publish)):
         monkeypatch.setitem(sys.modules, name, mod)
     bridge = TelemetryBridge(mqtt_broker="broker")

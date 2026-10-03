@@ -5,21 +5,19 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import yaml
 
 from omniuart.core.crc import normalize_algorithm_name
 from omniuart.core.models import (
     CommandSafety,
-    CommandIdSpec,
     CommandSpec,
     FieldSpec,
     FieldType,
     FramingConfig,
     FramingType,
     IntegritySpec,
-    LengthSpec,
     ProtocolMeta,
     ProtocolSpec,
     ResponseSpec,
@@ -95,7 +93,7 @@ def _normalise_id(value: Any) -> Union[int, str]:
                 return int(text)
         except ValueError:
             pass
-    return value
+    return cast(Union[int, str], value)
 
 
 def _first(params: Dict[str, Any], *names: str, default: Any = None) -> Any:
@@ -144,7 +142,7 @@ def _parse_integrity(raw: Dict[str, Any], source_name: Optional[str]) -> Integri
     return IntegritySpec(algorithm=algo, **kwargs)
 
 
-def _parse_baud(value: Any, source_name: str) -> int:
+def _parse_baud(value: Any, source_name: Optional[str]) -> int:
     """The baud rate declared by a kit protocol: an integer, a numeric string, or a list (the first entry wins).
 
     Never substitutes a different rate: a value that is not a positive integer raises ``ValueError``.
@@ -166,7 +164,7 @@ def _parse_baud(value: Any, source_name: str) -> int:
 
 def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) -> ProtocolSpec:
     """Parse a uart-interface-schema-kit dictionary into an OmniUART ProtocolSpec.
-    
+
     Explicitly excludes G460 protocol definitions as per configuration rules.
     """
     title = data.get("title") or data.get("name") or "Unnamed Protocol"
@@ -258,7 +256,7 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
         keyword = type_ref if type_ref and type_ref not in field_types else None
         base_type = type_info.get("baseType") or field_def.get("baseType") or keyword or "bytes"
         size_bytes = type_info.get("sizeBytes") or field_def.get("sizeBytes")
-        
+
         ftype = _map_field_type(base_type, size_bytes)
         endian = field_def.get("byteOrder") or type_info.get("byteOrder") or data.get("encoding", {}).get("byteOrder", "little")
         endian_str = "big" if "big" in str(endian).lower() else "little"

@@ -7,11 +7,11 @@ import time
 import pytest
 
 tk = pytest.importorskip("tkinter")
-from omniuart.core.catalog import CatalogManager
-from omniuart.core.models import CommandSafety, ProtocolSpec
-from omniuart.core.transport import list_available_ports
-from omniuart.desktop.app import OmniUARTDesktopApp
-from omniuart.core.codec import build_frame_payload
+from omniuart.core.catalog import CatalogManager  # noqa: E402
+from omniuart.core.models import CommandSafety, ProtocolSpec  # noqa: E402
+from omniuart.core.transport import list_available_ports  # noqa: E402
+from omniuart.desktop.app import OmniUARTDesktopApp  # noqa: E402
+from omniuart.core.codec import build_frame_payload  # noqa: E402
 
 
 def test_build_frame_payload(tmp_path):

@@ -20,7 +20,7 @@ class ConnectionToolbar(ttk.Frame):
 
     def __init__(
         self,
-        parent: tk.Widget,
+        parent: tk.Misc,
         on_connect_toggle: Callable[[Dict[str, Any]], None],
         catalog: Optional[CatalogManager] = None,
         on_protocol_change: Optional[Callable[[str], None]] = None,
@@ -279,7 +279,7 @@ class CommandCatalogView(ttk.Frame):
         self,
         parent: tk.Widget,
         catalog: CatalogManager,
-        on_transmit: Callable[[ProtocolSpec, str, Dict[str, Any]], None],
+        on_transmit: Callable[[ProtocolSpec, str, Dict[str, Any]], Any],
     ) -> None:
         super().__init__(parent, padding=12)
         self.catalog = catalog
@@ -458,10 +458,10 @@ class CommandCatalogView(ttk.Frame):
                     var.trace_add("write", lambda *args: self._update_preview())
                     self.param_vars[param.name] = var
                 elif param.type.value == "bool":
-                    var = tk.BooleanVar(value=bool(param.default))
-                    chk = ttk.Checkbutton(row, text="Enabled", variable=var, command=self._update_preview)
+                    bool_var = tk.BooleanVar(value=bool(param.default))
+                    chk = ttk.Checkbutton(row, text="Enabled", variable=bool_var, command=self._update_preview)
                     chk.pack(side=tk.LEFT)
-                    self.param_vars[param.name] = var
+                    self.param_vars[param.name] = bool_var
                 else:
                     var = tk.StringVar(value=str(param.default if param.default is not None else ""))
                     entry = ttk.Entry(row, textvariable=var, width=20)
