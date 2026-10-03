@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from unittest.mock import MagicMock, patch
 from omniuart.cli import main
 from omniuart.ui.desktop import launch_desktop_window
@@ -25,6 +26,7 @@ def test_cli_zero_args_launches_desktop_ui(mock_launch: MagicMock) -> None:
 
 @patch("webbrowser.open")
 def test_desktop_window_launcher_fallback(mock_browser_open: MagicMock) -> None:
+    pytest.importorskip("tkinter")
     try:
         launch_desktop_window("http://127.0.0.1:8000")
     except Exception as e:

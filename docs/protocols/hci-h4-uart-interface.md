@@ -28,6 +28,17 @@ Host <-> Bluetooth radio controller link. Includes HCI_Set_AFH_Host_Channel_Clas
 | `handleAndFlags` | `bytes` | - | - | - |
 | `data` | `bytes` | - | - | - |
 
+## Device-Initiated Messages
+
+#### `HCI_Command_Complete_Event` (Message ID: `0x0E`) - typeField=0x04, selecting the variantsByType['4'] override: only 1 precedingHeaderByte (eventCode), not 2 -- an earlier version of this instance wrongly folded numHciCommandPackets into the header count. eventCode is now a named, typed position=before-length-field value (0x0E for Command Complete specifically) and doubles as this message's discriminator against any other Event. numHciCommandPackets is genuinely the first byte of THIS event's own LENGTH-counted parameters, alongside every other Command Complete field, which is where it's listed below.
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `eventCode` | `bytes` | - |
+| `numHciCommandPackets` | `bytes` | - |
+| `commandOpcode` | `uint16` | - |
+| `returnParameters` | `bytes` | - |
+
 ## Formal AsyncAPI 2.6.0 Specification
 
 ```yaml

@@ -3,7 +3,7 @@
 **Version**: `illustrative`  
 **Physical Layer**: `115200 bps, 8N1.0`  
 **Framing**: `binary`  
-**Integrity Algorithm**: `checksum_8`  
+**Integrity Algorithm**: `sum8`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/single-wire-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/single-wire-uart-interface.html)
 
@@ -20,6 +20,15 @@ A genuine single shared data line, not just RTS/CTS omitted -- both sides' TX an
 | :--- | :--- | :--- | :--- | :--- |
 | `opcode` | `bytes` | - | - | - |
 | `reserved` | `bytes` | - | - | - |
+
+## Device-Initiated Messages
+
+#### `Pong` (Message ID: `0x81`)
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `opcode` | `bytes` | - |
+| `reserved` | `bytes` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -45,7 +54,7 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/Ping:
     publish:

@@ -3,7 +3,7 @@
 **Version**: `J1708`  
 **Physical Layer**: `9600 bps, 8N1.0`  
 **Framing**: `delimited`  
-**Integrity Algorithm**: `checksum_8`  
+**Integrity Algorithm**: `sum8`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/j1708-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/j1708-uart-interface.html)
 
@@ -45,7 +45,7 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: delimited
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/Message:
     publish:

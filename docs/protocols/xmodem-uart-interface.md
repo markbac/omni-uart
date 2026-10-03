@@ -3,7 +3,7 @@
 **Version**: `classic`  
 **Physical Layer**: `115200 bps, 8N1.0`  
 **Framing**: `binary`  
-**Integrity Algorithm**: `checksum_8`  
+**Integrity Algorithm**: `sum8`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/xmodem-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/xmodem-uart-interface.html)
 
@@ -44,6 +44,20 @@ File transfer over a serial link. Mixes 128/1024-byte framed data blocks (select
 | :--- | :--- | :--- | :--- | :--- |
 | `controlByte` | `bytes` | - | - | - |
 
+## Device-Initiated Messages
+
+#### `Ack` (Message ID: `0x06`)
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `controlByte` | `bytes` | - |
+
+#### `Nak` (Message ID: `0x15`)
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `controlByte` | `bytes` | - |
+
 ## Formal AsyncAPI 2.6.0 Specification
 
 ```yaml
@@ -68,7 +82,7 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/DataBlock128:
     publish:

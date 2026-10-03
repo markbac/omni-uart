@@ -10,18 +10,9 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.background import VIRTUAL_PORT, is_safe_poll_command
-from omniuart.core.codec import FrameCodec
+from omniuart.core.codec import build_frame_payload  # noqa: F401  (re-exported for existing imports)
 from omniuart.core.models import CommandSpec, ProtocolSpec
 from omniuart.core.transport import list_available_ports
-
-
-def build_frame_payload(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any]) -> bytes:
-    """Build the raw wire frame for a command using the shared schema-driven codec.
-
-    Raises :class:`omniuart.core.codec.CodecError` for missing, unknown, out-of-range or
-    otherwise invalid parameters instead of transmitting a guessed value.
-    """
-    return FrameCodec(spec).encode_command(cmd, params)
 
 
 class ConnectionToolbar(ttk.Frame):

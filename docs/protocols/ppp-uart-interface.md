@@ -3,7 +3,7 @@
 **Version**: `RFC 1662`  
 **Physical Layer**: `115200 bps, 8N1.0`  
 **Framing**: `delimited`  
-**Integrity Algorithm**: `crc_16_ccitt_false`  
+**Integrity Algorithm**: `crc16_ccitt_false`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/ppp-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/ppp-uart-interface.html)
 
@@ -14,11 +14,10 @@ Escapes any occurrence of the flag/escape bytes (and, by default, control chars 
 
 ### Category: GENERAL
 
-#### `Frame` (Command ID: `0x03`)
+#### `Frame` (Command ID: `0xFF`)
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `address` | `bytes` | - | - | - |
 | `control` | `bytes` | - | - | - |
 | `protocol` | `uint16` | - | - | - |
 | `information` | `bytes` | - | - | - |
@@ -47,11 +46,11 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: delimited
-        integrity: crc_16_ccitt_false
+        integrity: crc16_ccitt_false
 channels:
   omniuart/cmd/Frame:
     publish:
-      summary: 'Send command Frame (ID: 0x03)'
+      summary: 'Send command Frame (ID: 0xFF)'
       description: Dispatch Frame frame to microcontroller over serial line
       message:
         name: Frame_Message
@@ -66,10 +65,8 @@ components:
       properties:
         command_id:
           type: integer
-          const: 3
+          const: 255
           description: Opcode ID for Frame
-        address:
-          type: integer
         control:
           type: integer
         protocol:

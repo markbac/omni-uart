@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BinarySensorNode AsyncAPI 2.6.0 Specification</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem; max-width: 1000px; margin: 0 auto; line-height: 1.6; }
+    h1, h2 { color: #38bdf8; }
+    .badge { background: #0284c7; color: #fff; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.85rem; }
+    pre { background: #1e293b; padding: 1.25rem; border-radius: 8px; border: 1px solid #334155; overflow-x: auto; color: #34d399; font-family: monospace; font-size: 0.9rem; }
+    a { color: #38bdf8; text-decoration: none; font-weight: bold; }
+    a:hover { text-decoration: underline; }
+    .meta-box { background: #1e293b; padding: 1rem 1.5rem; border-radius: 8px; border: 1px solid #334155; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <p><a href="../index.html">← Back to Hardware Protocol Catalog</a></p>
+  <h1>⚡ BinarySensorNode AsyncAPI 2.6.0 Specification</h1>
+  <div class="meta-box">
+    <p><span class="badge">ASYNCAPI 2.6.0</span> <strong>Version:</strong> 1.1.0+hw.revB.fw.2.0.1 | <strong>Framing:</strong> BINARY | <strong>Baudrate:</strong> 115200 bps</p>
+    <p>Binary UART protocol for multi-channel environmental sensor node with CRC16-Modbus</p>
+  </div>
+  <h2>📄 AsyncAPI 2.6.0 YAML Definition</h2>
+  <pre><code>asyncapi: &quot;2.6.0&quot;
+info:
+  title: &quot;OmniUART Protocol Specification Schema Engine&quot;
+  version: &quot;1.0.0&quot;
+  description: &quot;Formal AsyncAPI 2.6.0 specification for the OmniUART schema-driven hardware protocol engine, envelope framing models, parametric CRCs, and command/telemetry contract framework.&quot;
+  contact:
+    name: &quot;OmniUART Engineering&quot;
+    url: &quot;https://markbac.github.io/omni-uart/&quot;
+  license:
+    name: &quot;MIT&quot;
+    url: &quot;https://opensource.org/licenses/MIT&quot;
+
+servers:
+  serial_interface:
+    url: &quot;serial://tty/115200&quot;
+    protocol: &quot;serial&quot;
+    description: &quot;Physical UART Serial Interface (115200 bps, 8N1, Binary &amp; Delimited Framing)&quot;
+    bindings:
+      serial:
+        baudRate: 115200
+        dataBits: 8
+        parity: &quot;none&quot;
+        stopBits: 1.0
+
+channels:
+  omniuart/schema/definition:
+    publish:
+      summary: &quot;Register Declarative Protocol Definition&quot;
+      description: &quot;Dispatches a full YAML or JSON OmniUART protocol envelope specification detailing serial parameters, framing, CRC integrity, and opcode definitions.&quot;
+      message:
+        name: &quot;ProtocolDefinitionMessage&quot;
+        title: &quot;Protocol Definition Envelope&quot;
+        payload:
+          $ref: &quot;#/components/schemas/ProtocolSchemaEnvelope&quot;
+
+  omniuart/cmd/execute:
+    publish:
+      summary: &quot;Execute Parameterized Command&quot;
+      description: &quot;Dispatches framed command opcodes and payload parameters to target hardware microcontroller.&quot;
+      message:
+        name: &quot;CommandExecutionMessage&quot;
+        title: &quot;Command Execution Payload&quot;
+        payload:
+          $ref: &quot;#/components/schemas/CommandExecutionPayload&quot;
+
+  omniuart/resp/stream:
+    subscribe:
+      summary: &quot;Receive Parsed Response Stream&quot;
+      description: &quot;Streams decoded telemetry responses and command acknowledgment payloads returned from hardware.&quot;
+      message:
+        name: &quot;CommandResponseMessage&quot;
+        title: &quot;Command Response Payload&quot;
+        payload:
+          $ref: &quot;#/components/schemas/CommandResponsePayload&quot;
+
+components:
+  schemas:
+    ProtocolSchemaEnvelope:
+      type: &quot;object&quot;
+      required:
+        - &quot;schema_version&quot;
+        - &quot;metadata&quot;
+        - &quot;serial_config&quot;
+        - &quot;framing&quot;
+        - &quot;commands&quot;
+      properties:
+        schema_version:
+          type: &quot;string&quot;
+          example: &quot;1.0.0&quot;
+          description: &quot;Target OmniUART schema specification version&quot;
+        metadata:
+          $ref: &quot;#/components/schemas/ProtocolMetadata&quot;
+        serial_config:
+          $ref: &quot;#/components/schemas/SerialConfig&quot;
+        framing:
+          $ref: &quot;#/components/schemas/FramingConfig&quot;
+        commands:
+          type: &quot;array&quot;
+          items:
+            $ref: &quot;#/components/schemas/CommandDefinition&quot;
+        telemetry:
+          type: &quot;array&quot;
+          items:
+            $ref: &quot;#/components/schemas/TelemetryDefinition&quot;
+
+    ProtocolMetadata:
+      type: &quot;object&quot;
+      required:
+        - &quot;name&quot;
+        - &quot;version&quot;
+      properties:
+        name:
+          type: &quot;string&quot;
+          example: &quot;BinarySensorNode&quot;
+        version:
+          type: &quot;string&quot;
+          example: &quot;1.1.0&quot;
+        description:
+          type: &quot;string&quot;
+          example: &quot;Environmental sensor node protocol specification&quot;
+        author:
+          type: &quot;string&quot;
+          example: &quot;Embedded Test Team&quot;
+
+    SerialConfig:
+      type: &quot;object&quot;
+      required:
+        - &quot;baudrate&quot;
+      properties:
+        baudrate:
+          type: &quot;integer&quot;
+          example: 115200
+        bytesize:
+          type: &quot;integer&quot;
+          enum: [5, 6, 7, 8]
+          default: 8
+        parity:
+          type: &quot;string&quot;
+          enum: [&quot;none&quot;, &quot;even&quot;, &quot;odd&quot;, &quot;mark&quot;, &quot;space&quot;]
+          default: &quot;none&quot;
+        stopbits:
+          type: &quot;number&quot;
+          enum: [1, 1.5, 2]
+          default: 1
+        flow_control:
+          type: &quot;string&quot;
+          enum: [&quot;none&quot;, &quot;hardware&quot;, &quot;software&quot;]
+          default: &quot;none&quot;
+        timeout_ms:
+          type: &quot;integer&quot;
+          default: 1000
+
+    FramingConfig:
+      type: &quot;object&quot;
+      required:
+        - &quot;type&quot;
+      properties:
+        type:
+          type: &quot;string&quot;
+          enum: [&quot;binary&quot;, &quot;delimited&quot;, &quot;cobs&quot;]
+        header:
+          type: &quot;array&quot;
+          items:
+            type: &quot;integer&quot;
+          example: [170, 85]
+        length:
+          $ref: &quot;#/components/schemas/LengthConfig&quot;
+        command_id:
+          $ref: &quot;#/components/schemas/CommandIdConfig&quot;
+        integrity:
+          $ref: &quot;#/components/schemas/IntegrityConfig&quot;
+        footer:
+          type: &quot;array&quot;
+          items:
+            type: &quot;integer&quot;
+          example: [13, 10]
+
+    LengthConfig:
+      type: &quot;object&quot;
+      required:
+        - &quot;type&quot;
+      properties:
+        type:
+          type: &quot;string&quot;
+          enum: [&quot;uint8&quot;, &quot;uint16&quot;, &quot;uint32&quot;]
+        endian:
+          type: &quot;string&quot;
+          enum: [&quot;little&quot;, &quot;big&quot;]
+          default: &quot;little&quot;
+        includes:
+          type: &quot;string&quot;
+          enum: [&quot;payload_only&quot;, &quot;full_frame&quot;, &quot;from_length_field&quot;]
+          default: &quot;payload_only&quot;
+
+    CommandIdConfig:
+      type: &quot;object&quot;
+      required:
+        - &quot;type&quot;
+      properties:
+        type:
+          type: &quot;string&quot;
+          enum: [&quot;uint8&quot;, &quot;uint16&quot;, &quot;uint32&quot;, &quot;string&quot;]
+
+    IntegrityConfig:
+      type: &quot;object&quot;
+      required:
+        - &quot;algorithm&quot;
+      properties:
+        algorithm:
+          type: &quot;string&quot;
+          example: &quot;crc16_modbus&quot;
+        range:
+          type: &quot;string&quot;
+          enum: [&quot;header_to_payload&quot;, &quot;payload_only&quot;]
+          default: &quot;header_to_payload&quot;
+
+    CommandDefinition:
+      type: &quot;object&quot;
+      required:
+        - &quot;name&quot;
+        - &quot;id&quot;
+      properties:
+        name:
+          type: &quot;string&quot;
+          example: &quot;get_readings&quot;
+        id:
+          type: &quot;integer&quot;
+          example: 2
+        description:
+          type: &quot;string&quot;
+          example: &quot;Query sensor channel telemetry&quot;
+        parameters:
+          type: &quot;array&quot;
+          items:
+            $ref: &quot;#/components/schemas/ParameterField&quot;
+
+    ParameterField:
+      type: &quot;object&quot;
+      required:
+        - &quot;name&quot;
+        - &quot;type&quot;
+      properties:
+        name:
+          type: &quot;string&quot;
+          example: &quot;channel&quot;
+        type:
+          type: &quot;string&quot;
+          enum: [&quot;uint8&quot;, &quot;uint16&quot;, &quot;uint32&quot;, &quot;int8&quot;, &quot;int16&quot;, &quot;int32&quot;, &quot;float32&quot;, &quot;float64&quot;, &quot;string&quot;, &quot;enum&quot;]
+        unit:
+          type: &quot;string&quot;
+          example: &quot;°C&quot;
+        min:
+          type: &quot;number&quot;
+        max:
+          type: &quot;number&quot;
+
+    TelemetryDefinition:
+      type: &quot;object&quot;
+      required:
+        - &quot;name&quot;
+        - &quot;id&quot;
+      properties:
+        name:
+          type: &quot;string&quot;
+          example: &quot;sensor_alarm&quot;
+        id:
+          type: &quot;integer&quot;
+          example: 160
+
+    CommandExecutionPayload:
+      type: &quot;object&quot;
+      properties:
+        command:
+          type: &quot;string&quot;
+          example: &quot;get_readings&quot;
+        parameters:
+          type: &quot;object&quot;
+          example:
+            channel: 1
+
+    CommandResponsePayload:
+      type: &quot;object&quot;
+      properties:
+        status:
+          type: &quot;string&quot;
+          example: &quot;SUCCESS&quot;
+        response_fields:
+          type: &quot;object&quot;
+          example:
+            temperature: 24.5
+            humidity: 58.2
+</code></pre>
+</body>
+</html>

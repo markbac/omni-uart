@@ -3,7 +3,7 @@
 **Version**: `0.1-illustrative`  
 **Physical Layer**: `115200 bps, 8N1.0`  
 **Framing**: `binary`  
-**Integrity Algorithm**: `crc_16_ccitt_false`  
+**Integrity Algorithm**: `crc16_ccitt_false`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/fh-radio-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/fh-radio-uart-interface.html)
 
@@ -46,6 +46,14 @@ NOT derived from, or a model of, any specific fielded system's published ICD -- 
 | :--- | :--- | :--- | :--- | :--- |
 | `frequencyHz` | `bytes` | - | - | - |
 
+## Device-Initiated Messages
+
+#### `StatusResponse` (Message ID: `StatusResponse`)
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `status` | `bytes` | - |
+
 ## Formal AsyncAPI 2.6.0 Specification
 
 ```yaml
@@ -72,7 +80,7 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: crc_16_ccitt_false
+        integrity: crc16_ccitt_false
 channels:
   omniuart/cmd/SetNetId:
     publish:

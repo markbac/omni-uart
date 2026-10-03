@@ -1,9 +1,9 @@
 # Hardware Protocol Specification: M-Bus (EN 13757-2/3), short frame
 
 **Version**: `EN 13757-2`  
-**Physical Layer**: `9600 bps, 8N1.0`  
+**Physical Layer**: `300 bps, 8N1.0`  
 **Framing**: `delimited`  
-**Integrity Algorithm**: `checksum_8`  
+**Integrity Algorithm**: `sum8`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/mbus-short-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/mbus-short-uart-interface.html)
 
@@ -35,17 +35,17 @@ info:
     name: Mark Bacon
 servers:
   serial_link:
-    url: serial://tty/9600
+    url: serial://tty/300
     protocol: serial
-    description: Physical UART Transport (9600 bps, 8N1.0)
+    description: Physical UART Transport (300 bps, 8N1.0)
     bindings:
       serial:
-        baudRate: 9600
+        baudRate: 300
         dataBits: 8
         parity: even
         stopBits: 1.0
         framingType: delimited
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/ShortFrame:
     publish:

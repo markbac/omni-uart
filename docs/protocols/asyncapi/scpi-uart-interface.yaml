@@ -87,8 +87,6 @@ components:
           type: integer
           const: '*IDN?'
           description: Opcode ID for Identify
-        text:
-          type: integer
       description: '*IDN? System identification query.'
     Reset_Request:
       type: object
@@ -97,8 +95,6 @@ components:
           type: integer
           const: '*RST'
           description: Opcode ID for Reset
-        text:
-          type: integer
       description: '*RST System reset command.'
     ClearStatus_Request:
       type: object
@@ -107,8 +103,6 @@ components:
           type: integer
           const: '*CLS'
           description: Opcode ID for ClearStatus
-        text:
-          type: integer
       description: '*CLS Clear status registers.'
     MeasureVoltageDC_Request:
       type: object
@@ -117,8 +111,6 @@ components:
           type: integer
           const: MEAS:VOLT:DC?
           description: Opcode ID for MeasureVoltageDC
-        text:
-          type: integer
       description: MEAS:VOLT:DC? Measure DC voltage in Volts.
     MeasureCurrentDC_Request:
       type: object
@@ -127,8 +119,6 @@ components:
           type: integer
           const: MEAS:CURR:DC?
           description: Opcode ID for MeasureCurrentDC
-        text:
-          type: integer
       description: MEAS:CURR:DC? Measure DC current in Amperes.
     SetVoltageOutput_Request:
       type: object
@@ -137,8 +127,6 @@ components:
           type: integer
           const: 'SOUR:VOLT '
           description: Opcode ID for SetVoltageOutput
-        prefix:
-          type: integer
         voltage:
           type: integer
       description: SOUR:VOLT <val> Set programmable power supply output voltage.

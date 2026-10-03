@@ -16,49 +16,21 @@ ASCII line-based instrument control (oscilloscopes, PSUs, DMMs). Baud is configu
 
 #### `Identify` (Command ID: `*IDN?`) - *IDN? System identification query.
 
-| Parameter | Type | Unit | Range / Constraints | Options |
-| :--- | :--- | :--- | :--- | :--- |
-| `text` | `bytes` | - | - | - |
-
 #### `Reset` (Command ID: `*RST`) - *RST System reset command.
 
-| Parameter | Type | Unit | Range / Constraints | Options |
-| :--- | :--- | :--- | :--- | :--- |
-| `text` | `bytes` | - | - | - |
-
 #### `ClearStatus` (Command ID: `*CLS`) - *CLS Clear status registers.
-
-| Parameter | Type | Unit | Range / Constraints | Options |
-| :--- | :--- | :--- | :--- | :--- |
-| `text` | `bytes` | - | - | - |
 
 ### Category: DASHBOARD
 
 #### `Identify` (Command ID: `*IDN?`) - *IDN? System identification query.
 
-| Parameter | Type | Unit | Range / Constraints | Options |
-| :--- | :--- | :--- | :--- | :--- |
-| `text` | `bytes` | - | - | - |
-
 #### `MeasureVoltageDC` (Command ID: `MEAS:VOLT:DC?`) - MEAS:VOLT:DC? Measure DC voltage in Volts.
-
-| Parameter | Type | Unit | Range / Constraints | Options |
-| :--- | :--- | :--- | :--- | :--- |
-| `text` | `bytes` | - | - | - |
 
 ### Category: SCPI/MEASURE
 
 #### `MeasureVoltageDC` (Command ID: `MEAS:VOLT:DC?`) - MEAS:VOLT:DC? Measure DC voltage in Volts.
 
-| Parameter | Type | Unit | Range / Constraints | Options |
-| :--- | :--- | :--- | :--- | :--- |
-| `text` | `bytes` | - | - | - |
-
 #### `MeasureCurrentDC` (Command ID: `MEAS:CURR:DC?`) - MEAS:CURR:DC? Measure DC current in Amperes.
-
-| Parameter | Type | Unit | Range / Constraints | Options |
-| :--- | :--- | :--- | :--- | :--- |
-| `text` | `bytes` | - | - | - |
 
 ### Category: SCPI/SOURCE
 
@@ -66,8 +38,18 @@ ASCII line-based instrument control (oscilloscopes, PSUs, DMMs). Baud is configu
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `prefix` | `bytes` | - | - | - |
 | `voltage` | `bytes` | - | - | - |
+
+## Device-Initiated Messages
+
+#### `IdentifyResult` (Message ID: `IdentifyResult`) - e.g. 'ACME,MM7,SN12345,FW2.1'
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `manufacturer` | `bytes` | - |
+| `model` | `bytes` | - |
+| `serial` | `bytes` | - |
+| `firmware` | `bytes` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -161,8 +143,6 @@ components:
           type: integer
           const: '*IDN?'
           description: Opcode ID for Identify
-        text:
-          type: integer
       description: '*IDN? System identification query.'
     Reset_Request:
       type: object
@@ -171,8 +151,6 @@ components:
           type: integer
           const: '*RST'
           description: Opcode ID for Reset
-        text:
-          type: integer
       description: '*RST System reset command.'
     ClearStatus_Request:
       type: object
@@ -181,8 +159,6 @@ components:
           type: integer
           const: '*CLS'
           description: Opcode ID for ClearStatus
-        text:
-          type: integer
       description: '*CLS Clear status registers.'
     MeasureVoltageDC_Request:
       type: object
@@ -191,8 +167,6 @@ components:
           type: integer
           const: MEAS:VOLT:DC?
           description: Opcode ID for MeasureVoltageDC
-        text:
-          type: integer
       description: MEAS:VOLT:DC? Measure DC voltage in Volts.
     MeasureCurrentDC_Request:
       type: object
@@ -201,8 +175,6 @@ components:
           type: integer
           const: MEAS:CURR:DC?
           description: Opcode ID for MeasureCurrentDC
-        text:
-          type: integer
       description: MEAS:CURR:DC? Measure DC current in Amperes.
     SetVoltageOutput_Request:
       type: object
@@ -211,8 +183,6 @@ components:
           type: integer
           const: 'SOUR:VOLT '
           description: Opcode ID for SetVoltageOutput
-        prefix:
-          type: integer
         voltage:
           type: integer
       description: SOUR:VOLT <val> Set programmable power supply output voltage.

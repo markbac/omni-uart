@@ -20,7 +20,7 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: crc_16_dnp
+        integrity: crc16_dnp
 channels:
   omniuart/cmd/DataLinkFrame:
     publish:

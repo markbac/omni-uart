@@ -52,6 +52,15 @@ Binary UART protocol for multi-channel environmental sensor node with CRC16-Modb
 | :--- | :--- | :--- |
 | `status` | `uint8` | - |
 
+## Device-Initiated Messages
+
+#### `periodic_status` (Message ID: `0x30`) - Spontaneous periodic heartbeat broadcast
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `battery_millivolts` | `uint16` | mV |
+| `error_flags` | `uint8` | - |
+
 ## Formal AsyncAPI 2.6.0 Specification
 
 ```yaml

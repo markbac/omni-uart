@@ -86,8 +86,6 @@ components:
           description: Opcode ID for ReadCoilsRequest
         slaveAddress:
           type: integer
-        functionCode:
-          type: integer
         startAddress:
           type: integer
         quantity:
@@ -102,8 +100,6 @@ components:
           const: 2
           description: Opcode ID for ReadDiscreteInputsRequest
         slaveAddress:
-          type: integer
-        functionCode:
           type: integer
         startAddress:
           type: integer
@@ -120,8 +116,6 @@ components:
           description: Opcode ID for ReadHoldingRegistersRequest
         slaveAddress:
           type: integer
-        functionCode:
-          type: integer
         startAddress:
           type: integer
         quantity:
@@ -136,8 +130,6 @@ components:
           const: 4
           description: Opcode ID for ReadInputRegistersRequest
         slaveAddress:
-          type: integer
-        functionCode:
           type: integer
         startAddress:
           type: integer
@@ -154,8 +146,6 @@ components:
           description: Opcode ID for WriteSingleRegisterRequest
         slaveAddress:
           type: integer
-        functionCode:
-          type: integer
         registerAddress:
           type: integer
         value:
@@ -169,8 +159,6 @@ components:
           const: 16
           description: Opcode ID for WriteMultipleRegistersRequest
         slaveAddress:
-          type: integer
-        functionCode:
           type: integer
         startAddress:
           type: integer

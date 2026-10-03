@@ -18,11 +18,11 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/SetChannelATCommand:
     publish:
-      summary: 'Send command SetChannelATCommand (ID: CH)'
+      summary: 'Send command SetChannelATCommand (ID: 0x08)'
       description: 'Frame type 0x08: local AT Command. The AT command here is ''CH''
         (RF channel/frequency), one of 16 channels in the 2.4GHz band.'
       message:
@@ -56,7 +56,7 @@ components:
       properties:
         command_id:
           type: integer
-          const: CH
+          const: 8
           description: Opcode ID for SetChannelATCommand
         frameType:
           type: integer

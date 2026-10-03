@@ -3,7 +3,7 @@
 **Version**: `generic (common 8051/PIC UART mode)`  
 **Physical Layer**: `9600 bps, 9N1.0`  
 **Framing**: `binary`  
-**Integrity Algorithm**: `checksum_8`  
+**Integrity Algorithm**: `sum8`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/multidrop-9bit-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/multidrop-9bit-uart-interface.html)
 
@@ -47,7 +47,7 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/SlaveMessage:
     publish:

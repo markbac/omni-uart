@@ -19,11 +19,11 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: delimited
-        integrity: crc_16_ccitt_false
+        integrity: crc16_ccitt_false
 channels:
   omniuart/cmd/Frame:
     publish:
-      summary: 'Send command Frame (ID: 0x03)'
+      summary: 'Send command Frame (ID: 0xFF)'
       description: Dispatch Frame frame to microcontroller over serial line
       message:
         name: Frame_Message
@@ -38,10 +38,8 @@ components:
       properties:
         command_id:
           type: integer
-          const: 3
+          const: 255
           description: Opcode ID for Frame
-        address:
-          type: integer
         control:
           type: integer
         protocol:

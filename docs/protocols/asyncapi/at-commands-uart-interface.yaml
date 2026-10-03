@@ -241,7 +241,7 @@ channels:
           $ref: '#/components/schemas/EnterPukWithNewPin_Request'
   omniuart/cmd/UnlockFacility:
     publish:
-      summary: 'Send command UnlockFacility (ID: 0x00)'
+      summary: 'Send command UnlockFacility (ID: AT+CLCK=)'
       description: AT+CLCK=<fac>,0[,<passwd>] -- from the manual's AT+CLCK (section
         8.5). fac is quoted, e.g. \"SC\" for the SIM facility.
       message:
@@ -251,7 +251,7 @@ channels:
           $ref: '#/components/schemas/UnlockFacility_Request'
   omniuart/cmd/LockFacility:
     publish:
-      summary: 'Send command LockFacility (ID: 0x01)'
+      summary: 'Send command LockFacility (ID: AT+CLCK=)'
       description: AT+CLCK=<fac>,1[,<passwd>].
       message:
         name: LockFacility_Message
@@ -260,7 +260,7 @@ channels:
           $ref: '#/components/schemas/LockFacility_Request'
   omniuart/cmd/QueryFacilityLock:
     publish:
-      summary: 'Send command QueryFacilityLock (ID: 0x02)'
+      summary: 'Send command QueryFacilityLock (ID: AT+CLCK=)'
       description: 'AT+CLCK=<fac>,2 -- the third CLCK shape: mode=2 needs no password,
         and gets a genuinely different response format (FacilityLockResult lines,
         not a bare OK) from mode=0/1 -- but that''s not actually ambiguous for this
@@ -286,7 +286,7 @@ channels:
           $ref: '#/components/schemas/SetPsmDisabled_Request'
   omniuart/cmd/SetPsmParameters:
     publish:
-      summary: 'Send command SetPsmParameters (ID: ,,,)'
+      summary: 'Send command SetPsmParameters (ID: AT+CPSMS=)'
       description: AT+CPSMS=<mode>,,,<TAU>,<activeTime> -- mode 0 (disable) or 1 (enable)
         plus the requested timer values. Two literal empty positions (the manual's
         own ',,,' -- unused parameters this module doesn't support) sit between mode
@@ -634,7 +634,7 @@ channels:
           $ref: '#/components/schemas/SetGprsAttach_Request'
   omniuart/cmd/DefinePdpContext:
     publish:
-      summary: 'Send command DefinePdpContext (ID: \"IP\")'
+      summary: 'Send command DefinePdpContext (ID: AT+CGDCONT=)'
       description: AT+CGDCONT=<cid>,<pdpType>,<apn> -- the first genuinely parameterized
         command here, showing delimiter-separated arguments rather than a single constValue
         line.
@@ -683,7 +683,7 @@ channels:
           $ref: '#/components/schemas/SmsTextMode_Request'
   omniuart/cmd/SendSmsHeader:
     publish:
-      summary: 'Send command SendSmsHeader (ID: \")'
+      summary: 'Send command SendSmsHeader (ID: AT+CMGS=\")'
       description: AT+CMGS=\"<number>\" -- the modem replies with a bare '> ' prompt
         (not modeled as its own response here -- it's a 2-character prompt, not a
         CRLF-terminated line, and this schema's message model assumes the latter),
@@ -715,8 +715,6 @@ components:
           type: integer
           const: AT
           description: Opcode ID for AttentionCheck
-        text:
-          type: integer
       description: The base 'is anybody there' command every AT command set supports.
     SetEchoOff_Request:
       type: object
@@ -725,8 +723,6 @@ components:
           type: integer
           const: ATE0
           description: Opcode ID for SetEchoOff
-        text:
-          type: integer
       description: ATE0 -- stop the modem echoing back everything it receives. Most
         scripted/automated use wants this; interactive terminal use usually wants
         echo on (ATE1) so what you type is visible.
@@ -737,8 +733,6 @@ components:
           type: integer
           const: ATE1
           description: Opcode ID for SetEchoOn
-        text:
-          type: integer
       description: ATE1 -- the modem's power-on default on most hardware.
     Reset_Request:
       type: object
@@ -747,8 +741,6 @@ components:
           type: integer
           const: ATZ
           description: Opcode ID for Reset
-        text:
-          type: integer
       description: ATZ -- reset to the profile stored in non-volatile memory (not
         necessarily factory defaults -- see FactoryDefaults for that).
     FactoryDefaults_Request:
@@ -758,8 +750,6 @@ components:
           type: integer
           const: AT&F
           description: Opcode ID for FactoryDefaults
-        text:
-          type: integer
       description: AT&F -- restore factory default configuration.
     Identify_Request:
       type: object
@@ -768,8 +758,6 @@ components:
           type: integer
           const: ATI
           description: Opcode ID for Identify
-        text:
-          type: integer
       description: ATI -- a free-form multi-line identification string, format entirely
         vendor-specific.
     GetManufacturer_Request:
@@ -779,8 +767,6 @@ components:
           type: integer
           const: AT+CGMI
           description: Opcode ID for GetManufacturer
-        text:
-          type: integer
       description: AT+CGMI.
     GetModel_Request:
       type: object
@@ -789,8 +775,6 @@ components:
           type: integer
           const: AT+CGMM
           description: Opcode ID for GetModel
-        text:
-          type: integer
       description: AT+CGMM.
     GetSerialNumber_Request:
       type: object
@@ -799,8 +783,6 @@ components:
           type: integer
           const: AT+CGSN
           description: Opcode ID for GetSerialNumber
-        text:
-          type: integer
       description: AT+CGSN -- returns the modem's IMEI.
     GetPinStatus_Request:
       type: object
@@ -809,8 +791,6 @@ components:
           type: integer
           const: AT+CPIN?
           description: Opcode ID for GetPinStatus
-        text:
-          type: integer
       description: AT+CPIN? -- whether the SIM needs a PIN/PUK entered before it can
         be used.
     GetNetworkRegistration_Request:
@@ -820,8 +800,6 @@ components:
           type: integer
           const: AT+CREG?
           description: Opcode ID for GetNetworkRegistration
-        text:
-          type: integer
       description: AT+CREG? -- whether, and how, the modem is registered on the network.
     SignalQuery_Request:
       type: object
@@ -830,8 +808,6 @@ components:
           type: integer
           const: AT+CSQ
           description: Opcode ID for SignalQuery
-        text:
-          type: integer
       description: AT+CSQ
     GetExtendedSignalQuality_Request:
       type: object
@@ -840,8 +816,6 @@ components:
           type: integer
           const: AT+CESQ
           description: Opcode ID for GetExtendedSignalQuality
-        text:
-          type: integer
       description: AT+CESQ -- supersedes CSQ with metrics meaningful for UMTS/LTE
         (RSCP, EcNo, RSRQ, RSRP), not just GSM RSSI/BER.
     GetOperator_Request:
@@ -851,8 +825,6 @@ components:
           type: integer
           const: AT+COPS?
           description: Opcode ID for GetOperator
-        text:
-          type: integer
       description: AT+COPS? -- the currently selected network operator and how it
         was selected.
     SetOperatorAutomatic_Request:
@@ -862,8 +834,6 @@ components:
           type: integer
           const: AT+COPS=0
           description: Opcode ID for SetOperatorAutomatic
-        text:
-          type: integer
       description: 'AT+COPS=0 -- automatic network/operator selection. Each COPS mode
         is its own command here, the same way SetEchoOff/SetEchoOn are separate rather
         than one parameterized command: the trailing parameters COPS actually accepts
@@ -877,8 +847,6 @@ components:
           type: integer
           const: AT+COPS=1,
           description: Opcode ID for SetOperatorManual
-        prefix:
-          type: integer
         format:
           type: integer
         oper:
@@ -895,8 +863,6 @@ components:
           type: integer
           const: AT+COPS=2
           description: Opcode ID for SetOperatorDeregister
-        text:
-          type: integer
       description: AT+COPS=2 -- deregister from the network and remain deregistered
         until told otherwise.
     SetOperatorFormatOnly_Request:
@@ -906,8 +872,6 @@ components:
           type: integer
           const: AT+COPS=3,
           description: Opcode ID for SetOperatorFormatOnly
-        prefix:
-          type: integer
         format:
           type: integer
       description: AT+COPS=3,<format> -- sets how OperatorResult's oper field will
@@ -919,8 +883,6 @@ components:
           type: integer
           const: AT+COPS=4,
           description: Opcode ID for SetOperatorManualAutomatic
-        prefix:
-          type: integer
         format:
           type: integer
         oper:
@@ -935,8 +897,6 @@ components:
           type: integer
           const: AT+CPIN=
           description: Opcode ID for EnterPin
-        prefix:
-          type: integer
         pin:
           type: integer
       description: 'AT+CPIN=<pin> -- from the Quectel BC660K-GL manual (AT+CPIN, section
@@ -949,8 +909,6 @@ components:
           type: integer
           const: AT+CPIN=
           description: Opcode ID for EnterPukWithNewPin
-        prefix:
-          type: integer
         puk:
           type: integer
         newpin:
@@ -967,10 +925,8 @@ components:
       properties:
         command_id:
           type: integer
-          const: 0
+          const: AT+CLCK=
           description: Opcode ID for UnlockFacility
-        prefix:
-          type: integer
         fac:
           type: integer
         mode:
@@ -982,10 +938,8 @@ components:
       properties:
         command_id:
           type: integer
-          const: 1
+          const: AT+CLCK=
           description: Opcode ID for LockFacility
-        prefix:
-          type: integer
         fac:
           type: integer
         mode:
@@ -996,10 +950,8 @@ components:
       properties:
         command_id:
           type: integer
-          const: 2
+          const: AT+CLCK=
           description: Opcode ID for QueryFacilityLock
-        prefix:
-          type: integer
         fac:
           type: integer
         mode:
@@ -1018,8 +970,6 @@ components:
           type: integer
           const: AT+CPSMS=2
           description: Opcode ID for SetPsmDisabled
-        text:
-          type: integer
       description: 'AT+CPSMS=2 -- from the manual''s AT+CPSMS (section 9.4): mode=2
         is a ''special form'' that takes no further parameters at all and resets everything
         to defaults, unlike mode=0/1 below.'
@@ -1028,10 +978,8 @@ components:
       properties:
         command_id:
           type: integer
-          const: ',,,'
+          const: AT+CPSMS=
           description: Opcode ID for SetPsmParameters
-        prefix:
-          type: integer
         mode:
           type: integer
         separator:
@@ -1056,8 +1004,6 @@ components:
           type: integer
           const: AT+QCFG=\"DataInactTimer\"
           description: Opcode ID for QcfgGetDataInactTimer
-        text:
-          type: integer
       description: 'AT+QCFG=\"DataInactTimer\" -- Quectel''s AT+QCFG (section 11.1)
         is itself a text-based sub-command dispatcher: its first argument, a quoted
         function name, selects an entirely different parameter set for everything
@@ -1071,8 +1017,6 @@ components:
           type: integer
           const: AT+QCFG=\"DataInactTimer\",
           description: Opcode ID for QcfgSetDataInactTimer
-        prefix:
-          type: integer
         value:
           type: integer
       description: AT+QCFG=\"DataInactTimer\",<value> -- supplying the value switches
@@ -1084,8 +1028,6 @@ components:
           type: integer
           const: AT+QCFG=\"GPIO\",1,
           description: Opcode ID for QcfgGpioInitialize
-        prefix:
-          type: integer
         pin:
           type: integer
         dir:
@@ -1109,8 +1051,6 @@ components:
           type: integer
           const: AT+QCFG=\"GPIO\",2,
           description: Opcode ID for QcfgGpioQuery
-        prefix:
-          type: integer
         pin:
           type: integer
       description: 'AT+QCFG=\"GPIO\"[,2[,<pin>]] -- mode=2 (the default if omitted
@@ -1126,8 +1066,6 @@ components:
           type: integer
           const: AT+QCFG=\"GPIO\",3,
           description: Opcode ID for QcfgGpioConfigure
-        prefix:
-          type: integer
         pin:
           type: integer
         level:
@@ -1143,8 +1081,6 @@ components:
           type: integer
           const: AT+QCCID
           description: Opcode ID for GetIccidQuectel
-        text:
-          type: integer
       description: 'AT+QCCID -- correction: an earlier version of this file modeled
         a generic, vendor-unspecified ''AT+CCID'' for this. The Quectel BC660K-GL
         manual''s actual command (section 8.11) is AT+QCCID, an execution command
@@ -1159,8 +1095,6 @@ components:
           type: integer
           const: AT+CGMR
           description: Opcode ID for GetFirmwareRevision
-        text:
-          type: integer
       description: 'AT+CGMR -- from the BC660K-GL manual (section 2.4). Worth flagging:
         its response line is literally ''Revision: <revision>'', not a ''+CGMR:''
         prefix the way almost every other query response here works -- a genuine,
@@ -1172,8 +1106,6 @@ components:
           type: integer
           const: AT+IPR?
           description: Opcode ID for GetBaudRate
-        text:
-          type: integer
       description: AT+IPR? (section 3.2).
     SetBaudRate_Request:
       type: object
@@ -1182,8 +1114,6 @@ components:
           type: integer
           const: AT+IPR=
           description: Opcode ID for SetBaudRate
-        prefix:
-          type: integer
         rate:
           type: integer
       description: 'AT+IPR=<rate> -- one of the module''s own real supported rates
@@ -1197,8 +1127,6 @@ components:
           type: integer
           const: AT+CMEE=2
           description: Opcode ID for SetVerboseErrors
-        text:
-          type: integer
       description: AT+CMEE=2 (section 10.2) -- without this, most of the CmeError
         responses modeled throughout this whole file wouldn't actually be returned
         at all; the module would send plain ERROR instead. Worth sending early in
@@ -1210,8 +1138,6 @@ components:
           type: integer
           const: AT+CGACT=
           description: Opcode ID for SetPdpContextActivation
-        prefix:
-          type: integer
         state:
           type: integer
         cid:
@@ -1226,8 +1152,6 @@ components:
           type: integer
           const: AT+CGPADDR
           description: Opcode ID for GetPdpAddress
-        text:
-          type: integer
       description: AT+CGPADDR (section 4.4, bare execution form) -- the IP address
         actually assigned to the device once its PDP context is active.
     SendControlPlaneData_Request:
@@ -1237,8 +1161,6 @@ components:
           type: integer
           const: AT+CSODCP=
           description: Opcode ID for SendControlPlaneData
-        prefix:
-          type: integer
         cid:
           type: integer
         cpdataLength:
@@ -1259,8 +1181,6 @@ components:
           type: integer
           const: AT+CRTDCP=
           description: Opcode ID for SetControlPlaneDataReporting
-        prefix:
-          type: integer
         reporting:
           type: integer
       description: 'AT+CRTDCP=<reporting> (section 7.3) -- enables the +CRTDCP: URC
@@ -1273,8 +1193,6 @@ components:
           type: integer
           const: AT+CBC
           description: Opcode ID for GetBatteryVoltage
-        text:
-          type: integer
       description: AT+CBC (section 10.1) -- for a battery-powered deployment, worth
         polling before/after any high-current radio activity.
     ResetModule_Request:
@@ -1284,8 +1202,6 @@ components:
           type: integer
           const: AT+QRST=1
           description: Opcode ID for ResetModule
-        text:
-          type: integer
       description: AT+QRST=1 (section 10.4) -- immediate reset, without a clean network
         detach first.
     GetClock_Request:
@@ -1295,8 +1211,6 @@ components:
           type: integer
           const: AT+CCLK?
           description: Opcode ID for GetClock
-        text:
-          type: integer
       description: AT+CCLK? (section 12.1).
     SetClock_Request:
       type: object
@@ -1305,8 +1219,6 @@ components:
           type: integer
           const: AT+CCLK=
           description: Opcode ID for SetClock
-        prefix:
-          type: integer
         time:
           type: integer
       description: AT+CCLK=<time>, format \"YY/MM/DD,hh:mm:ss+zz\" (quarter-hours
@@ -1319,8 +1231,6 @@ components:
           type: integer
           const: AT+CEDRXS=3
           description: Opcode ID for SetEdrxDisabled
-        text:
-          type: integer
       description: 'AT+CEDRXS=3 (section 9.1) -- the exact same COPS/CPSMS-like pattern
         again: a bare mode value that takes no further parameters and resets everything,
         distinct from mode 0/1/2 below which all need AcT_type and a requested value.'
@@ -1331,8 +1241,6 @@ components:
           type: integer
           const: AT+CEDRXS=
           description: Opcode ID for SetEdrxParameters
-        prefix:
-          type: integer
         mode:
           type: integer
         actType:
@@ -1349,8 +1257,6 @@ components:
           type: integer
           const: AT+COPN
           description: Opcode ID for GetOperatorNames
-        text:
-          type: integer
       description: 'AT+COPN -- dumps the modem''s whole built-in numeric-to-alphanumeric
         operator name table. The device sends one OperatorNameResult line per known
         operator, then OK -- a burst of many same-shaped response frames, not one.
@@ -1363,8 +1269,6 @@ components:
           type: integer
           const: AT+CPLS?
           description: Opcode ID for GetPreferredListSelection
-        text:
-          type: integer
       description: 'AT+CPLS? -- which preferred-PLMN list is currently active: 0=SIM/USIM
         (user-controlled), 1=operator-controlled, 2=HPLMN selector.'
     GetPreferredOperatorList_Request:
@@ -1374,8 +1278,6 @@ components:
           type: integer
           const: AT+CPOL?
           description: Opcode ID for GetPreferredOperatorList
-        text:
-          type: integer
       description: AT+CPOL? -- entries stored in the list GetPreferredListSelection
         points at. Like GetOperatorNames, typically returns several PreferredOperatorResult
         lines, one per stored entry, before OK.
@@ -1386,8 +1288,6 @@ components:
           type: integer
           const: AT+CIMI
           description: Opcode ID for GetImsi
-        text:
-          type: integer
       description: 'AT+CIMI -- the SIM''s IMSI. Response is the raw digit string with
         no +CIMI: prefix at all, unlike most other query responses here -- see ImsiResult.'
     GetIccid_Request:
@@ -1397,8 +1297,6 @@ components:
           type: integer
           const: AT+CCID
           description: Opcode ID for GetIccid
-        text:
-          type: integer
       description: Reads the SIM's ICCID. Genuinely non-standardized across vendors
         (AT+CCID, AT+ICCID, AT+QCCID and others all exist) -- AT+CCID modeled here
         as one common form, not a universal one.
@@ -1409,8 +1307,6 @@ components:
           type: integer
           const: AT+GSN
           description: Opcode ID for GetSerialNumberLegacy
-        text:
-          type: integer
       description: AT+GSN -- the older Hayes-style serial number query. Response is
         the raw IMEI digit string with no prefix, unlike GetSerialNumber's AT+CGSN
         which modern modules also usually support; both often return the same value.
@@ -1421,8 +1317,6 @@ components:
           type: integer
           const: AT+CGREG?
           description: Opcode ID for GetGprsRegistration
-        text:
-          type: integer
       description: AT+CGREG? -- packet-switched (GPRS/UMTS) registration status, analogous
         to GetNetworkRegistration's AT+CREG? for circuit-switched.
     GetEpsRegistration_Request:
@@ -1432,8 +1326,6 @@ components:
           type: integer
           const: AT+CEREG?
           description: Opcode ID for GetEpsRegistration
-        text:
-          type: integer
       description: AT+CEREG? -- LTE/EPS registration status, the AT+CREG?/AT+CGREG?
         equivalent for 4G.
     SetGprsAttach_Request:
@@ -1443,8 +1335,6 @@ components:
           type: integer
           const: AT+CGATT=1
           description: Opcode ID for SetGprsAttach
-        text:
-          type: integer
       description: AT+CGATT=1 -- attach to the GPRS/packet-data service, a precondition
         for DefinePdpContext.
     DefinePdpContext_Request:
@@ -1452,10 +1342,8 @@ components:
       properties:
         command_id:
           type: integer
-          const: \"IP\"
+          const: AT+CGDCONT=
           description: Opcode ID for DefinePdpContext
-        prefix:
-          type: integer
         cid:
           type: integer
         pdpType:
@@ -1472,8 +1360,6 @@ components:
           type: integer
           const: ATD
           description: Opcode ID for Dial
-        prefix:
-          type: integer
         phoneNumber:
           type: integer
       description: ATD<number> -- for a circuit-switched or legacy dial-up data call.
@@ -1484,8 +1370,6 @@ components:
           type: integer
           const: ATH
           description: Opcode ID for HangUp
-        text:
-          type: integer
       description: ATH.
     EnterDataMode_Request:
       type: object
@@ -1494,8 +1378,6 @@ components:
           type: integer
           const: AT+CGDATA=\"PPP\",1
           description: Opcode ID for EnterDataMode
-        text:
-          type: integer
       description: AT+CGDATA=\"PPP\",1 -- switches this same link from AT command
         mode into raw PPP. See relatedInterfaces.
     SmsTextMode_Request:
@@ -1505,8 +1387,6 @@ components:
           type: integer
           const: AT+CMGF=1
           description: Opcode ID for SmsTextMode
-        text:
-          type: integer
       description: AT+CMGF=1 -- text mode rather than PDU mode, a precondition for
         SendSmsHeader as modeled here.
     SendSmsHeader_Request:
@@ -1514,10 +1394,8 @@ components:
       properties:
         command_id:
           type: integer
-          const: \"
+          const: AT+CMGS=\"
           description: Opcode ID for SendSmsHeader
-        prefix:
-          type: integer
         phoneNumber:
           type: integer
         suffix:

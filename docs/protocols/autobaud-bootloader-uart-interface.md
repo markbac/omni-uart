@@ -3,7 +3,7 @@
 **Version**: `illustrative`  
 **Physical Layer**: `115200 bps, 8N1.0`  
 **Framing**: `binary`  
-**Integrity Algorithm**: `checksum_8`  
+**Integrity Algorithm**: `sum8`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/autobaud-bootloader-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/autobaud-bootloader-uart-interface.html)
 
@@ -20,6 +20,12 @@ Not modelling any specific vendor's exact protocol -- illustrates the auto-baud 
 | :--- | :--- | :--- | :--- | :--- |
 | `syncByte` | `bytes` | - | - | - |
 
+#### `GetVersion` (Command ID: `0x01`)
+
+| Parameter | Type | Unit | Range / Constraints | Options |
+| :--- | :--- | :--- | :--- | :--- |
+| `opcode` | `bytes` | - | - | - |
+
 #### `WriteMemory` (Command ID: `0x02`)
 
 | Parameter | Type | Unit | Range / Constraints | Options |
@@ -35,13 +41,19 @@ Not modelling any specific vendor's exact protocol -- illustrates the auto-baud 
 | `opcode` | `bytes` | - | - | - |
 | `address` | `bytes` | - | - | - |
 
-### Category: DASHBOARD
+## Device-Initiated Messages
 
-#### `GetVersion` (Command ID: `0x01`)
+#### `Ack` (Message ID: `0x79`)
 
-| Parameter | Type | Unit | Range / Constraints | Options |
-| :--- | :--- | :--- | :--- | :--- |
-| `opcode` | `bytes` | - | - | - |
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `controlByte` | `bytes` | - |
+
+#### `Nack` (Message ID: `0x1F`)
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `controlByte` | `bytes` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -66,7 +78,7 @@ servers:
         parity: even
         stopBits: 1.0
         framingType: binary
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/AutoBaudSync:
     publish:
