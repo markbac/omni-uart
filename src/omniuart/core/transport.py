@@ -361,21 +361,185 @@ class VirtualSerialPair:
         await self.device.close()
 
 
+class PtyTransport(AsyncTransport):
+    """Asynchronous transport over a POSIX pseudo-terminal file descriptor (Linux and macOS).
+
+    Wrap an existing descriptor (``fd``) or open a pty slave device (``path``, for example the
+    ``slave_pts_path`` of a :class:`PtySerialPair`). The descriptor is switched to raw,
+    non-blocking mode and read through the event loop, so there is no line-discipline echo or
+    newline translation and no worker threads.
+
+    ``read`` waits up to ``timeout_ms`` for ``size`` bytes and returns whatever arrived (possibly
+    nothing) when the time is up; ``timeout_ms=None`` waits forever and ``0`` polls. Once the other
+    end has closed, buffered bytes are still delivered and later reads return ``b""`` at once;
+    ``peer_closed`` reports it and writes raise :class:`ConnectionError`.
+    """
+
+    def __init__(self, fd: Optional[int] = None, path: Optional[str] = None, port_name: str = "PTY", owns_fd: bool = True) -> None:
+        import os
+
+        if os.name == "nt":
+            raise NotImplementedError("PtyTransport is only supported on POSIX systems (Linux/macOS).")
+        if (fd is None) == (path is None):
+            raise ValueError("give exactly one of fd or path")
+        self.port_name = path or port_name
+        self._fd = fd
+        self._path = path
+        self._owns_fd = owns_fd or path is not None
+        self._buffer = bytearray()
+        self._data_event: Optional[asyncio.Event] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._is_open = False
+        self.peer_closed = False
+
+    @property
+    def is_open(self) -> bool:
+        return self._is_open
+
+    async def open(self) -> None:
+        import os
+
+        if self._is_open:
+            return
+        if self._path is not None:
+            self._fd = os.open(self._path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        assert self._fd is not None
+        self._make_raw(self._fd)
+        os.set_blocking(self._fd, False)
+        self._loop = asyncio.get_running_loop()
+        self._data_event = asyncio.Event()
+        self._loop.add_reader(self._fd, self._on_readable)
+        self.peer_closed = False
+        self._is_open = True
+        logger.info("Opened PTY transport %s", self.port_name)
+
+    @staticmethod
+    def _make_raw(fd: int) -> None:
+        import termios
+        import tty
+
+        try:
+            tty.setraw(fd)
+        except termios.error:  # not a terminal, or the platform refuses: carry on with the descriptor as is
+            pass
+
+    def _on_readable(self) -> None:
+        import os
+
+        assert self._fd is not None and self._data_event is not None
+        try:
+            chunk = os.read(self._fd, 65536)
+        except BlockingIOError:
+            return
+        except OSError:  # EIO: every other handle on the pty has been closed
+            chunk = b""
+        if chunk:
+            self._buffer.extend(chunk)
+        else:
+            self.peer_closed = True
+            if self._loop is not None:
+                self._loop.remove_reader(self._fd)
+        self._data_event.set()
+
+    async def close(self) -> None:
+        import os
+
+        if not self._is_open:
+            return
+        self._is_open = False
+        if self._fd is not None:
+            if self._loop is not None:
+                self._loop.remove_reader(self._fd)
+            if self._owns_fd:
+                try:
+                    os.close(self._fd)
+                except OSError:
+                    pass
+                self._fd = None
+        if self._data_event is not None:
+            self._data_event.set()  # wake any reader so it can see the transport is closed
+        logger.info("Closed PTY transport %s", self.port_name)
+
+    async def write(self, data: bytes) -> int:
+        import errno
+        import os
+
+        if not self._is_open or self._fd is None:
+            raise RuntimeError("PtyTransport is not open.")
+        if self.peer_closed:
+            raise ConnectionError("PTY peer has closed the connection")
+        view = memoryview(data)
+        while view:
+            try:
+                written = os.write(self._fd, view)
+            except BlockingIOError:
+                await self._wait_writable()
+                continue
+            except OSError as exc:
+                if exc.errno == errno.EIO:
+                    self.peer_closed = True
+                    raise ConnectionError("PTY peer has closed the connection") from exc
+                raise
+            view = view[written:]
+        return len(data)
+
+    async def _wait_writable(self) -> None:
+        assert self._loop is not None and self._fd is not None
+        ready: asyncio.Future[None] = self._loop.create_future()
+        self._loop.add_writer(self._fd, lambda: ready.done() or ready.set_result(None))
+        try:
+            await ready
+        finally:
+            if self._fd is not None:
+                self._loop.remove_writer(self._fd)
+
+    async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
+        if not self._is_open or self._data_event is None:
+            raise RuntimeError("PtyTransport is not open.")
+
+        deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000.0
+        while len(self._buffer) < size and not self.peer_closed and self._is_open:
+            self._data_event.clear()
+            if deadline is None:
+                await self._data_event.wait()
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                await asyncio.wait_for(self._data_event.wait(), timeout=remaining)
+            except asyncio.TimeoutError:
+                break
+
+        result = bytes(self._buffer[:size])
+        del self._buffer[:size]
+        return result
+
+    async def set_pin_state(self, pin: str, state: bool) -> None:
+        """A pty has no modem control lines; the request is accepted and ignored."""
+
+
 class PtySerialPair:
-    """Native POSIX pseudo-terminal (PTY) virtual serial pair for Linux and macOS."""
+    """Native POSIX pseudo-terminal pair: ``host`` is the master side and ``device`` the slave side.
+
+    Both ends are real file descriptors, so bytes written on one come out of the other through the
+    kernel exactly as over a serial cable. ``slave_pts_path`` is the path of the slave device
+    (for example ``/dev/pts/7``) that another program, or :class:`HardwareSerialTransport`, can open.
+    """
 
     def __init__(self) -> None:
         import os
+
         if os.name == "nt":
             raise NotImplementedError("PtySerialPair is only supported on POSIX systems (Linux/macOS).")
 
         import pty
+
         self.master_fd, self.slave_fd = pty.openpty()
         self.slave_pts_path = os.ttyname(self.slave_fd)
-        self.host = PipeTransport(port_name="PTY_MASTER")
-        self.device = PipeTransport(port_name=self.slave_pts_path)
-        self.host.connect_peer(self.device)
-        self.device.connect_peer(self.host)
+        self.host = PtyTransport(fd=self.master_fd, port_name="PTY_MASTER", owns_fd=False)
+        self.device = PtyTransport(fd=self.slave_fd, port_name=self.slave_pts_path, owns_fd=False)
+        self._closed = False
 
     async def open(self) -> None:
         await self.host.open()
@@ -383,13 +547,16 @@ class PtySerialPair:
 
     async def close(self) -> None:
         import os
+
         await self.host.close()
         await self.device.close()
-        try:
-            os.close(self.master_fd)
-            os.close(self.slave_fd)
-        except Exception:
-            pass
+        if not self._closed:
+            self._closed = True
+            for fd in (self.master_fd, self.slave_fd):
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
 
 
 class WindowsNamedPipeTransport(AsyncTransport):
