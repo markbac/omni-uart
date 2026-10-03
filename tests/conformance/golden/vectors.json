@@ -1,0 +1,1056 @@
+{
+ "ascii_device.yaml": {
+  "SET_POWER": {
+   "decoded": {
+    "dbm": "14"
+   },
+   "params": {
+    "dbm": 14
+   },
+   "request": "41 54 2B 50 4F 57 45 52 2C 31 34 0D 0A",
+   "response": "41 54 2B 4F 4B 0D 0A"
+  },
+  "TEST": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 54 45 53 54 0D 0A",
+   "response": "41 54 2B 4F 4B 0D 0A"
+  }
+ },
+ "at-commands-uart-interface.json": {
+  "AttentionCheck": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 0D 0A"
+  },
+  "DefinePdpContext": {
+   "decoded": {
+    "apn": "A",
+    "cid": "0",
+    "pdpType": "\\\"IP\\\""
+   },
+   "params": {
+    "apn": "A",
+    "cid": 0,
+    "pdpType": "\\\"IP\\\""
+   },
+   "request": "41 54 2B 43 47 44 43 4F 4E 54 3D 2C 30 2C 5C 22 49 50 5C 22 2C 41 0D 0A"
+  },
+  "Dial": {
+   "decoded": {
+    "phoneNumber": "A"
+   },
+   "params": {
+    "phoneNumber": "A"
+   },
+   "request": "41 54 44 2C 41 0D 0A"
+  },
+  "EnterPin": {
+   "decoded": {
+    "pin": "A"
+   },
+   "params": {
+    "pin": "A"
+   },
+   "request": "41 54 2B 43 50 49 4E 3D 2C 41 0D 0A"
+  },
+  "FactoryDefaults": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 26 46 0D 0A"
+  },
+  "GetBatteryVoltage": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 42 43 0D 0A"
+  },
+  "GetBaudRate": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 49 50 52 3F 0D 0A"
+  },
+  "GetClock": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 43 4C 4B 3F 0D 0A"
+  },
+  "GetEpsRegistration": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 45 52 45 47 3F 0D 0A"
+  },
+  "GetExtendedSignalQuality": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 45 53 51 0D 0A"
+  },
+  "GetFirmwareRevision": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 47 4D 52 0D 0A"
+  },
+  "GetGprsRegistration": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 47 52 45 47 3F 0D 0A"
+  },
+  "GetIccid": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 43 49 44 0D 0A"
+  },
+  "GetIccidQuectel": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 51 43 43 49 44 0D 0A"
+  },
+  "GetImsi": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 49 4D 49 0D 0A"
+  },
+  "GetManufacturer": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 47 4D 49 0D 0A"
+  },
+  "GetModel": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 47 4D 4D 0D 0A"
+  },
+  "GetNetworkRegistration": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 52 45 47 3F 0D 0A"
+  },
+  "GetOperator": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 4F 50 53 3F 0D 0A"
+  },
+  "GetOperatorNames": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 4F 50 4E 0D 0A"
+  },
+  "GetPdpAddress": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 47 50 41 44 44 52 0D 0A"
+  },
+  "GetPinStatus": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 50 49 4E 3F 0D 0A"
+  },
+  "GetPreferredListSelection": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 50 4C 53 3F 0D 0A"
+  },
+  "GetPreferredOperatorList": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 50 4F 4C 3F 0D 0A"
+  },
+  "GetSerialNumber": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 47 53 4E 0D 0A"
+  },
+  "GetSerialNumberLegacy": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 47 53 4E 0D 0A"
+  },
+  "HangUp": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 48 0D 0A"
+  },
+  "Identify": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 49 0D 0A"
+  },
+  "QcfgGetDataInactTimer": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 51 43 46 47 3D 5C 22 44 61 74 61 49 6E 61 63 74 54 69 6D 65 72 5C 22 0D 0A"
+  },
+  "Reset": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 5A 0D 0A"
+  },
+  "ResetModule": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 51 52 53 54 3D 31 0D 0A"
+  },
+  "SendControlPlaneData": {
+   "decoded": {
+    "cid": "0",
+    "cpdata": "A",
+    "cpdataLength": "0"
+   },
+   "params": {
+    "cid": 0,
+    "cpdata": "A",
+    "cpdataLength": 0
+   },
+   "request": "41 54 2B 43 53 4F 44 43 50 3D 2C 30 2C 30 2C 41 0D 0A"
+  },
+  "SendSmsBody": {
+   "decoded": {
+    "messageText": "A"
+   },
+   "params": {
+    "messageText": "A"
+   },
+   "request": "36 31 2C 41 0D 0A"
+  },
+  "SendSmsHeader": {
+   "decoded": {
+    "phoneNumber": "A",
+    "suffix": "\\\""
+   },
+   "params": {
+    "phoneNumber": "A",
+    "suffix": "\\\""
+   },
+   "request": "41 54 2B 43 4D 47 53 3D 5C 22 2C 41 2C 5C 22 0D 0A"
+  },
+  "SetBaudRate": {
+   "decoded": {
+    "rate": "0"
+   },
+   "params": {
+    "rate": 0
+   },
+   "request": "41 54 2B 49 50 52 3D 2C 30 0D 0A"
+  },
+  "SetClock": {
+   "decoded": {
+    "time": "A"
+   },
+   "params": {
+    "time": "A"
+   },
+   "request": "41 54 2B 43 43 4C 4B 3D 2C 41 0D 0A"
+  },
+  "SetControlPlaneDataReporting": {
+   "decoded": {
+    "reporting": "0"
+   },
+   "params": {
+    "reporting": 0
+   },
+   "request": "41 54 2B 43 52 54 44 43 50 3D 2C 30 0D 0A"
+  },
+  "SetEchoOff": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 45 30 0D 0A"
+  },
+  "SetEchoOn": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 45 31 0D 0A"
+  },
+  "SetEdrxDisabled": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 45 44 52 58 53 3D 33 0D 0A"
+  },
+  "SetEdrxParameters": {
+   "decoded": {
+    "actType": "0",
+    "mode": "0",
+    "requestedEdrxValue": "A"
+   },
+   "params": {
+    "actType": 0,
+    "mode": "0",
+    "requestedEdrxValue": "A"
+   },
+   "request": "41 54 2B 43 45 44 52 58 53 3D 2C 30 2C 30 2C 41 0D 0A"
+  },
+  "SetGprsAttach": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 47 41 54 54 3D 31 0D 0A"
+  },
+  "SetOperatorAutomatic": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 4F 50 53 3D 30 0D 0A"
+  },
+  "SetOperatorDeregister": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 4F 50 53 3D 32 0D 0A"
+  },
+  "SetPdpContextActivation": {
+   "decoded": {
+    "cid": "0",
+    "state": "0"
+   },
+   "params": {
+    "cid": 0,
+    "state": 0
+   },
+   "request": "41 54 2B 43 47 41 43 54 3D 2C 30 2C 30 0D 0A"
+  },
+  "SetPsmDisabled": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 50 53 4D 53 3D 32 0D 0A"
+  },
+  "SetPsmParameters": {
+   "decoded": {
+    "activeTime": "",
+    "mode": "0",
+    "separator": "",
+    "tau": ""
+   },
+   "params": {
+    "activeTime": "A",
+    "mode": "0",
+    "separator": ",,,",
+    "tau": "A"
+   },
+   "request": "41 54 2B 43 50 53 4D 53 3D 2C 30 2C 2C 2C 2C 2C 41 2C 41 0D 0A"
+  },
+  "SetVerboseErrors": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 4D 45 45 3D 32 0D 0A"
+  },
+  "SignalQuery": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 53 51 0D 0A"
+  },
+  "SmsTextMode": {
+   "decoded": {},
+   "params": {},
+   "request": "41 54 2B 43 4D 47 46 3D 31 0D 0A"
+  },
+  "UnlockFacility": {
+   "decoded": {
+    "fac": "A",
+    "mode": "0"
+   },
+   "params": {
+    "fac": "A",
+    "mode": 0
+   },
+   "request": "41 54 2B 43 4C 43 4B 3D 2C 41 2C 30 0D 0A"
+  }
+ },
+ "autobaud-bootloader-uart-interface.json": {
+  "AutoBaudSync": {
+   "decoded": {
+    "syncByte": 127
+   },
+   "params": {
+    "syncByte": 127
+   },
+   "request": "7F 7F 7F"
+  },
+  "GetVersion": {
+   "decoded": {
+    "opcode": 1
+   },
+   "params": {
+    "opcode": 1
+   },
+   "request": "01 01 01"
+  },
+  "Go": {
+   "decoded": {
+    "address": 0,
+    "opcode": 3
+   },
+   "params": {
+    "address": 0,
+    "opcode": 3
+   },
+   "request": "03 03 00 00 00 00 03"
+  }
+ },
+ "binary_sensor_node.yaml": {
+  "get_readings": {
+   "decoded": {
+    "channel": 0
+   },
+   "params": {
+    "channel": 0
+   },
+   "request": "AA 55 01 00 02 00 00 B8 55 AA",
+   "response": "AA 55 0D 00 82 00 00 00 00 00 00 00 00 00 00 00 00 00 F8 E7 55 AA"
+  },
+  "ping": {
+   "decoded": {},
+   "params": {},
+   "request": "AA 55 00 00 01 B0 00 55 AA",
+   "response": "AA 55 04 00 81 00 00 00 00 62 DE 55 AA"
+  },
+  "set_sampling_rate": {
+   "decoded": {
+    "rate_hz": 1
+   },
+   "params": {
+    "rate_hz": 1
+   },
+   "request": "AA 55 01 00 03 01 C0 E8 55 AA",
+   "response": "AA 55 01 00 83 00 60 E8 55 AA"
+  }
+ },
+ "console-xonxoff-uart-interface.json": {
+  "CommandLine": {
+   "decoded": {
+    "text": "A"
+   },
+   "params": {
+    "text": "A"
+   },
+   "request": "30 2C 41 0D 0A"
+  }
+ },
+ "custom_crc_device.yaml": {
+  "get_device_status": {
+   "decoded": {},
+   "params": {},
+   "request": "5A A5 00 00 10 DE AD 0D 0A",
+   "response": "5A A5 04 00 90 00 00 00 00 16 82 0D 0A"
+  }
+ },
+ "fh-radio-uart-interface.json": {
+  "SelectHopset": {
+   "decoded": {
+    "hopsetIndex": 0
+   },
+   "params": {
+    "hopsetIndex": 0
+   },
+   "request": "01 00 F0 E1"
+  },
+  "SetChannelLockout": {
+   "decoded": {
+    "lockoutBitmap": "01010101000000000000000000000000"
+   },
+   "params": {
+    "lockoutBitmap": "01 01 01 01"
+   },
+   "request": "03 01 01 01 01 00 00 00 00 00 00 00 00 00 00 00 00 D0 52"
+  },
+  "SetNetId": {
+   "decoded": {
+    "netId": 0
+   },
+   "params": {
+    "netId": 0
+   },
+   "request": "00 00 F0 E1"
+  },
+  "SetSingleChannelFrequency": {
+   "decoded": {
+    "frequencyHz": 0
+   },
+   "params": {
+    "frequencyHz": 0
+   },
+   "request": "04 00 00 00 00 C0 84"
+  },
+  "SetTimeOfDay": {
+   "decoded": {
+    "secondsSinceEpoch": 0
+   },
+   "params": {
+    "secondsSinceEpoch": 0
+   },
+   "request": "02 00 00 00 00 C0 84"
+  }
+ },
+ "j1708-uart-interface.json": {
+  "Message": {
+   "decoded": {
+    "data": "b'\\x01'",
+    "mid": "0"
+   },
+   "params": {
+    "data": "01",
+    "mid": 0
+   },
+   "request": "30 2C 30 2C 62 27 5C 78 30 31 27 0D 0A"
+  }
+ },
+ "lin-uart-interface.json": {
+  "WheelSpeedFrame": {
+   "decoded": {
+    "data": "01010101",
+    "pid": "01"
+   },
+   "params": {
+    "data": "01 01 01 01",
+    "pid": "01"
+   },
+   "request": "00 01 01 01 01 01 FA"
+  }
+ },
+ "mavlink-ftp-uart-interface.json": {
+  "FTP_BurstReadFile": {
+   "decoded": {
+    "burstComplete": 0,
+    "compId": 0,
+    "msgId": 110,
+    "offset": 0,
+    "opcode": 15,
+    "padding": 0,
+    "reqOpcode": 0,
+    "seq": 0,
+    "seqNumber": 0,
+    "session": 0,
+    "size": 0,
+    "sysId": 0
+   },
+   "params": {
+    "burstComplete": 0,
+    "compId": 0,
+    "msgId": 110,
+    "offset": 0,
+    "opcode": 15,
+    "padding": 0,
+    "reqOpcode": 0,
+    "seq": 0,
+    "seqNumber": 0,
+    "session": 0,
+    "size": 0,
+    "sysId": 0
+   },
+   "request": "0F 00 00 00 6E 00 00 00 0F 00 00 00 00 00 00 00 00 E9 B7"
+  }
+ },
+ "mavlink-v1-uart-interface.json": {
+  "ATTITUDE": {
+   "decoded": {
+    "compId": 0,
+    "msgId": 30,
+    "pitch": 0.0,
+    "pitchspeed": 0.0,
+    "roll": 0.0,
+    "rollspeed": 0.0,
+    "seq": 0,
+    "sysId": 0,
+    "timeBootMs": 0,
+    "yaw": 0.0,
+    "yawspeed": 0.0
+   },
+   "params": {
+    "compId": 0,
+    "msgId": 30,
+    "pitch": 0.0,
+    "pitchspeed": 0.0,
+    "roll": 0.0,
+    "rollspeed": 0.0,
+    "seq": 0,
+    "sysId": 0,
+    "timeBootMs": 0,
+    "yaw": 0.0,
+    "yawspeed": 0.0
+   },
+   "request": "1E 00 00 00 1E 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 4C DC"
+  },
+  "COMMAND_LONG": {
+   "decoded": {
+    "command": 0,
+    "compId": 0,
+    "confirmation": 0,
+    "msgId": 76,
+    "param1": 0.0,
+    "param2": 0.0,
+    "param3": 0.0,
+    "param4": 0.0,
+    "param5": 0.0,
+    "param6": 0.0,
+    "param7": 0.0,
+    "seq": 0,
+    "sysId": 0,
+    "targetComponent": 0,
+    "targetSystem": 0
+   },
+   "params": {
+    "command": 0,
+    "compId": 0,
+    "confirmation": 0,
+    "msgId": 76,
+    "param1": 0.0,
+    "param2": 0.0,
+    "param3": 0.0,
+    "param4": 0.0,
+    "param5": 0.0,
+    "param6": 0.0,
+    "param7": 0.0,
+    "seq": 0,
+    "sysId": 0,
+    "targetComponent": 0,
+    "targetSystem": 0
+   },
+   "request": "4C 00 00 00 4C 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 45 D0"
+  },
+  "GPS_RAW_INT": {
+   "decoded": {
+    "alt": 0,
+    "cog": 0,
+    "compId": 0,
+    "eph": 0,
+    "epv": 0,
+    "fixType": 0,
+    "lat": 0,
+    "lon": 0,
+    "msgId": 24,
+    "satellitesVisible": 0,
+    "seq": 0,
+    "sysId": 0,
+    "timeUsec": 0,
+    "vel": 0
+   },
+   "params": {
+    "alt": 0,
+    "cog": 0,
+    "compId": 0,
+    "eph": 0,
+    "epv": 0,
+    "fixType": 0,
+    "lat": 0,
+    "lon": 0,
+    "msgId": 24,
+    "satellitesVisible": 0,
+    "seq": 0,
+    "sysId": 0,
+    "timeUsec": 0,
+    "vel": 0
+   },
+   "request": "18 00 00 00 18 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 2B 53"
+  },
+  "HEARTBEAT": {
+   "decoded": {
+    "autopilot": 0,
+    "baseMode": 0,
+    "compId": 0,
+    "customMode": 0,
+    "mavlinkVersion": 0,
+    "msgId": 0,
+    "seq": 0,
+    "sysId": 0,
+    "systemStatus": 0,
+    "vehicleType": 0
+   },
+   "params": {
+    "autopilot": 0,
+    "baseMode": 0,
+    "compId": 0,
+    "customMode": 0,
+    "mavlinkVersion": 0,
+    "msgId": 0,
+    "seq": 0,
+    "sysId": 0,
+    "systemStatus": 0,
+    "vehicleType": 0
+   },
+   "request": "00 00 00 00 00 00 00 00 00 00 00 00 00 00 95 56"
+  },
+  "SYS_STATUS": {
+   "decoded": {
+    "batteryRemaining": 0,
+    "compId": 0,
+    "currentBattery": 0,
+    "load": 0,
+    "msgId": 1,
+    "onboardSensorsEnabled": 0,
+    "onboardSensorsHealth": 0,
+    "onboardSensorsPresent": 0,
+    "seq": 0,
+    "sysId": 0,
+    "voltageBattery": 0
+   },
+   "params": {
+    "batteryRemaining": 0,
+    "compId": 0,
+    "currentBattery": 0,
+    "load": 0,
+    "msgId": 1,
+    "onboardSensorsEnabled": 0,
+    "onboardSensorsHealth": 0,
+    "onboardSensorsPresent": 0,
+    "seq": 0,
+    "sysId": 0,
+    "voltageBattery": 0
+   },
+   "request": "01 00 00 00 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 E5 D5"
+  }
+ },
+ "mbus-short-uart-interface.json": {
+  "ShortFrame": {
+   "decoded": {
+    "aField": "0",
+    "cField": "0"
+   },
+   "params": {
+    "aField": 0,
+    "cField": 0
+   },
+   "request": "30 2C 30 2C 30 0D 0A"
+  }
+ },
+ "mcu-normal-mode-uart-interface.json": {
+  "EnterBootloader": {
+   "decoded": {
+    "opcode": 255,
+    "reserved": "0101"
+   },
+   "params": {
+    "opcode": 255,
+    "reserved": "01 01"
+   },
+   "request": "FF FF 01 01 01"
+  },
+  "Ping": {
+   "decoded": {
+    "opcode": 1,
+    "reserved": "0101"
+   },
+   "params": {
+    "opcode": 1,
+    "reserved": "01 01"
+   },
+   "request": "01 01 01 01 03"
+  }
+ },
+ "modbus-ascii-uart-interface.json": {
+  "ReadHoldingRegistersRequest": {
+   "decoded": {
+    "quantity": "0",
+    "slaveAddress": "0",
+    "startAddress": "0"
+   },
+   "params": {
+    "quantity": 0,
+    "slaveAddress": 0,
+    "startAddress": 0
+   },
+   "request": "33 2C 30 2C 30 2C 30 0D 0A"
+  }
+ },
+ "modbus-rtu-uart-interface.json": {
+  "ReadCoilsRequest": {
+   "decoded": {
+    "quantity": "0",
+    "slaveAddress": "0",
+    "startAddress": "0"
+   },
+   "params": {
+    "quantity": 0,
+    "slaveAddress": 0,
+    "startAddress": 0
+   },
+   "request": "31 2C 30 2C 30 2C 30 0D 0A"
+  },
+  "ReadDiscreteInputsRequest": {
+   "decoded": {
+    "quantity": "0",
+    "slaveAddress": "0",
+    "startAddress": "0"
+   },
+   "params": {
+    "quantity": 0,
+    "slaveAddress": 0,
+    "startAddress": 0
+   },
+   "request": "32 2C 30 2C 30 2C 30 0D 0A"
+  },
+  "ReadHoldingRegistersRequest": {
+   "decoded": {
+    "quantity": "0",
+    "slaveAddress": "0",
+    "startAddress": "0"
+   },
+   "params": {
+    "quantity": 0,
+    "slaveAddress": 0,
+    "startAddress": 0
+   },
+   "request": "33 2C 30 2C 30 2C 30 0D 0A"
+  },
+  "ReadInputRegistersRequest": {
+   "decoded": {
+    "quantity": "0",
+    "slaveAddress": "0",
+    "startAddress": "0"
+   },
+   "params": {
+    "quantity": 0,
+    "slaveAddress": 0,
+    "startAddress": 0
+   },
+   "request": "34 2C 30 2C 30 2C 30 0D 0A"
+  },
+  "WriteMultipleRegistersRequest": {
+   "decoded": {
+    "byteCount": "0",
+    "quantity": "0",
+    "slaveAddress": "0",
+    "startAddress": "0"
+   },
+   "params": {
+    "byteCount": 0,
+    "quantity": 0,
+    "slaveAddress": 0,
+    "startAddress": 0
+   },
+   "request": "31 36 2C 30 2C 30 2C 30 2C 30 0D 0A"
+  },
+  "WriteSingleRegisterRequest": {
+   "decoded": {
+    "registerAddress": "0",
+    "slaveAddress": "0",
+    "value": "0"
+   },
+   "params": {
+    "registerAddress": 0,
+    "slaveAddress": 0,
+    "value": 0
+   },
+   "request": "36 2C 30 2C 30 2C 30 0D 0A"
+  }
+ },
+ "ppp-uart-interface.json": {
+  "Frame": {
+   "decoded": {
+    "control": "3",
+    "information": "b'\\x01'",
+    "protocol": "0"
+   },
+   "params": {
+    "control": 3,
+    "information": "01",
+    "protocol": 0
+   },
+   "request": "32 35 35 2C 33 2C 30 2C 62 27 5C 78 30 31 27 0D 0A"
+  }
+ },
+ "pppos-uart-interface.json": {
+  "Frame": {
+   "decoded": {
+    "control": "3",
+    "information": "b'\\x01'",
+    "protocol": "0"
+   },
+   "params": {
+    "control": 3,
+    "information": "01",
+    "protocol": 0
+   },
+   "request": "32 35 35 2C 33 2C 30 2C 62 27 5C 78 30 31 27 0D 0A"
+  }
+ },
+ "scpi-uart-interface.json": {
+  "ClearStatus": {
+   "decoded": {},
+   "params": {},
+   "request": "2A 43 4C 53 0D 0A"
+  },
+  "Identify": {
+   "decoded": {},
+   "params": {},
+   "request": "2A 49 44 4E 3F 0D 0A"
+  },
+  "MeasureCurrentDC": {
+   "decoded": {},
+   "params": {},
+   "request": "4D 45 41 53 3A 43 55 52 52 3A 44 43 3F 0D 0A"
+  },
+  "MeasureVoltageDC": {
+   "decoded": {},
+   "params": {},
+   "request": "4D 45 41 53 3A 56 4F 4C 54 3A 44 43 3F 0D 0A"
+  },
+  "Reset": {
+   "decoded": {},
+   "params": {},
+   "request": "2A 52 53 54 0D 0A"
+  },
+  "SetVoltageOutput": {
+   "decoded": {
+    "voltage": "0.0"
+   },
+   "params": {
+    "voltage": 0.0
+   },
+   "request": "53 4F 55 52 3A 56 4F 4C 54 20 2C 30 2E 30 0D 0A"
+  }
+ },
+ "single-wire-uart-interface.json": {
+  "Ping": {
+   "decoded": {
+    "opcode": 1,
+    "reserved": "0101"
+   },
+   "params": {
+    "opcode": 1,
+    "reserved": "01 01"
+   },
+   "request": "01 01 01 01 03"
+  }
+ },
+ "slip-uart-interface.json": {
+  "EncapsulatedPacket": {
+   "decoded": {
+    "data": "b'\\x01'"
+   },
+   "params": {
+    "data": "01"
+   },
+   "request": "30 2C 62 27 5C 78 30 31 27 0D 0A"
+  }
+ },
+ "smart_actuator.json": {
+  "set_position": {
+   "decoded": {
+    "angle_degrees": 90.0,
+    "channel": 0,
+    "velocity_limit": 1000
+   },
+   "params": {
+    "angle_degrees": 90.0,
+    "channel": 0,
+    "velocity_limit": 1000
+   },
+   "request": "BA BE 07 00 01 10 00 00 00 B4 42 E8 03 3A 29 DC C7 ED FE",
+   "response": "BA BE 06 00 01 90 00 00 00 00 00 00 93 6E F6 CD ED FE"
+  }
+ },
+ "ubx-uart-interface.json": {
+  "CFG-PRT-Poll": {
+   "decoded": {
+    "class": 6,
+    "id": 0
+   },
+   "params": {
+    "class": 6,
+    "id": 0
+   },
+   "request": "06 06 00 06 0C"
+  },
+  "MON-VER": {
+   "decoded": {
+    "class": 10,
+    "id": 4
+   },
+   "params": {
+    "class": 10,
+    "id": 4
+   },
+   "request": "0A 0A 04 0E 18"
+  },
+  "NAV-POSLLH": {
+   "decoded": {
+    "class": 1,
+    "hAcc": 0,
+    "hMSL": 0,
+    "height": 0,
+    "iTOW": 0,
+    "id": 2,
+    "lat": 0,
+    "lon": 0,
+    "vAcc": 0
+   },
+   "params": {
+    "class": 1,
+    "hAcc": 0,
+    "hMSL": 0,
+    "height": 0,
+    "iTOW": 0,
+    "id": 2,
+    "lat": 0,
+    "lon": 0,
+    "vAcc": 0
+   },
+   "request": "01 01 02 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 03 58"
+  }
+ },
+ "xbee-api-uart-interface.json": {
+  "RemoteATCommand": {
+   "decoded": {
+    "applyOptions": 0,
+    "atCommand": "AA",
+    "dest16": 0,
+    "dest64": "0101010100000000",
+    "frameId": 0,
+    "frameType": 23
+   },
+   "params": {
+    "applyOptions": 0,
+    "atCommand": "AA",
+    "dest16": 0,
+    "dest64": "01 01 01 01",
+    "frameId": 0,
+    "frameType": 23
+   },
+   "request": "17 17 00 01 01 01 01 00 00 00 00 00 00 00 41 41 62"
+  }
+ },
+ "xmodem-uart-interface.json": {
+  "Cancel": {
+   "decoded": {
+    "controlByte": 24
+   },
+   "params": {
+    "controlByte": 24
+   },
+   "request": "18 18 18"
+  },
+  "DataBlock1024": {
+   "decoded": {
+    "blockNumber": 0,
+    "blockNumberComplement": 0,
+    "data": "01010101000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "header": 2
+   },
+   "params": {
+    "blockNumber": 0,
+    "blockNumberComplement": 0,
+    "data": "01 01 01 01",
+    "header": 2
+   },
+   "request": "02 02 00 00 01 01 01 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 06"
+  },
+  "DataBlock128": {
+   "decoded": {
+    "blockNumber": 0,
+    "blockNumberComplement": 0,
+    "data": "0101010100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "header": 1
+   },
+   "params": {
+    "blockNumber": 0,
+    "blockNumberComplement": 0,
+    "data": "01 01 01 01",
+    "header": 1
+   },
+   "request": "01 01 00 00 01 01 01 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 05"
+  },
+  "EndOfTransmission": {
+   "decoded": {
+    "controlByte": 4
+   },
+   "params": {
+    "controlByte": 4
+   },
+   "request": "04 04 04"
+  }
+ }
+}
