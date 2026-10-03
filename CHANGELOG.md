@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added `PtyTransport` and rebuilt `PtySerialPair` on real pseudo-terminal descriptors: raw non-blocking event-loop I/O, timeouts, partial reads, endpoint lifecycle, peer-close detection, and an openable `slave_pts_path` that PySerial can use. Previously the PTY was allocated but never connected to the transports (#195).
 - Added `ScriptRunner` (`omniuart.core.runner`), a reusable script execution engine with ordered steps, delays, log steps, send/receive with timeouts, assertions (operators and kit-format aliases), `${variables}` with `save`, abort-or-continue handling, optional recording and a JSON report (#193).
 - Added script-level `variables` and step-level `save` to the script schema (#193).
 - Added `DeviceSession` (`omniuart.core.session`) which encodes a command, transmits it, and decodes the response with timeouts, recording and typed outcomes; used by the CLI and shared with future clients (#192).

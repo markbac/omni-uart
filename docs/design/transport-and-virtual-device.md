@@ -56,6 +56,14 @@ For RS-485 transceivers requiring Direction Control (DE/RE pins):
 - Custom RTS toggle before and after write operations.
 - Settling delay configuration (pre-transmission and post-transmission guard times) to prevent bus collisions.
 
+### 3.3 PTY Transport (Linux and macOS)
+`PtyTransport` is a real, event-loop driven transport over a POSIX pseudo-terminal descriptor, and `PtySerialPair` allocates a linked master/slave pair:
+- **Endpoints**: `PtySerialPair().host` is the master side and `.device` the slave side. `slave_pts_path` (for example `/dev/pts/7`) is the slave device node, which other programs, or `HardwareSerialTransport`, can open like a serial port. `PtyTransport(path=...)` opens such a node itself.
+- **Raw I/O**: Descriptors are switched to raw, non-blocking mode (no echo, no newline translation) and read through `loop.add_reader`, with no worker threads. Writes larger than the kernel buffer wait for the reader instead of failing.
+- **Timeouts**: `read(size, timeout_ms)` returns the bytes that arrived within the timeout (possibly none); `timeout_ms=None` waits forever and `0` polls.
+- **Lifecycle and errors**: Operations on a closed transport raise `RuntimeError`; `close()` is idempotent. When the other end goes away, buffered bytes are still delivered, later reads return `b""` immediately, `peer_closed` becomes true and writes raise `ConnectionError`.
+- **Pins**: A pty has no DTR/RTS lines; `set_pin_state` is accepted and ignored.
+
 ---
 
 ## 4. Virtual MCU Loopback Engine (`VirtualTransport`)
