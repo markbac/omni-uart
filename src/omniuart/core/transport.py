@@ -205,17 +205,51 @@ class VirtualTransport(AsyncTransport):
 
 
 class HardwareSerialTransport(AsyncTransport):
-    """Physical serial hardware port transport using PySerial."""
+    """Physical serial hardware port transport using PySerial.
 
-    def __init__(self, port: str, baudrate: int = 115200, timeout: float = 1.0) -> None:
+    ``port`` may be a device name (``COM3``, ``/dev/ttyUSB0``) or any PySerial URL handler such as
+    ``loop://`` or ``socket://host:port``.
+    """
+
+    def __init__(
+        self,
+        port: str,
+        baudrate: int = 115200,
+        timeout: float = 1.0,
+        serial_config: Optional[SerialConfig] = None,
+    ) -> None:
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
+        self.serial_config = serial_config
         self._serial: Optional[serial.Serial] = None
+
+    def _serial_kwargs(self) -> Dict[str, Any]:
+        cfg = self.serial_config
+        if cfg is None:
+            return {}
+        parity = {
+            "none": serial.PARITY_NONE,
+            "even": serial.PARITY_EVEN,
+            "odd": serial.PARITY_ODD,
+            "mark": serial.PARITY_MARK,
+            "space": serial.PARITY_SPACE,
+        }[cfg.parity.lower()]
+        stopbits = {1.0: serial.STOPBITS_ONE, 1.5: serial.STOPBITS_ONE_POINT_FIVE, 2.0: serial.STOPBITS_TWO}[float(cfg.stopbits)]
+        flow = cfg.flow_control.lower()
+        return {
+            "bytesize": cfg.bytesize,
+            "parity": parity,
+            "stopbits": stopbits,
+            "rtscts": flow == "hardware",
+            "xonxoff": flow == "software",
+        }
 
     async def open(self) -> None:
         """Open physical serial port connection."""
-        self._serial = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
+        self._serial = await asyncio.to_thread(
+            serial.serial_for_url, self.port, baudrate=self.baudrate, timeout=self.timeout, **self._serial_kwargs()
+        )
         logger.info(f"Connected hardware serial port: {self.port} at {self.baudrate} bps")
 
     async def close(self) -> None:
@@ -236,6 +270,7 @@ class HardwareSerialTransport(AsyncTransport):
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
         if not self.is_open or not self._serial:
             raise RuntimeError("HardwareSerialTransport is not open.")
+        self._serial.timeout = self.timeout if timeout_ms is None else timeout_ms / 1000.0
         return await asyncio.to_thread(self._serial.read, size)
 
     async def set_pin_state(self, pin: str, state: bool) -> None:

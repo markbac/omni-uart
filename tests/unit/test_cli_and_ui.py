@@ -28,13 +28,13 @@ def test_cli_info_command(capsys) -> None:
     assert "COMMAND CATALOG & PARAMETERS" in captured.out
 
 
-def test_cli_send_command(capsys) -> None:
-    """Verify CLI send command executes dry-run simulation."""
-    exit_code = cli_main(["send", "binary_sensor_node", "get_readings", "-p", "channel=1"])
+def test_cli_send_dry_run_is_explicit_and_transmits_nothing(capsys) -> None:
+    """--dry-run builds and prints the frame only."""
+    exit_code = cli_main(["send", "binary_sensor_node", "get_readings", "-p", "channel=1", "--dry-run"])
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "Executing command 'get_readings'" in captured.out
-    assert "[DRY-RUN SIMULATION OK]" in captured.out
+    assert "Request   : AA 55 01 00 02 01" in captured.out
+    assert "DRY-RUN" in captured.out
 
 
 def test_ui_api_protocols_list() -> None:
