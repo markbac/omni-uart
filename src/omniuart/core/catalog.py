@@ -150,6 +150,22 @@ class CatalogManager:
 
         return None
 
+    def resolve_script_protocol(self, script: ScriptSpec, override: Optional[str] = None) -> Optional[ProtocolSpec]:
+        """Find the protocol a script targets: ``override``, else ``meta.protocol`` as a catalog name or a file path."""
+        ref_path = Path(script.meta.protocol)
+        for ref in [override] if override else [script.meta.protocol, ref_path.name, ref_path.stem]:
+            if not ref:
+                continue
+            if Path(ref).is_file():
+                try:
+                    return load_protocol(Path(ref))
+                except ValueError:
+                    return None
+            spec = self.get_protocol(ref)
+            if spec:
+                return spec
+        return None
+
     def get_script(self, identifier: str) -> Optional[ScriptSpec]:
         """Lookup and parse a test script by filename, script name, or partial match."""
         files = self.list_script_files()

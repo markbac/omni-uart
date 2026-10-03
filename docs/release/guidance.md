@@ -125,6 +125,19 @@ omni-uart --log-file ~/.omniuart/logs/session.log --log-level DEBUG list
 
 ---
 
+## 3a. Native Desktop App Behaviour
+
+The desktop app drives the same session, codec and script runner as the CLI and web API.
+
+1. **Connect / Disconnect**: Choose a detected serial port, or `virtual` for the labelled simulated device, and press Connect. The button and status change only once the port has really opened; a missing or busy port shows the error and stays disconnected. Disconnect closes the port.
+2. **Sending**: Commands from the Command Catalog are encoded by the protocol codec, written to the open link and answered with a decoded response. The Comms Streamer logs the bytes actually sent (TX), the bytes received (RX) with decoded fields, and any timeout or invalid response (ERR). Sending while disconnected transmits nothing.
+3. **Script Runner**: Runs the selected script with the shared runner and shows the real PASSED, FAILED, ERROR or SKIPPED result per step, with each assertion's expected and actual value, and an overall result.
+4. **Telemetry Plotter**: Plots only numeric fields decoded from valid RX frames (the first two numeric fields become Ch1 and Ch2). Transmitted bytes are never plotted and the axis shows real values. Text responses such as AT replies are shown in the Comms Streamer but not plotted.
+5. **Auto-Poll**: Only commands tagged `dashboard` that expect a response and whose parameters all have defaults can be polled. Polling stops if the link is lost, and a new poll is not sent while the previous one is still waiting.
+6. **Raw Send**: Hex or ASCII typed in the Comms Streamer is written unmodified and any reply is logged. The built-in AT and Modbus macro buttons were removed because they sent fixed bytes to whatever device was connected.
+
+---
+
 ## 3. Dynamic Web UI Features
 
 1. **Protocol Dropdown Selector**: Switch between any discovered hardware protocol interactively.
