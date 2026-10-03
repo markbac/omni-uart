@@ -254,6 +254,7 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     elif args.subcommand == "fuzz":
         import asyncio
+        from omniuart.core.codec import CodecError
         from omniuart.core.fuzzer import ProtocolFuzzer
         from omniuart.core.transport import VirtualTransport
         spec = catalog.get_protocol(args.protocol)
@@ -261,15 +262,21 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
             return 1
         print(f"Starting Fuzzing Campaign for '{spec.metadata.name}' ({args.vectors} vectors)...")
-        fuzzer = ProtocolFuzzer(spec)
-        transport = VirtualTransport(spec, latency_ms=1.0)
-        report = asyncio.run(fuzzer.run_campaign(transport, max_vectors=args.vectors))
-        print(f"Campaign Completed:")
+        try:
+            fuzzer = ProtocolFuzzer(spec)
+            transport = VirtualTransport(spec, latency_ms=1.0)
+            report = asyncio.run(fuzzer.run_campaign(transport, max_vectors=args.vectors))
+        except CodecError as exc:
+            print(f"Error: cannot fuzz '{spec.metadata.name}': {exc}", file=sys.stderr)
+            return 1
+        print("Campaign Completed:")
         print(f"  Total Vectors Executed : {report.total_vectors}")
-        print(f"  Handled / Rejected     : {report.handled_count}")
+        print(f"  Handled correctly      : {report.handled_count}")
+        print(f"  Unexpectedly accepted  : {report.unexpected_count}")
+        print(f"  Malformed responses    : {report.malformed_count}")
         print(f"  Hangs / Timeouts       : {report.hang_count}")
-        print(f"  Crashes / Errors       : {report.crash_count}")
-        return 0
+        print(f"  Transport errors       : {report.crash_count}")
+        return 0 if report.passed else 1
 
     elif args.subcommand == "replay":
         import asyncio

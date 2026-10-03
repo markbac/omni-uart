@@ -122,7 +122,7 @@ flowchart TD
 ### 3.5 Replayer, Telemetry Bridge & Fuzzer
 - **`SessionReplayer` (`omniuart.core.replayer`)**: Replays recorded `.jsonl` session transactions onto physical or virtual serial links with real-time or speed-scaled timing.
 - **`TelemetryBridge` (`omniuart.core.telemetry`)**: Dispatches parsed UART telemetry events to external HTTP Webhook endpoints and MQTT topics (`omniuart/telemetry/<cmd_name>`).
-- **`ProtocolFuzzer` (`omniuart.core.fuzzer`)**: Executes automated boundary mutation campaigns (bit flips, length corruptions, string overflows, integer boundary values) against target MCUs to assess firmware stability.
+- **`ProtocolFuzzer` (`omniuart.core.fuzzer`)**: Builds vectors with `FrameCodec` (out-of-bounds parameter, corrupted integrity field, truncated frame, random byte mutation) and classifies each outcome as accepted, correctly rejected, unexpectedly accepted, malformed response, timeout, hang or transport error. A liveness probe after each invalid vector detects firmware that locks up.
 
 ### 3.6 Presentation & Web UI (`omniuart.cli` & `omniuart.ui.app`)
 - **Interactive Web UI**: Zero-dependency FastAPI + WebSockets local web interface. Auto-generates command parameter forms, auto-runs dashboard diagnostics, streams 60 FPS real-time serial traffic, and provides dark/light themes and compact mode.

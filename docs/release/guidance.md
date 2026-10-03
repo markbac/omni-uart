@@ -70,7 +70,19 @@ Sequentially runs command steps, evaluates field assertions, and verifies respon
 ```bash
 omni-uart fuzz binary_sensor_node.yaml --vectors 50
 ```
-Runs a 50-vector mutation campaign against MCU firmware, testing resilience to corrupted lengths, invalid CRCs, payload boundary values, and string overflows.
+Runs a 50-vector mutation campaign built from the protocol (a valid baseline, an out-of-bounds parameter, a corrupted integrity field, a truncated frame and a random byte mutation per command; strategies that do not apply to a command are skipped). Every vector is classified from what the device did:
+
+| Outcome | Meaning |
+| :--- | :--- |
+| `ACCEPTED` | A valid request was answered with a valid response. |
+| `CORRECTLY_REJECTED` | An invalid request was ignored and the device still answered a valid probe afterwards. |
+| `UNEXPECTEDLY_ACCEPTED` | An invalid request was answered as if it were valid. |
+| `MALFORMED_RESPONSE` | The device sent bytes that do not decode as a valid response. |
+| `TIMEOUT` | A valid request received no response. |
+| `HANG` | The device stopped answering valid requests after this vector. |
+| `TRANSPORT_ERROR` | The transport failed while writing or reading. |
+
+The protocol schema defines no error frames, so staying silent is how a device rejects an invalid request. The command exits with status 0 only when every vector was handled correctly (`ACCEPTED` or `CORRECTLY_REJECTED`), and 1 otherwise.
 
 #### 6. `replay`: Session Replay Engine
 ```bash
