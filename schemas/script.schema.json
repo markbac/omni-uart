@@ -1,61 +1,239 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/markbac/omni-uart/schemas/script.schema.json",
-  "title": "OmniUART Automation Script Schema",
-  "description": "Schema definition for automated UART command sequences and regression test suites.",
-  "type": "object",
-  "required": ["version", "meta", "steps"],
+  "$defs": {
+    "ScriptConfig": {
+      "additionalProperties": false,
+      "description": "Global execution settings for an automated test script.",
+      "properties": {
+        "abort_on_error": {
+          "default": true,
+          "title": "Abort On Error",
+          "type": "boolean"
+        },
+        "default_timeout_ms": {
+          "default": 1000,
+          "title": "Default Timeout Ms",
+          "type": "integer"
+        },
+        "inter_step_delay_ms": {
+          "default": 0,
+          "title": "Inter Step Delay Ms",
+          "type": "integer"
+        }
+      },
+      "title": "ScriptConfig",
+      "type": "object"
+    },
+    "ScriptMeta": {
+      "additionalProperties": false,
+      "description": "Metadata block for an automation script.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "protocol": {
+          "title": "Protocol",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author"
+        }
+      },
+      "required": [
+        "name",
+        "protocol"
+      ],
+      "title": "ScriptMeta",
+      "type": "object"
+    },
+    "ScriptStep": {
+      "additionalProperties": false,
+      "description": "Individual action step in an automated test sequence.",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "expect_response": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expect Response"
+        },
+        "timeout_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timeout Ms"
+        },
+        "delay_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delay Ms"
+        },
+        "log": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Log"
+        },
+        "assertions": {
+          "items": {
+            "$ref": "#/$defs/StepAssertion"
+          },
+          "title": "Assertions",
+          "type": "array"
+        },
+        "save": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Save",
+          "type": "object"
+        }
+      },
+      "title": "ScriptStep",
+      "type": "object"
+    },
+    "StepAssertion": {
+      "additionalProperties": false,
+      "description": "Condition asserted against response payload fields.",
+      "properties": {
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "op": {
+          "title": "Op",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value"
+        },
+        "tolerance": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tolerance"
+        }
+      },
+      "required": [
+        "field",
+        "op",
+        "value"
+      ],
+      "title": "StepAssertion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Root model for an OmniUART automated test script.",
   "properties": {
     "version": {
-      "type": "string",
-      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
-      "description": "SemVer 2.0.0 version string with optional pre-release and test suite metadata"
+      "default": "1.0.0",
+      "title": "Version",
+      "type": "string"
     },
     "meta": {
-      "type": "object",
-      "required": ["name", "protocol"],
-      "properties": {
-        "name": { "type": "string" },
-        "protocol": { "type": "string" },
-        "description": { "type": "string" },
-        "author": { "type": "string" }
-      }
+      "$ref": "#/$defs/ScriptMeta"
     },
     "config": {
-      "type": "object",
-      "properties": {
-        "abort_on_error": { "type": "boolean", "default": true },
-        "default_timeout_ms": { "type": "integer", "default": 1000 },
-        "inter_step_delay_ms": { "type": "integer", "default": 0 }
-      }
+      "$ref": "#/$defs/ScriptConfig"
+    },
+    "variables": {
+      "additionalProperties": true,
+      "title": "Variables",
+      "type": "object"
     },
     "steps": {
-      "type": "array",
       "items": {
-        "type": "object",
-        "properties": {
-          "name": { "type": "string" },
-          "command": { "type": "string" },
-          "params": { "type": "object" },
-          "expect_response": { "type": "string" },
-          "timeout_ms": { "type": "integer" },
-          "delay_ms": { "type": "integer" },
-          "log": { "type": "string" },
-          "assertions": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": ["field", "op", "value"],
-              "properties": {
-                "field": { "type": "string" },
-                "op": { "type": "string", "enum": ["==", "!=", "<", "<=", ">", ">=", "in", "tolerance"] },
-                "value": {},
-                "tolerance": { "type": "number" }
-              }
-            }
-          }
-        }
-      }
+        "$ref": "#/$defs/ScriptStep"
+      },
+      "title": "Steps",
+      "type": "array"
     }
-  }
+  },
+  "required": [
+    "meta"
+  ],
+  "title": "OmniUART Automation Script Schema",
+  "type": "object"
 }
