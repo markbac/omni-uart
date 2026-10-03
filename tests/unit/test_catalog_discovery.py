@@ -42,7 +42,8 @@ def test_first_directory_wins_and_collision_is_reported(dirs) -> None:
     assert catalog.list_protocol_files() == [(a / "dev.yaml").resolve()]
     assert catalog.get_protocol("dev").metadata.name == "First"
     (c,) = [c for c in catalog.catalog_summary()["collisions"] if c["reason"] == "same filename"]
-    assert c["used"].endswith("a/dev.yaml") and c["shadowed"].endswith("b/dev.yaml") and c["identical"] is False
+    assert Path(c["used"]) == (a / "dev.yaml").resolve()
+    assert Path(c["shadowed"]) == (b / "dev.yaml").resolve() and c["identical"] is False
 
 
 def test_identical_duplicate_is_flagged_as_identical(dirs) -> None:
