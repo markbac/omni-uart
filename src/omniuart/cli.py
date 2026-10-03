@@ -81,6 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     fuzz_parser = subparsers.add_parser("fuzz", help="Run automated fuzzing & MCU firmware stress testing campaign")
     fuzz_parser.add_argument("protocol", help="Protocol name or filename to fuzz")
     fuzz_parser.add_argument("--vectors", "-n", type=int, default=20, help="Number of fuzz test vectors to run")
+    fuzz_parser.add_argument("--seed", type=int, default=None, help="Seed for reproducible random mutations (printed in the summary)")
 
     # 9. replay (Session Replay Engine)
     replay_parser = subparsers.add_parser("replay", help="Replay recorded session transactions onto a serial transport")
@@ -375,13 +376,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 1
         print(f"Starting Fuzzing Campaign for '{spec.metadata.name}' ({args.vectors} vectors)...")
         try:
-            fuzzer = ProtocolFuzzer(spec)
+            fuzzer = ProtocolFuzzer(spec, seed=args.seed)
             transport = VirtualTransport(spec, latency_ms=1.0)
             report = asyncio.run(fuzzer.run_campaign(transport, max_vectors=args.vectors))
         except CodecError as exc:
             print(f"Error: cannot fuzz '{spec.metadata.name}': {exc}", file=sys.stderr)
             return 1
         print("Campaign Completed:")
+        print(f"  Seed                   : {report.seed if report.seed is not None else 'random'}")
         print(f"  Total Vectors Executed : {report.total_vectors}")
         print(f"  Handled correctly      : {report.handled_count}")
         print(f"  Unexpectedly accepted  : {report.unexpected_count}")

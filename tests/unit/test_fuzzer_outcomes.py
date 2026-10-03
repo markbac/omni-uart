@@ -152,3 +152,23 @@ def test_vectors_are_valid_frames_built_by_the_codec(spec):
 def test_cli_fuzz_exit_code_reflects_the_result(capsys):
     assert cli_main(["fuzz", "binary_sensor_node", "-n", "8"]) == 0
     assert "Handled correctly" in capsys.readouterr().out
+
+
+def test_small_budget_still_covers_every_command(spec):
+    fuzzer = ProtocolFuzzer(spec, seed=1)
+    chosen = fuzzer.select_vectors(len(spec.commands))
+    assert {v.command_name for v in chosen} == {c.name for c in spec.commands}
+    assert all(v.strategy == "valid" for v in chosen)
+
+
+def test_same_seed_gives_identical_vectors(spec):
+    first = [v.raw_payload for v in ProtocolFuzzer(spec, seed=42).select_vectors(50)]
+    second = [v.raw_payload for v in ProtocolFuzzer(spec, seed=42).select_vectors(50)]
+    assert first == second
+
+
+def test_cli_fuzz_reports_the_seed(capsys):
+    from omniuart.cli import main
+
+    main(["fuzz", "binary_sensor_node", "-n", "5", "--seed", "7"])
+    assert "Seed                   : 7" in capsys.readouterr().out
