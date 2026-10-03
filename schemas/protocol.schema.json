@@ -77,7 +77,12 @@
             "refout": { "type": "boolean", "default": false },
             "xorout": { "oneOf": [{ "type": "integer" }, { "type": "string" }], "default": 0 },
             "endian": { "type": "string", "enum": ["little", "big"], "default": "little" },
-            "check": { "oneOf": [{ "type": "integer" }, { "type": "string" }] }
+            "check": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
+            "covers": {
+              "type": "string",
+              "enum": ["after_header", "full_frame", "payload_only"],
+              "default": "after_header"
+            }
           }
         },
         "footer": {

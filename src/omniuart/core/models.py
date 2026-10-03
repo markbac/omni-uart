@@ -134,6 +134,14 @@ class IntegritySpec(BaseModel):
     xorout: Optional[Union[int, str]] = 0
     endian: str = "little"
     check: Optional[Union[int, str]] = None
+    covers: str = "after_header"
+
+    @field_validator("covers")
+    @classmethod
+    def validate_covers(cls, v: str) -> str:
+        if v not in ("after_header", "full_frame", "payload_only"):
+            raise ValueError(f"covers must be 'after_header', 'full_frame' or 'payload_only', got '{v}'")
+        return v
 
     def to_crc_model(self) -> Optional[CrcModel]:
         """Convert custom integrity parameters into a CrcModel instance."""
