@@ -177,3 +177,12 @@ async def test_virtual_transport_without_protocol_is_a_plain_loopback():
     await transport.write(b"hello")
     assert await transport.read(size=5, timeout_ms=500) == b"hello"
     await transport.close()
+
+
+@pytest.mark.asyncio
+async def test_out_of_range_parameters_are_ignored_by_the_device():
+    spec = load_protocol(LAYOUTS["header_length_crc_footer"])  # ch is declared 0..3
+    codec = FrameCodec(spec)
+    too_big = codec.encode_message(0x07, bytes([4]))
+    got, sim = await _exchange(spec, [too_big])
+    assert got == b"" and sim._state["rx_errors"] == 1

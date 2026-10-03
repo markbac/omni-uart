@@ -12,7 +12,7 @@ import random
 import time
 from typing import Any, Dict, List, Optional, Union
 
-from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec
+from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec, validate_fields
 from omniuart.core.crc import calculate_crc
 from omniuart.core.models import CommandSpec, FramingConfig, ProtocolMeta, ProtocolSpec, SerialConfig, load_protocol
 from omniuart.core.transport import AsyncTransport, VirtualTransport
@@ -29,8 +29,10 @@ class BaseDeviceSimulator:
         transport: Optional[AsyncTransport] = None,
         latency_ms: float = 5.0,
         fault_drop_rate: float = 0.0,
+        frame_timeout_ms: float = 50.0,
     ) -> None:
         self.spec = spec
+        self.frame_timeout_ms = frame_timeout_ms
         self.transport = transport or VirtualTransport(protocol=spec)
         self.latency_ms = latency_ms
         self.fault_drop_rate = fault_drop_rate
@@ -65,13 +67,21 @@ class BaseDeviceSimulator:
     async def _listen_loop(self) -> None:
         """Continuously read request frames, process logic, and send responses."""
         buf = bytearray()
+        last_rx = time.monotonic()
         while self._running:
             try:
                 chunk = await self.transport.read(size=1, timeout_ms=50)
                 if not chunk:
+                    # Like a real UART receiver, abandon a partial frame after an idle gap so that
+                    # one truncated frame cannot swallow the start of the next request.
+                    if buf and (time.monotonic() - last_rx) * 1000.0 >= self.frame_timeout_ms:
+                        logger.debug("Discarding %d byte(s) of incomplete frame after idle timeout", len(buf))
+                        buf.clear()
+                        self._state["rx_errors"] += 1
                     await asyncio.sleep(0.005)
                     continue
 
+                last_rx = time.monotonic()
                 buf.extend(chunk)
                 resp = self.process_incoming_bytes(buf)
                 if resp:
@@ -125,7 +135,15 @@ class BaseDeviceSimulator:
     def handle_frame(self, frame: DecodedFrame) -> bytes:
         """Answer one valid request frame; returns ``b""`` when the command has no response."""
         cmd = self.spec.get_command(frame.name or "")
-        if cmd is None or cmd.response is None:
+        if cmd is None:
+            return b""
+        violation = validate_fields(cmd.parameters, frame.fields)
+        if violation:
+            # A compliant device refuses out-of-range parameters rather than acting on them.
+            self._state["rx_errors"] += 1
+            logger.debug("Ignoring '%s': %s", cmd.name, violation)
+            return b""
+        if cmd.response is None:
             return b""
         values = self.handle_command(cmd, frame.fields)
         if values is None:

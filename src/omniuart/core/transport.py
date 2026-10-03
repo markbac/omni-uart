@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import serial
 import serial.tools.list_ports
 
-from omniuart.core.codec import FrameCodec
+from omniuart.core.codec import FrameCodec, validate_fields
 from omniuart.core.models import ProtocolSpec, SerialConfig
 
 logger = logging.getLogger(__name__)
@@ -97,6 +97,7 @@ class VirtualTransport(AsyncTransport):
 
         self._tx_queue: asyncio.Queue[bytes] = asyncio.Queue()
         self._rx_queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self._rx_buffer = bytearray()
         self._is_open = False
         self._rule_responses: Dict[int, bytes] = {}
         self.pin_states: Dict[str, bool] = {"dtr": False, "rts": False}
@@ -150,22 +151,27 @@ class VirtualTransport(AsyncTransport):
         return len(data)
 
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
-        """Read bytes from RX queue."""
+        """Read up to ``size`` bytes from the RX queue; surplus bytes stay buffered for the next read."""
         if not self._is_open:
             raise RuntimeError("VirtualTransport is not open.")
 
-        timeout_sec = (timeout_ms / 1000.0) if timeout_ms else None
-        try:
-            buf = bytearray()
-            while len(buf) < size:
-                if timeout_sec is not None:
-                    chunk = await asyncio.wait_for(self._rx_queue.get(), timeout=timeout_sec)
-                else:
+        end_time = (time.monotonic() + timeout_ms / 1000.0) if timeout_ms else None
+        while len(self._rx_buffer) < size:
+            try:
+                if end_time is None:
                     chunk = await self._rx_queue.get()
-                buf.extend(chunk)
-            return bytes(buf[:size])
-        except asyncio.TimeoutError:
-            return bytes()
+                else:
+                    remaining = end_time - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    chunk = await asyncio.wait_for(self._rx_queue.get(), timeout=remaining)
+            except asyncio.TimeoutError:
+                break
+            self._rx_buffer.extend(chunk)
+
+        result = bytes(self._rx_buffer[:size])
+        del self._rx_buffer[:size]
+        return result
 
     def _generate_response(self, request_bytes: bytes) -> bytes:
         """Simulate the device side of the link.
@@ -191,6 +197,8 @@ class VirtualTransport(AsyncTransport):
                 out.extend(self._rule_responses[frame.message_id])
                 continue
             cmd = self.protocol.get_command(frame.name or "")
+            if cmd is not None and validate_fields(cmd.parameters, frame.fields):
+                continue
             if cmd is not None and cmd.response is not None:
                 out.extend(codec.encode_response(cmd))
         return bytes(out)

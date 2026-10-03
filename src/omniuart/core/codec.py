@@ -251,6 +251,21 @@ def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
     return out
 
 
+def validate_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> Optional[str]:
+    """Check decoded values against declared ``min``/``max``/``options``; return the first violation."""
+    for spec in specs:
+        value = values.get(spec.name)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        if spec.min is not None and value < spec.min:
+            return f"'{spec.name}' value {value:g} is below the minimum {spec.min:g}"
+        if spec.max is not None and value > spec.max:
+            return f"'{spec.name}' value {value:g} is above the maximum {spec.max:g}"
+        if spec.type is FieldType.ENUM and spec.options and str(int(value)) not in {str(k) for k in spec.options}:
+            return f"'{spec.name}' value {value:g} is not a declared option"
+    return None
+
+
 def default_value(spec: FieldSpec) -> Any:
     """A valid placeholder value for a field: its declared default, else the smallest legal value."""
     if spec.default is not None:
@@ -282,6 +297,16 @@ class FrameCodec:
         self._footer = _as_bytes(self.framing.footer) if self.is_binary else b""
         self._crc_bits = self._resolve_integrity_width() if self.is_binary else 0
         self._integrity_width = self._crc_bits // 8  # bytes on the wire
+
+    @property
+    def integrity_size(self) -> int:
+        """Size in bytes of the integrity field on the wire (0 when there is none)."""
+        return self._integrity_width
+
+    @property
+    def footer_bytes(self) -> bytes:
+        """The footer sequence of binary frames (empty when there is none)."""
+        return self._footer
 
     # ------------------------------------------------------------------ integrity
     def _resolve_integrity_width(self) -> int:
