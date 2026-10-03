@@ -43,7 +43,11 @@ def test_oversized_definition_file_and_text_are_rejected(tmp_path, monkeypatch) 
         load_script("# x\n" * 100)
 
 
-@pytest.mark.parametrize("text", ["[" * 100_000, "[" * 100_000 + "]" * 100_000, '{"a":' * 100_000])
+@pytest.mark.parametrize(
+    "text",
+    ["[" * 100_000, "[" * 100_000 + "]" * 100_000, '{"a":' * 100_000],
+    ids=["open-list", "closed-list", "open-object"],  # short ids: pytest puts the id in an environment variable (32 KB limit on Windows)
+)
 def test_deeply_nested_documents_are_a_value_error_not_a_crash(text) -> None:
     with pytest.raises(ValueError):
         load_protocol(text)
