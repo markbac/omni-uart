@@ -17,7 +17,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from omniuart.core.codec import CodecError
 from omniuart.core.models import ScriptSpec, ScriptStep, StepAssertion
-from omniuart.core.session import DeviceSession, Exchange, ExchangeStatus
+from omniuart.core.session import CommandBlockedError, DeviceSession, Exchange, ExchangeStatus
 
 _VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_.]*)\}")
 
@@ -235,6 +235,8 @@ class ScriptRunner:
             return await self._run_command(index, name, step)
         except ScriptError as exc:
             return StepResult(index, name, StepStatus.ERROR, str(exc))
+        except CommandBlockedError as exc:
+            return StepResult(index, name, StepStatus.ERROR, f"blocked: {exc}")
         except CodecError as exc:
             return StepResult(index, name, StepStatus.ERROR, f"invalid parameters: {exc}")
 

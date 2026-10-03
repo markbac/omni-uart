@@ -20,6 +20,22 @@ logger = logging.getLogger(__name__)
 STANDARD_BAUDRATES = (1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 250000, 460800, 921600)
 
 
+class CommandSafety(str, Enum):
+    """What a command can do to the device. Anything not declared is treated as ``mutating``.
+
+    - ``read_only``: queries state, changes nothing. The only level that may run automatically
+      (dashboard auto-run, auto-poll).
+    - ``idempotent``: changes state, but sending it again has the same effect (set a value).
+    - ``mutating``: changes state and is not safe to repeat.
+    - ``destructive``: erases data, resets or reprograms the device.
+    """
+
+    READ_ONLY = "read_only"
+    IDEMPOTENT = "idempotent"
+    MUTATING = "mutating"
+    DESTRUCTIVE = "destructive"
+
+
 class FieldType(str, Enum):
     """Supported primitive field data types."""
 
@@ -90,8 +106,18 @@ class CommandSpec(BaseModel):
     id: Union[int, str]
     description: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
+    safety: CommandSafety = CommandSafety.MUTATING
     parameters: List[FieldSpec] = Field(default_factory=list)
     response: Optional[ResponseSpec] = None
+
+    @property
+    def is_read_only(self) -> bool:
+        return self.safety is CommandSafety.READ_ONLY
+
+    @property
+    def needs_confirmation(self) -> bool:
+        """Whether a front end must get an explicit yes before sending (mutating and destructive commands)."""
+        return self.safety in (CommandSafety.MUTATING, CommandSafety.DESTRUCTIVE)
 
 
 class TelemetrySpec(BaseModel):
@@ -370,11 +396,7 @@ def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
         from omniuart.core.kit_adapter import parse_kit_protocol
         return parse_kit_protocol(data, source_name=source_name)
 
-    spec = ProtocolSpec.model_validate(data)
-    for cmd in spec.commands:
-        if not cmd.tags and any(kw in cmd.name.lower() for kw in ("version", "status", "info", "read", "get", "poll", "ping")):
-            cmd.tags.append("dashboard")
-    return spec
+    return ProtocolSpec.model_validate(data)
 
 
 def load_script(source: Union[str, Path]) -> ScriptSpec:

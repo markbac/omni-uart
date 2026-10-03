@@ -25,6 +25,8 @@ commands:
   - name: "TEST"
     id: "TEST"
     description: "Check modem connectivity"
+    safety: "read_only"
+    tags: ["dashboard"]
     parameters: []
     response:
       id: "OK"
@@ -36,6 +38,7 @@ commands:
   - name: "SET_POWER"
     id: "POWER"
     description: "Set output transmission power level"
+    safety: "idempotent"
     parameters:
       - name: "dbm"
         type: "int8"

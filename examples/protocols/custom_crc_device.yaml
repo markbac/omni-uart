@@ -38,6 +38,8 @@ commands:
   - name: "get_device_status"
     id: 0x10
     description: "Queries proprietary device operational status"
+    safety: "read_only"
+    tags: ["dashboard"]
     parameters: []
     response:
       id: 0x90

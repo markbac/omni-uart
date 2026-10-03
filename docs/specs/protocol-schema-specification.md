@@ -253,8 +253,16 @@ Commands specify outbound requests dispatched to the device. Each command can de
 - `name`: Unique alphanumeric identifier (e.g. `set_target_temperature`).
 - `id`: Opcode / Command identifier (e.g. `0x05`).
 - `description`: Human-readable summary.
+- `tags`: Free-form labels used to group commands. `dashboard` marks commands shown on the dashboard. Tags are never inferred from the command name.
+- `safety`: What the command can do to the device: `read_only` (queries state, changes nothing), `idempotent` (changes state, repeating it has the same effect), `mutating` (changes state, not safe to repeat) or `destructive` (erases, resets or reprograms). **Default: `mutating`**, so a command that does not declare its safety is never run automatically.
 - `parameters`: List of typed fields composing the outbound payload.
 - `response`: Specification of expected response frame (opcode, timeout, and unpacked fields).
+
+#### 5.1 Command safety
+- Only `read_only` commands run without a person asking: the dashboard auto-run runs commands that are both tagged `dashboard` and `read_only` (a dashboard command that is not `read_only` is skipped), and auto-poll offers only `read_only` commands that expect a response and whose parameters all have defaults.
+- Web and desktop front ends ask for confirmation before sending a `mutating` or `destructive` command (the web API answers `428` until the request carries `"confirm": true`). The CLI refuses a `destructive` command unless `--yes` is given.
+- A **read-only session** refuses every command that is not `read_only`, and raw bytes, before anything is written: `send --read-only`, `run --read-only`, the `read_only` field of `POST /api/serial/connect` (`403` on a refused send) and the *Read-only* option in the web and desktop toolbars.
+- Earlier versions tagged any command whose name contained `get`, `read`, `info`, `status`, `version`, `poll` or `ping` as `dashboard`, so `set_target_temperature`, `forget_pairing` and `start_sweeping` ran automatically. That heuristic was removed. Add `safety` (and `tags: [dashboard]`) explicitly. Kit protocols carry no safety information, so their commands are `mutating` unless the protocol is edited.
 
 ```yaml
 commands:

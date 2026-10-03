@@ -15,7 +15,7 @@ from typing import Any, Awaitable, Callable, Mapping, Optional, TypeVar
 
 from omniuart.core.models import CommandSpec, ProtocolSpec, ScriptSpec, SerialConfig
 from omniuart.core.runner import ScriptResult, ScriptRunner, StepResult
-from omniuart.core.session import DeviceSession, Exchange, read_available
+from omniuart.core.session import CommandBlockedError, DeviceSession, Exchange, read_available
 from omniuart.core.transport import AsyncTransport, HardwareSerialTransport, VirtualTransport
 
 T = TypeVar("T")
@@ -30,10 +30,10 @@ class NotConnected(RuntimeError):
 def is_safe_poll_command(cmd: CommandSpec) -> bool:
     """Whether ``cmd`` may be sent repeatedly without operator input.
 
-    Only commands tagged ``dashboard`` (read-only status queries) that expect a response and whose
-    parameters all have defaults qualify; nothing that could actuate hardware is ever polled.
+    Only commands explicitly marked ``safety: read_only`` that expect a response and whose parameters
+    all have defaults qualify; nothing that could change device state is ever polled.
     """
-    if "dashboard" not in cmd.tags or cmd.response is None:
+    if not cmd.is_read_only or cmd.response is None:
         return False
     return all(p.default is not None for p in cmd.parameters)
 
@@ -47,6 +47,7 @@ class BackgroundDevice:
         self._lock: Optional[asyncio.Lock] = None
         self._transport: Optional[AsyncTransport] = None
         self._virtual = False
+        self._read_only = False
         self._port: Optional[str] = None
         self._start_guard = threading.Lock()
 
@@ -58,6 +59,10 @@ class BackgroundDevice:
     @property
     def simulated(self) -> bool:
         return self._virtual
+
+    @property
+    def read_only(self) -> bool:
+        return self._read_only
 
     @property
     def port(self) -> Optional[str]:
@@ -95,11 +100,17 @@ class BackgroundDevice:
         serial_config: Optional[SerialConfig] = None,
         rts: bool = True,
         dtr: bool = True,
+        read_only: bool = False,
     ) -> "Future[None]":
-        """Open ``port`` (or the virtual device when ``port == 'virtual'``). The future raises on failure."""
-        return self._submit(self._connect(port, baudrate, serial_config, rts, dtr))
+        """Open ``port`` (or the virtual device when ``port == 'virtual'``). The future raises on failure.
 
-    async def _connect(self, port: str, baudrate: int, serial_config: Optional[SerialConfig], rts: bool, dtr: bool) -> None:
+        With ``read_only`` the link refuses every command not marked ``safety: read_only``.
+        """
+        return self._submit(self._connect(port, baudrate, serial_config, rts, dtr, read_only))
+
+    async def _connect(
+        self, port: str, baudrate: int, serial_config: Optional[SerialConfig], rts: bool, dtr: bool, read_only: bool = False
+    ) -> None:
         assert self._lock is not None
         async with self._lock:
             await self._disconnect()
@@ -115,6 +126,7 @@ class BackgroundDevice:
                     pass
                 self._transport = transport
             self._port = port
+            self._read_only = read_only
 
     def disconnect(self) -> "Future[None]":
         return self._submit(self._locked_disconnect())
@@ -128,6 +140,7 @@ class BackgroundDevice:
         transport, self._transport = self._transport, None
         self._virtual = False
         self._port = None
+        self._read_only = False
         if transport is not None:
             await transport.close()
 
@@ -148,10 +161,10 @@ class BackgroundDevice:
     # ------------------------------------------------------------------ operations
     def _session(self, spec: ProtocolSpec) -> DeviceSession:
         if self._virtual:
-            return DeviceSession(spec, VirtualTransport(spec, latency_ms=1.0, jitter_ms=0.0))
+            return DeviceSession(spec, VirtualTransport(spec, latency_ms=1.0, jitter_ms=0.0), read_only=self._read_only)
         if self._transport is None or not self._transport.is_open:
             raise NotConnected("Not connected. Connect a serial port or the virtual device first.")
-        return DeviceSession(spec, self._transport)
+        return DeviceSession(spec, self._transport, read_only=self._read_only)
 
     async def _with_session(self, spec: ProtocolSpec, work: Callable[[DeviceSession], Awaitable[T]]) -> T:
         assert self._lock is not None
@@ -198,6 +211,8 @@ class BackgroundDevice:
         async def work() -> bytes:
             assert self._lock is not None
             async with self._lock:
+                if self._read_only:
+                    raise CommandBlockedError("read-only session: raw bytes cannot be checked against command safety, so they are not sent")
                 if self._virtual:
                     if spec is None:
                         raise NotConnected("The virtual device needs an active protocol to answer raw bytes.")

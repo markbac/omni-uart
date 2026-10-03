@@ -8,7 +8,7 @@ import tkinter as tk
 
 import pytest
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.models import ProtocolSpec
+from omniuart.core.models import CommandSafety, ProtocolSpec
 from omniuart.core.transport import list_available_ports
 from omniuart.desktop.app import OmniUARTDesktopApp
 from omniuart.desktop.views import build_frame_payload
@@ -163,3 +163,36 @@ def test_script_runner_view_reports_real_results(app) -> None:
     results = [view.steps_tree.set(item, "result") for item in view.steps_tree.get_children()]
     assert results and all(r in {"PASSED", "FAILED", "ERROR", "SKIPPED"} for r in results)
     assert str(view.run_btn["state"]) == "normal"
+
+
+def test_mutating_command_needs_confirmation_and_declining_sends_nothing(app, monkeypatch) -> None:
+    from tkinter import messagebox
+
+    spec = _select_protocol(app, "binary_sensor_node")
+    _connect_virtual(app)
+    cmd = spec.get_command("set_sampling_rate").model_copy(update={"safety": CommandSafety.MUTATING})
+    view = app.catalog_view
+    view.selected_proto, view.selected_cmd = spec, cmd
+    view.param_vars = {"rate_hz": tk.StringVar(value="5")}
+
+    asked = []
+    monkeypatch.setattr(messagebox, "askyesno", lambda *a, **k: asked.append(a) or False)
+    view._transmit_command()
+    assert asked and "mutating" in asked[0][1]
+    assert app.tx_bytes_count == 0
+
+    monkeypatch.setattr(messagebox, "askyesno", lambda *a, **k: True)
+    view._transmit_command()
+    assert app.tx_bytes_count > 0
+
+
+def test_read_only_toolbar_option_blocks_commands(app) -> None:
+    spec = _select_protocol(app, "binary_sensor_node")
+    app.toolbar.port_var.set("virtual")
+    app.toolbar.read_only_var.set(True)
+    app.toolbar._toggle_connection()
+    _wait(app, lambda: app.toolbar.is_connected)
+    assert "[read-only]" in app.status_text_var.get()
+    app._handle_send(spec, "set_sampling_rate", {"rate_hz": 5})
+    _wait(app, lambda: "failed" in app.status_text_var.get())
+    assert "read-only" in app.status_text_var.get()

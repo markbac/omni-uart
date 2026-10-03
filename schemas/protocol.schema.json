@@ -140,6 +140,13 @@
           ]
         },
         "description": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "safety": {
+          "type": "string",
+          "enum": ["read_only", "idempotent", "mutating", "destructive"],
+          "default": "mutating",
+          "description": "What the command can do to the device. Only read_only commands run automatically; unspecified means mutating."
+        },
         "parameters": {
           "type": "array",
           "items": { "$ref": "#/$defs/field" }
