@@ -53,7 +53,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     # 4. run (Run Automation Script)
     run_parser = subparsers.add_parser("run", help="Execute an automated sequence test script")
-    run_parser.add_argument("script", help="Script name or filename (e.g. ubx-baud-switch-sequence.json)")
+    run_parser.add_argument("script", help="Script name, filename or path (e.g. ubx-baud-switch-sequence.json)")
+    run_parser.add_argument("--port", "-P", help="Serial port to run against (e.g. COM3, /dev/ttyUSB0, or a PySerial URL such as loop://)")
+    run_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate override (default: from the protocol)")
+    run_parser.add_argument("--virtual", action="store_true", help="Run against the built-in simulated device instead of a serial port")
+    run_parser.add_argument("--protocol", help="Protocol name or file to use instead of the one named in the script")
+    run_parser.add_argument("--record", help="Write every transmitted and received frame to this .jsonl file")
+    run_parser.add_argument("--report", help="Write a machine-readable JSON result report to this file")
 
     # 5. docs (Generate Documentation)
     docs_parser = subparsers.add_parser("docs", help="Auto-generate Markdown/HTML protocol specification documentation site")
@@ -190,6 +196,86 @@ def _send_command(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any], 
     return 0
 
 
+def _resolve_script_protocol(script: Any, catalog: CatalogManager, override: Optional[str]) -> Optional[ProtocolSpec]:
+    """Find the protocol a script targets: ``--protocol``, else ``meta.protocol`` as a catalog name or a file path."""
+    for ref in [override] if override else [script.meta.protocol, Path(script.meta.protocol).name, Path(script.meta.protocol).stem]:
+        if not ref:
+            continue
+        if Path(ref).is_file():
+            return load_protocol(Path(ref))
+        spec = catalog.get_protocol(ref)
+        if spec:
+            return spec
+    return None
+
+
+def _run_script(args: argparse.Namespace, catalog: CatalogManager) -> int:
+    """Execute a script against a real or simulated device. Exit codes follow ScriptResult.exit_code."""
+    import asyncio
+
+    from omniuart.core.codec import CodecError
+    from omniuart.core.recorder import SessionRecorder
+    from omniuart.core.runner import EXIT_FAILED, EXIT_INVALID, EXIT_TRANSPORT, ScriptRunner, StepStatus
+    from omniuart.core.session import DeviceSession, create_transport
+
+    script_path = Path(args.script)
+    try:
+        script = load_script(script_path) if script_path.is_file() else catalog.get_script(args.script)
+    except Exception as exc:  # noqa: BLE001 - malformed script file
+        print(f"Error: cannot load script '{args.script}': {exc}", file=sys.stderr)
+        return EXIT_INVALID
+    if not script:
+        print(f"Error: Script '{args.script}' not found.", file=sys.stderr)
+        return 1
+    spec = _resolve_script_protocol(script, catalog, args.protocol)
+    if spec is None:
+        print(f"Error: protocol '{args.protocol or script.meta.protocol}' for this script was not found. Use --protocol.", file=sys.stderr)
+        return EXIT_INVALID
+    try:
+        transport = create_transport(spec, port=args.port, baudrate=args.baudrate, virtual=args.virtual)
+        recorder = SessionRecorder() if args.record else None
+        session = DeviceSession(spec, transport, recorder=recorder)
+    except CodecError as exc:
+        print(f"Error: cannot use protocol '{spec.metadata.name}': {exc}", file=sys.stderr)
+        return EXIT_INVALID
+    except ValueError as exc:
+        print(f"Error: {exc}. Use --port <port> or --virtual.", file=sys.stderr)
+        return EXIT_INVALID
+
+    symbols = {StepStatus.PASSED: "PASS", StepStatus.FAILED: "FAIL", StepStatus.ERROR: "ERROR", StepStatus.SKIPPED: "SKIP"}
+
+    def show(step: Any) -> None:
+        print(f"  [{symbols[step.status]}] {step.index}. {step.name} ({step.duration_ms:.0f} ms)")
+        if step.message and step.status is not StepStatus.PASSED:
+            print(f"         {step.message}")
+
+    print(f"Running script '{script.meta.name}' ({len(script.steps)} steps) on protocol '{spec.metadata.name}'...")
+
+    async def _go():
+        try:
+            await session.open()
+        except Exception as exc:  # noqa: BLE001 - the port could not be opened
+            return exc
+        try:
+            return await ScriptRunner(script, session, on_step=show, on_log=lambda m: print(f"         log: {m}")).run()
+        finally:
+            await session.close()
+
+    result = asyncio.run(_go())
+    if isinstance(result, Exception):
+        print(f"Error: cannot use transport: {result}", file=sys.stderr)
+        return EXIT_TRANSPORT
+
+    if recorder:
+        recorder.export_jsonl(args.record)
+    if args.report:
+        Path(args.report).write_text(json.dumps(result.to_dict(), indent=2, default=str), encoding="utf-8")
+    counts = {status: sum(1 for s in result.steps if s.status is status) for status in StepStatus}
+    print(f"Result: {'PASSED' if result.passed else 'FAILED'} - {counts[StepStatus.PASSED]} passed, {counts[StepStatus.FAILED]} failed, "
+          f"{counts[StepStatus.ERROR]} errors, {counts[StepStatus.SKIPPED]} skipped")
+    return result.exit_code if result.steps else EXIT_FAILED
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     """Main CLI entrypoint."""
     from omniuart.core.logger import setup_logging
@@ -243,18 +329,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return _send_command(spec, cmd, params_dict, args)
 
     elif args.subcommand == "run":
-        script = catalog.get_script(args.script)
-        if not script:
-            print(f"Error: Script '{args.script}' not found.", file=sys.stderr)
-            return 1
-        print(f"Running script '{script.meta.name}' ({len(script.steps)} steps) targeting '{script.meta.protocol}'...")
-        for idx, step in enumerate(script.steps, 1):
-            if step.command:
-                print(f"  Step {idx}: Send '{step.command}' (params: {step.params})")
-            else:
-                print(f"  Step {idx}: Pause for {step.delay_ms} ms")
-        print("Script execution completed successfully.")
-        return 0
+        return _run_script(args, catalog)
 
     elif args.subcommand == "docs":
         from omniuart.docs_generator import build_site_documentation, generate_html_docs, generate_markdown_docs

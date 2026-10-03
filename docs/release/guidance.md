@@ -75,10 +75,13 @@ Encodes the command with the protocol's framing and CRC, transmits it, waits for
 
 #### 4. `run`: Execute Automated Test Sequence Script
 ```bash
-omni-uart run sensor_test_suite.yaml
-omni-uart run ubx-baud-switch-sequence.json
+omni-uart run sensor_test_suite.yaml --port /dev/ttyUSB0
+omni-uart run sensor_test_suite.yaml --virtual --record session.jsonl --report result.json
+omni-uart run ubx-baud-switch-sequence.json --protocol ubx-uart-interface.json --port COM3
 ```
-Sequentially runs command steps, evaluates field assertions, and verifies response timeouts.
+Executes the script's steps in order against a real serial port (`--port`) or the built-in simulated device (`--virtual`): sends commands, waits for responses with timeouts, evaluates field assertions, applies delays and variables, and stops at the first failure unless the script sets `abort_on_error: false`. The protocol is taken from the script's `meta.protocol` (a catalog name or file path) unless `--protocol` is given. `--record` writes every frame to a `.jsonl` session file and `--report` writes a JSON result.
+
+Exit status: `0` all steps passed, `1` a step failed, `2` invalid script or input, `3` transport error. See the [Script Specification](../specs/script-schema-specification.md).
 
 #### 5. `fuzz`: Boundary Mutation Campaign Engine
 ```bash

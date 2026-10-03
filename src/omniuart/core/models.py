@@ -279,6 +279,7 @@ class ScriptStep(BaseModel):
     delay_ms: Optional[int] = None
     log: Optional[str] = None
     assertions: List[StepAssertion] = Field(default_factory=list)
+    save: Dict[str, str] = Field(default_factory=dict)
 
 
 class ScriptConfig(BaseModel):
@@ -310,7 +311,16 @@ class ScriptSpec(BaseModel):
     version: str = "1.0.0"
     meta: ScriptMeta
     config: ScriptConfig = Field(default_factory=ScriptConfig)
+    variables: Dict[str, Any] = Field(default_factory=dict)
     steps: List[ScriptStep] = Field(default_factory=list)
+
+
+def _is_existing_file(text: str) -> bool:
+    """True if ``text`` names an existing file. Long inline documents are not valid paths (OSError)."""
+    try:
+        return "\n" not in text and Path(text).exists()
+    except (OSError, ValueError):
+        return False
 
 
 def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
@@ -320,7 +330,7 @@ def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
         source_name = source.name
         raw = source.read_text(encoding="utf-8")
         data = yaml.safe_load(raw) if source.suffix.lower() in (".yaml", ".yml") else json.loads(raw)
-    elif isinstance(source, str) and "\n" not in source and Path(source).exists():
+    elif isinstance(source, str) and _is_existing_file(source):
         path = Path(source)
         source_name = path.name
         raw = path.read_text(encoding="utf-8")
@@ -350,7 +360,7 @@ def load_script(source: Union[str, Path]) -> ScriptSpec:
         source_name = source.name
         raw = source.read_text(encoding="utf-8")
         data = yaml.safe_load(raw) if source.suffix.lower() in (".yaml", ".yml") else json.loads(raw)
-    elif isinstance(source, str) and "\n" not in source and Path(source).exists():
+    elif isinstance(source, str) and _is_existing_file(source):
         path = Path(source)
         source_name = path.name
         raw = path.read_text(encoding="utf-8")
