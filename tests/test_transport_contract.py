@@ -12,7 +12,6 @@ import pytest
 from omniuart.core.transport import (
     AsyncTransport,
     HardwareSerialTransport,
-    PipeTransport,
     PtySerialPair,
     VirtualSerialPair,
     VirtualTransport,

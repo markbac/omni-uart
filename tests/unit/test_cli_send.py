@@ -3,7 +3,6 @@
 import pytest
 
 from omniuart.cli import main as cli_main
-from omniuart.core.codec import FrameCodec
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.models import load_protocol
 from omniuart.core.session import DeviceSession, ExchangeStatus
@@ -64,8 +63,6 @@ async def test_session_times_out_when_the_device_is_silent(spec):
 async def test_session_reports_a_corrupt_response(spec):
     pair = VirtualSerialPair()
     await pair.open()
-    codec = FrameCodec(spec)
-
     class Corrupting(BaseDeviceSimulator):
         def handle_frame(self, frame):
             good = bytearray(super().handle_frame(frame))

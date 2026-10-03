@@ -1,6 +1,5 @@
 """Unit tests for VirtualTransport, MCU loopback, latency simulation, and fault injection."""
 
-import asyncio
 import pytest
 
 from omniuart.core.transport import VirtualTransport, list_available_ports
@@ -40,7 +39,6 @@ async def test_virtual_transport_fault_crc_flip() -> None:
     resp = await transport.read(size=8, timeout_ms=500)
     assert len(resp) == 8
     # Fault injection flips last byte
-    normal = bytes([0xAA, 0x55, 0x02, 0x00, 0x01, 0x00])
     await transport.close()
 
 

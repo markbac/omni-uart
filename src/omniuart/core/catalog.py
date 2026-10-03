@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set, Union
 
 from omniuart.core.models import ProtocolSpec, ScriptSpec, load_protocol, load_script
 
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class CatalogManager:
     """Manages auto-discovery, cataloging, and retrieval of protocol definitions and test scripts.
-    
+
     Automatically picks up new protocol definitions and scripts added to registered directories.
     Explicitly excludes G460 files as required by system policy.
     """
@@ -122,7 +122,7 @@ class CatalogManager:
     def get_protocol(self, identifier: str) -> Optional[ProtocolSpec]:
         """Lookup and parse a protocol definition by filename, protocol name, or partial match."""
         files = self.list_protocol_files()
-        
+
         # 1. Direct filename match
         for f in files:
             if f.name.lower() == identifier.lower() or f.stem.lower() == identifier.lower():
@@ -217,13 +217,13 @@ class CatalogManager:
         scripts = []
         for sf in self.list_script_files():
             try:
-                spec = load_script(sf)
+                script = load_script(sf)
                 scripts.append({
                     "filename": sf.name,
                     "path": str(sf),
-                    "name": spec.meta.name,
-                    "protocol": spec.meta.protocol,
-                    "steps_count": len(spec.steps),
+                    "name": script.meta.name,
+                    "protocol": script.meta.protocol,
+                    "steps_count": len(script.steps),
                 })
             except Exception as e:
                 logger.warning(f"Could not load script file {sf}: {e}")

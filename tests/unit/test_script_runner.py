@@ -1,7 +1,6 @@
 """The script runner really executes steps against a device (#193)."""
 
 import json
-from pathlib import Path
 
 import pytest
 

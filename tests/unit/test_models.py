@@ -8,8 +8,6 @@ from omniuart.core.models import (
     FieldSpec,
     FieldType,
     FramingConfig,
-    FramingType,
-    LengthSpec,
     ProtocolSpec,
     ScriptSpec,
     SerialConfig,

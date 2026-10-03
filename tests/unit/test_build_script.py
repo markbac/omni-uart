@@ -1,7 +1,6 @@
 """Unit tests for build script availability and syntax."""
 
 from pathlib import Path
-import pytest
 
 
 def test_build_standalone_script_exists() -> None:

@@ -12,12 +12,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.models import CommandSafety, CommandSpec, ProtocolSpec, load_protocol, load_script
+from omniuart.core.models import CommandSafety, CommandSpec, ProtocolSpec, load_script
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
     except Exception:
         pass
 
@@ -119,7 +119,7 @@ def format_protocol_help(spec: ProtocolSpec) -> str:
     lines.append("-" * 70)
 
     # Group commands by tag
-    tagged_map = {}
+    tagged_map: Dict[str, List[Any]] = {}
     for cmd in spec.commands:
         tags = cmd.tags if cmd.tags else ["general"]
         for tag in tags:
@@ -194,7 +194,7 @@ def _send_command(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any], 
         print(f"Error: {exc}. Use --port <port>, --virtual, or --dry-run.", file=sys.stderr)
         return 2
 
-    async def _run():
+    async def _run() -> Any:
         async with DeviceSession(spec, transport, read_only=args.read_only) as session:
             return await session.send(cmd, params, timeout_ms=args.timeout)
 
@@ -268,7 +268,7 @@ def _run_script(args: argparse.Namespace, catalog: CatalogManager) -> int:
 
     print(f"Running script '{script.meta.name}' ({len(script.steps)} steps) on protocol '{spec.metadata.name}'...")
 
-    async def _go():
+    async def _go() -> Any:
         try:
             await session.open()
         except Exception as exc:  # noqa: BLE001 - the port could not be opened
@@ -439,6 +439,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         transport = VirtualTransport(latency_ms=1.0)
         replayer = SessionReplayer(transport, speed_multiplier=args.speed)
         count = asyncio.run(replayer.replay_file(args.session_file))
+        print(f"Replayed {count} packet(s).")
+        return 0
     elif args.subcommand == "ui":
         return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode)
 
@@ -469,10 +471,10 @@ def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bo
         host = "127.0.0.1"
 
     url = f"http://{host}:{port}"
-    print(f"\n========================================================")
+    print("\n========================================================")
     print(f"  ⚡ OmniUART Interactive Control Workbench ({mode.upper()} Mode)")
     print(f"  URL: {url}")
-    print(f"========================================================\n")
+    print("========================================================\n")
 
     if mode == "desktop":
         threading.Timer(1.2, lambda: launch_desktop_window(url)).start()

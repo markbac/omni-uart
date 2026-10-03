@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +14,7 @@ from omniuart.ui.security import LOOPBACK_ORIGIN_REGEX, LocalOnlyMiddleware
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     """Close the serial link when the server stops."""
     yield
     await connection.disconnect()

@@ -11,7 +11,7 @@ import re
 import struct
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Literal, Optional, Union
 
 
 class CrcAlgorithm(str, Enum):
@@ -45,6 +45,16 @@ _ALIASES = {
 }
 
 TRANSFORMS = ("none", "twos_complement", "ones_complement")
+
+
+def byte_order(endian: str) -> Literal["little", "big"]:
+    """``"little"`` or ``"big"`` (case-insensitive); any other value raises ``ValueError``."""
+    value = endian.lower()
+    if value == "little":
+        return "little"
+    if value == "big":
+        return "big"
+    raise ValueError(f"Endianness must be 'little' or 'big', got {endian!r}")
 
 
 def normalize_algorithm_name(name: str) -> str:
@@ -290,7 +300,7 @@ def format_crc_bytes(val: int, width: int, endian: str = "little") -> bytes:
     elif byte_count == 4:
         return struct.pack(f"{order}I", val & 0xFFFFFFFF)
     else:
-        return val.to_bytes(byte_count, byteorder=endian.lower(), signed=False)
+        return val.to_bytes(byte_count, byteorder=byte_order(endian), signed=False)
 
 
 def parse_crc_bytes(raw: bytes, width: int, endian: str = "little") -> int:
@@ -307,7 +317,7 @@ def parse_crc_bytes(raw: bytes, width: int, endian: str = "little") -> int:
     elif byte_count == 4:
         return int(struct.unpack(f"{order}I", raw[:4])[0])
     else:
-        return int.from_bytes(raw[:byte_count], byteorder=endian.lower(), signed=False)
+        return int.from_bytes(raw[:byte_count], byteorder=byte_order(endian), signed=False)
 
 
 def verify_crc(

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 import pytest
 
@@ -40,7 +39,7 @@ def test_compiled_binaries_smoke_execution(tmp_path):
     """Smoke test compiled standalone executables for startup errors."""
     repo_root = Path(__file__).resolve().parent.parent
     dist_dir = repo_root / "dist"
-    
+
     # Check if dist binaries exist or build them via PyInstaller
     cli_binary = dist_dir / ("omni-uart-cli.exe" if os.name == "nt" else "omni-uart-cli")
     web_binary = dist_dir / ("omni-uart-web.exe" if os.name == "nt" else "omni-uart-web")

@@ -5,13 +5,14 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Tuple
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.codec import CodecError
+from omniuart.core.models import CommandSpec, ProtocolSpec
 from omniuart.core.recorder import SessionRecorder
 from omniuart.core.runner import ScriptRunner, StepStatus
 from omniuart.core.session import CommandBlockedError, ExchangeStatus
@@ -80,7 +81,7 @@ def get_protocol_spec(identifier: str) -> Dict[str, Any]:
     spec = catalog.get_protocol(identifier)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
-    
+
     tag_groups: Dict[str, List[str]] = {}
     for cmd in spec.commands:
         tags = cmd.tags if cmd.tags else ["general"]
@@ -134,7 +135,7 @@ def serial_status() -> Dict[str, Any]:
     return {"connection": connection.state()}
 
 
-def _resolve(identifier: str, command: str):
+def _resolve(identifier: str, command: str) -> Tuple[ProtocolSpec, CommandSpec]:
     spec = catalog.get_protocol(identifier)
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
@@ -188,7 +189,7 @@ async def send_command(identifier: str, req: CommandRequest) -> Any:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     await _publish(temp.events)
 
-    body = {
+    body: Dict[str, Any] = {
         "status": "success" if exchange.ok else "failed",
         "protocol": spec.metadata.name,
         "command": cmd.name,

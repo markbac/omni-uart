@@ -69,7 +69,11 @@ jobs:
 
       - name: Run Ruff Linter
         run: |
-          ruff check . || true
+          ruff check .
+
+      - name: Run mypy
+        run: |
+          mypy src
 
       - name: Validate Example Protocols with OmniUART Linter
         run: |
@@ -97,10 +101,6 @@ jobs:
                   print(f'Validated script: {s.name}')
           "
 
-      - name: Run Vale & Documentation Style Checker
-        run: |
-          python scripts/check_docs.py || true
-
   test:
     name: Test Suite Matrix
     runs-on: ${{ matrix.os }}
@@ -108,6 +108,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         python-version: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.13"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

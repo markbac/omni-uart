@@ -144,7 +144,7 @@ class OmniUARTDesktopApp(tk.Tk):
         except tk.TclError:  # window destroyed
             self._pump_id = None
 
-    def _watch(self, future: "Future[Any]", on_done: Callable[[Future], None]) -> None:
+    def _watch(self, future: "Future[Any]", on_done: Callable[["Future[Any]"], None]) -> None:
         future.add_done_callback(lambda f: self._post(lambda: on_done(f)))
 
     def destroy(self) -> None:
@@ -187,7 +187,7 @@ class OmniUARTDesktopApp(tk.Tk):
             return
         self._watch(future, lambda f: self._connection_done(True, config, f))
 
-    def _connection_done(self, wanted: bool, config: Dict[str, Any], future: Future) -> None:
+    def _connection_done(self, wanted: bool, config: Dict[str, Any], future: "Future[Any]") -> None:
         error = future.exception()
         if wanted and error is None:
             self.connection_config = config
@@ -256,7 +256,7 @@ class OmniUARTDesktopApp(tk.Tk):
         self._watch(future, lambda f: self._send_done(label, f))
         return future
 
-    def _send_done(self, label: str, future: Future) -> None:
+    def _send_done(self, label: str, future: "Future[Any]") -> None:
         if future.cancelled():
             return
         error = future.exception()
@@ -292,7 +292,7 @@ class OmniUARTDesktopApp(tk.Tk):
         self.comms_view.log("TX", data, label)
         self._watch(future, lambda f: self._raw_done(label, f))
 
-    def _raw_done(self, label: str, future: Future) -> None:
+    def _raw_done(self, label: str, future: "Future[Any]") -> None:
         error = future.exception()
         if error is not None:
             self._report_error(f"'{label}' failed", error)
@@ -317,7 +317,7 @@ class OmniUARTDesktopApp(tk.Tk):
             return None
         future = self.device.run_script(script, spec, on_step=lambda r: self._post(lambda: on_step(r)))
 
-        def finished(f: Future) -> None:
+        def finished(f: "Future[Any]") -> None:
             if f.cancelled():
                 on_done(None, None, True)
             else:

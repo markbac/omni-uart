@@ -10,11 +10,11 @@ import asyncio
 import logging
 import random
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional
 
 from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec, validate_fields
 from omniuart.core.crc import calculate_crc
-from omniuart.core.models import CommandSpec, FramingConfig, ProtocolMeta, ProtocolSpec, SerialConfig, load_protocol
+from omniuart.core.models import CommandSpec, FramingConfig, FramingType, ProtocolMeta, ProtocolSpec, SerialConfig
 from omniuart.core.transport import AsyncTransport, VirtualTransport
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class BaseDeviceSimulator:
         self.fault_drop_rate = fault_drop_rate
 
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: Optional[asyncio.Task[None]] = None
         self._state: Dict[str, Any] = {"power": True, "rx_count": 0, "rx_errors": 0, "tx_count": 0}
         self.codec = FrameCodec(spec)
 
@@ -196,7 +196,7 @@ class ATModemSimulator(BaseDeviceSimulator):
             spec = ProtocolSpec(
                 metadata=ProtocolMeta(name="Virtual AT Modem", version="1.0.0"),
                 serial_config=SerialConfig(baudrate=115200),
-                framing=FramingConfig(type="delimited", prefix="AT", suffix="\r\n"),
+                framing=FramingConfig(type=FramingType.DELIMITED, prefix="AT", suffix="\r\n"),
                 commands=[],
             )
         super().__init__(spec=spec, transport=transport)
@@ -248,14 +248,14 @@ class IoTSensorSimulator(BaseDeviceSimulator):
             spec = ProtocolSpec(
                 metadata=ProtocolMeta(name="Virtual IoT Sensor Node", version="1.0.0"),
                 serial_config=SerialConfig(baudrate=115200),
-                framing=FramingConfig(type="binary"),
+                framing=FramingConfig(type=FramingType.BINARY),
                 commands=[],
             )
         super().__init__(spec=spec, transport=transport)
         self.telemetry_interval_sec = telemetry_interval_sec
         self.temperature_c = 22.5
         self.humidity_pct = 45.0
-        self._telemetry_task: Optional[asyncio.Task] = None
+        self._telemetry_task: Optional[asyncio.Task[None]] = None
 
     async def start(self) -> None:
         await super().start()
@@ -283,7 +283,7 @@ class IoTSensorSimulator(BaseDeviceSimulator):
             t_frac = int((self.temperature_c - t_int) * 100)
             h_int = int(self.humidity_pct)
             frame = bytearray([0x55, 0xAA, 0x81, t_int & 0xFF, t_frac & 0xFF, h_int & 0xFF])
-            crc = calculate_crc(frame[2:], "crc16_modbus")
+            crc = calculate_crc(bytes(frame[2:]), "crc16_modbus")
             frame.extend(crc.to_bytes(2, "little"))
 
             if self.transport and self.transport.is_open:
@@ -303,7 +303,7 @@ class ModbusRtuSimulator(BaseDeviceSimulator):
             spec = ProtocolSpec(
                 metadata=ProtocolMeta(name="Virtual Modbus RTU Slave", version="1.0.0"),
                 serial_config=SerialConfig(baudrate=9600),
-                framing=FramingConfig(type="binary"),
+                framing=FramingConfig(type=FramingType.BINARY),
                 commands=[],
             )
         super().__init__(spec=spec, transport=transport)

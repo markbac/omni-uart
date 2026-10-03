@@ -354,7 +354,7 @@ def check_cross_file_anchors(files: list[Path], rules: list[StructureRule]) -> l
             for base_slug, occs in by_slug.items():
                 if len(occs) > 1:
                     first_file = occs[0][0]
-                    for path, line, resolved in occs[1:]:
+                    for path, line, _resolved in occs[1:]:
                         msg = rule.collision_message.format(target=base_slug, other_file=first_file.name)
                         findings.append(Finding(path, line, rule.collision_severity or rule.severity,
                                                  rule.id, msg))
@@ -928,4 +928,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)
-        raise SystemExit(130)
+        raise SystemExit(130) from None

@@ -9,7 +9,7 @@ import json
 from typing import Any, Dict
 import yaml
 
-from omniuart.core.models import ProtocolSpec, load_protocol
+from omniuart.core.models import ProtocolSpec
 
 
 def export_asyncapi_dict(spec: ProtocolSpec) -> Dict[str, Any]:
@@ -58,7 +58,7 @@ def export_asyncapi_dict(spec: ProtocolSpec) -> Dict[str, Any]:
     for cmd in spec.commands:
         cmd_id_str = f"0x{cmd.id:02X}" if isinstance(cmd.id, int) else str(cmd.id)
         channel_name = f"omniuart/cmd/{cmd.name}"
-        
+
         # Publish operation (Client -> MCU)
         cmd_schema_properties: Dict[str, Any] = {
             "command_id": {"type": "integer", "const": cmd.id, "description": f"Opcode ID for {cmd.name}"}
