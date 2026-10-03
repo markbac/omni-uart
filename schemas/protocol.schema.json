@@ -28,7 +28,7 @@
       "type": "object",
       "required": ["baudrate"],
       "properties": {
-        "baudrate": { "type": "integer", "enum": [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600] },
+        "baudrate": { "type": "integer", "minimum": 1, "examples": [9600, 115200, 250000] },
         "bytesize": { "type": "integer", "enum": [5, 6, 7, 8], "default": 8 },
         "parity": { "type": "string", "enum": ["none", "even", "odd", "mark", "space"], "default": "none" },
         "stopbits": { "type": "number", "enum": [1, 1.5, 2], "default": 1 },

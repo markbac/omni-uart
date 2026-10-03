@@ -79,6 +79,26 @@ def _map_algorithm_name(algo: str) -> str:
     return mappings.get(algo_clean, algo_clean)
 
 
+def _parse_baud(value: Any, source_name: str) -> int:
+    """The baud rate declared by a kit protocol: an integer, a numeric string, or a list (the first entry wins).
+
+    Never substitutes a different rate: a value that is not a positive integer raises ``ValueError``.
+    """
+    candidate = value[0] if isinstance(value, list) and value else value
+    if isinstance(candidate, bool):
+        raise ValueError(f"{source_name}: invalid baudRate {value!r}")
+    if isinstance(candidate, str):
+        candidate = candidate.strip()
+        if not candidate.isdigit():
+            raise ValueError(f"{source_name}: invalid baudRate {value!r}")
+        candidate = int(candidate)
+    if isinstance(candidate, float) and candidate.is_integer():
+        candidate = int(candidate)
+    if not isinstance(candidate, int) or candidate <= 0:
+        raise ValueError(f"{source_name}: invalid baudRate {value!r}")
+    return candidate
+
+
 def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) -> ProtocolSpec:
     """Parse a uart-interface-schema-kit dictionary into an OmniUART ProtocolSpec.
     
@@ -104,15 +124,7 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
 
     # Extract serial physical layer config
     phys = data.get("physicalLayer", {})
-    baud = phys.get("baudRate", 115200)
-    if isinstance(baud, list):
-        # Pick a standard baudrate from the list or default to 115200
-        valid_bauds = [b for b in baud if b in {9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600}]
-        baudrate = valid_bauds[0] if valid_bauds else 115200
-    elif isinstance(baud, int) and baud in {9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600}:
-        baudrate = baud
-    else:
-        baudrate = 115200
+    baudrate = _parse_baud(phys.get("baudRate", 115200), source_name)
 
     bytesize = phys.get("dataBits", 8)
     parity_val = str(phys.get("parity", "none")).lower()
