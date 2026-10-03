@@ -56,6 +56,13 @@ For RS-485 transceivers requiring Direction Control (DE/RE pins):
 - Custom RTS toggle before and after write operations.
 - Settling delay configuration (pre-transmission and post-transmission guard times) to prevent bus collisions.
 
+### 3.2a Read and timeout contract (all transports)
+Every transport (`VirtualTransport`, `PipeTransport`, `HardwareSerialTransport`, `PtyTransport`, `WindowsNamedPipeTransport`) honours the same `read(size, timeout_ms)` contract, checked by `tests/test_transport_contract.py`:
+- `timeout_ms=None` waits until `size` bytes arrive, `0` is a non-blocking poll, and any other value is an absolute deadline that arriving chunks do not restart.
+- On timeout the bytes that arrived are returned, never discarded. Bytes beyond `size` stay buffered for the next read.
+- A cancelled read loses no data. `HardwareSerialTransport` reads in 50 ms slices, so a cancelled caller never leaves a thread blocked for the whole timeout, and bytes read by an orphaned slice are kept for the next read.
+- `set_pin_state` accepts `dtr` and `rts` (case-insensitive) and raises `ValueError` for any other name, on every transport. `write` on a hardware port flushes.
+
 ### 3.3 PTY Transport (Linux and macOS)
 `PtyTransport` is a real, event-loop driven transport over a POSIX pseudo-terminal descriptor, and `PtySerialPair` allocates a linked master/slave pair:
 - **Endpoints**: `PtySerialPair().host` is the master side and `.device` the slave side. `slave_pts_path` (for example `/dev/pts/7`) is the slave device node, which other programs, or `HardwareSerialTransport`, can open like a serial port. `PtyTransport(path=...)` opens such a node itself.
