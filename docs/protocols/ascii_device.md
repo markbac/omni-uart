@@ -13,7 +13,7 @@ Delimited ASCII command protocol (AT-command style)
 
 ## Command Catalog & Message Signatures
 
-### Category: GENERAL
+### Category: DASHBOARD
 
 #### `TEST` (Command ID: `TEST`) - Check modem connectivity
 
@@ -22,6 +22,8 @@ Delimited ASCII command protocol (AT-command style)
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
 | `result` | `string` | - |
+
+### Category: GENERAL
 
 #### `SET_POWER` (Command ID: `POWER`) - Set output transmission power level
 

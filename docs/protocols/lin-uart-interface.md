@@ -3,7 +3,7 @@
 **Version**: `2.0`  
 **Physical Layer**: `115200 bps, 8N1.0`  
 **Framing**: `binary`  
-**Integrity Algorithm**: `checksum_8`  
+**Integrity Algorithm**: `sum8`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/lin-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/lin-uart-interface.html)
 
@@ -44,7 +44,7 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/WheelSpeedFrame:
     publish:

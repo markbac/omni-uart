@@ -19,7 +19,6 @@ Modbus over serial, RTU transmission mode. Frame boundaries are marked by line s
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `slaveAddress` | `uint8` | - | - | - |
-| `functionCode` | `enum` | - | - | `{'1': 'ReadCoils', '2': 'ReadDiscreteInputs', '3': 'ReadHoldingRegisters', '4': 'ReadInputRegisters', '6': 'WriteSingleRegister', '16': 'WriteMultipleRegisters'}` |
 | `startAddress` | `uint16` | - | - | - |
 | `quantity` | `uint16` | coils | - | - |
 
@@ -30,7 +29,6 @@ Modbus over serial, RTU transmission mode. Frame boundaries are marked by line s
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `slaveAddress` | `uint8` | - | - | - |
-| `functionCode` | `enum` | - | - | `{'1': 'ReadCoils', '2': 'ReadDiscreteInputs', '3': 'ReadHoldingRegisters', '4': 'ReadInputRegisters', '6': 'WriteSingleRegister', '16': 'WriteMultipleRegisters'}` |
 | `startAddress` | `uint16` | - | - | - |
 | `quantity` | `uint16` | inputs | - | - |
 
@@ -41,7 +39,6 @@ Modbus over serial, RTU transmission mode. Frame boundaries are marked by line s
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `slaveAddress` | `uint8` | - | - | - |
-| `functionCode` | `enum` | - | - | `{'1': 'ReadCoils', '2': 'ReadDiscreteInputs', '3': 'ReadHoldingRegisters', '4': 'ReadInputRegisters', '6': 'WriteSingleRegister', '16': 'WriteMultipleRegisters'}` |
 | `startAddress` | `uint16` | - | - | - |
 | `quantity` | `uint16` | registers | - | - |
 
@@ -52,7 +49,6 @@ Modbus over serial, RTU transmission mode. Frame boundaries are marked by line s
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `slaveAddress` | `uint8` | - | - | - |
-| `functionCode` | `enum` | - | - | `{'1': 'ReadCoils', '2': 'ReadDiscreteInputs', '3': 'ReadHoldingRegisters', '4': 'ReadInputRegisters', '6': 'WriteSingleRegister', '16': 'WriteMultipleRegisters'}` |
 | `startAddress` | `uint16` | - | - | - |
 | `quantity` | `uint16` | registers | - | - |
 
@@ -63,7 +59,6 @@ Modbus over serial, RTU transmission mode. Frame boundaries are marked by line s
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `slaveAddress` | `uint8` | - | - | - |
-| `functionCode` | `enum` | - | - | `{'1': 'ReadCoils', '2': 'ReadDiscreteInputs', '3': 'ReadHoldingRegisters', '4': 'ReadInputRegisters', '6': 'WriteSingleRegister', '16': 'WriteMultipleRegisters'}` |
 | `startAddress` | `uint16` | - | - | - |
 | `quantity` | `uint16` | registers | - | - |
 
@@ -74,7 +69,6 @@ Modbus over serial, RTU transmission mode. Frame boundaries are marked by line s
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `slaveAddress` | `uint8` | - | - | - |
-| `functionCode` | `enum` | - | - | `{'1': 'ReadCoils', '2': 'ReadDiscreteInputs', '3': 'ReadHoldingRegisters', '4': 'ReadInputRegisters', '6': 'WriteSingleRegister', '16': 'WriteMultipleRegisters'}` |
 | `registerAddress` | `uint16` | - | - | - |
 | `value` | `uint16` | - | - | - |
 
@@ -85,7 +79,6 @@ Modbus over serial, RTU transmission mode. Frame boundaries are marked by line s
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `slaveAddress` | `uint8` | - | - | - |
-| `functionCode` | `enum` | - | - | `{'1': 'ReadCoils', '2': 'ReadDiscreteInputs', '3': 'ReadHoldingRegisters', '4': 'ReadInputRegisters', '6': 'WriteSingleRegister', '16': 'WriteMultipleRegisters'}` |
 | `startAddress` | `uint16` | - | - | - |
 | `quantity` | `uint16` | registers | - | - |
 | `byteCount` | `uint8` | - | - | - |
@@ -181,8 +174,6 @@ components:
           description: Opcode ID for ReadCoilsRequest
         slaveAddress:
           type: integer
-        functionCode:
-          type: integer
         startAddress:
           type: integer
         quantity:
@@ -197,8 +188,6 @@ components:
           const: 2
           description: Opcode ID for ReadDiscreteInputsRequest
         slaveAddress:
-          type: integer
-        functionCode:
           type: integer
         startAddress:
           type: integer
@@ -215,8 +204,6 @@ components:
           description: Opcode ID for ReadHoldingRegistersRequest
         slaveAddress:
           type: integer
-        functionCode:
-          type: integer
         startAddress:
           type: integer
         quantity:
@@ -231,8 +218,6 @@ components:
           const: 4
           description: Opcode ID for ReadInputRegistersRequest
         slaveAddress:
-          type: integer
-        functionCode:
           type: integer
         startAddress:
           type: integer
@@ -249,8 +234,6 @@ components:
           description: Opcode ID for WriteSingleRegisterRequest
         slaveAddress:
           type: integer
-        functionCode:
-          type: integer
         registerAddress:
           type: integer
         value:
@@ -264,8 +247,6 @@ components:
           const: 16
           description: Opcode ID for WriteMultipleRegistersRequest
         slaveAddress:
-          type: integer
-        functionCode:
           type: integer
         startAddress:
           type: integer

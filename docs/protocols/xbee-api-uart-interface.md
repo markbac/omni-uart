@@ -3,7 +3,7 @@
 **Version**: `S2C Zigbee firmware`  
 **Physical Layer**: `115200 bps, 8N1.0`  
 **Framing**: `binary`  
-**Integrity Algorithm**: `checksum_8`  
+**Integrity Algorithm**: `sum8`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/xbee-api-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/xbee-api-uart-interface.html)
 
@@ -14,7 +14,7 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 
 ### Category: XBEE/AT_COMMAND
 
-#### `SetChannelATCommand` (Command ID: `CH`) - Frame type 0x08: local AT Command. The AT command here is 'CH' (RF channel/frequency), one of 16 channels in the 2.4GHz band.
+#### `SetChannelATCommand` (Command ID: `0x08`) - Frame type 0x08: local AT Command. The AT command here is 'CH' (RF channel/frequency), one of 16 channels in the 2.4GHz band.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
@@ -25,7 +25,7 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 
 ### Category: DASHBOARD
 
-#### `SetChannelATCommand` (Command ID: `CH`) - Frame type 0x08: local AT Command. The AT command here is 'CH' (RF channel/frequency), one of 16 channels in the 2.4GHz band.
+#### `SetChannelATCommand` (Command ID: `0x08`) - Frame type 0x08: local AT Command. The AT command here is 'CH' (RF channel/frequency), one of 16 channels in the 2.4GHz band.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
@@ -61,6 +61,17 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 | `applyOptions` | `bytes` | - | - | - |
 | `atCommand` | `bytes` | - | - | - |
 
+## Device-Initiated Messages
+
+#### `ATCommandResponse` (Message ID: `0x88`)
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `frameType` | `enum` | - |
+| `frameId` | `bytes` | - |
+| `atCommand` | `bytes` | - |
+| `commandStatus` | `bytes` | - |
+
 ## Formal AsyncAPI 2.6.0 Specification
 
 ```yaml
@@ -84,11 +95,11 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/SetChannelATCommand:
     publish:
-      summary: 'Send command SetChannelATCommand (ID: CH)'
+      summary: 'Send command SetChannelATCommand (ID: 0x08)'
       description: 'Frame type 0x08: local AT Command. The AT command here is ''CH''
         (RF channel/frequency), one of 16 channels in the 2.4GHz band.'
       message:
@@ -122,7 +133,7 @@ components:
       properties:
         command_id:
           type: integer
-          const: CH
+          const: 8
           description: Opcode ID for SetChannelATCommand
         frameType:
           type: integer

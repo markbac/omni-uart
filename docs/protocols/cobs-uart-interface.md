@@ -12,9 +12,14 @@ Consistent Overhead Byte Stuffing: the encoding itself guarantees the delimiter 
 
 ## Command Catalog & Message Signatures
 
-### Category: GENERAL
+## Device-Initiated Messages
 
-#### `ping` (Command ID: `0x01`)
+#### `SensorReading` (Message ID: `SensorReading`)
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `sensorId` | `bytes` | - |
+| `value` | `bytes` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -41,26 +46,9 @@ servers:
         stopBits: 1.0
         framingType: binary
         integrity: crc16_modbus
-channels:
-  omniuart/cmd/ping:
-    publish:
-      summary: 'Send command ping (ID: 0x01)'
-      description: Dispatch ping frame to microcontroller over serial line
-      message:
-        name: ping_Message
-        title: ping Command
-        payload:
-          $ref: '#/components/schemas/ping_Request'
+channels: {}
 components:
   messages: {}
-  schemas:
-    ping_Request:
-      type: object
-      properties:
-        command_id:
-          type: integer
-          const: 1
-          description: Opcode ID for ping
-      description: Command payload for ping
+  schemas: {}
 
 ```

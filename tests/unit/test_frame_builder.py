@@ -10,7 +10,7 @@ from omniuart.core.catalog import CatalogManager  # noqa: E402
 from omniuart.core.codec import CodecError  # noqa: E402
 from omniuart.core.crc import calculate_crc  # noqa: E402
 from omniuart.core.models import load_protocol  # noqa: E402
-from omniuart.desktop.views import build_frame_payload  # noqa: E402
+from omniuart.core.codec import build_frame_payload  # noqa: E402
 
 EXAMPLES = Path(__file__).resolve().parents[2] / "examples" / "protocols"
 

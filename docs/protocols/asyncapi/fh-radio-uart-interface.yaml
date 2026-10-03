@@ -21,7 +21,7 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: crc_16_ccitt_false
+        integrity: crc16_ccitt_false
 channels:
   omniuart/cmd/SetNetId:
     publish:

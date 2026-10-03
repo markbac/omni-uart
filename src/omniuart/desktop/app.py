@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from omniuart.core.background import VIRTUAL_PORT, BackgroundDevice
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.codec import CodecError
+from omniuart.core.codec import CodecError, build_frame_payload
 from omniuart.core.models import ProtocolSpec, ScriptSpec, SerialConfig
 from omniuart.core.session import Exchange, ExchangeStatus
 from omniuart.desktop.views import (
@@ -22,7 +22,6 @@ from omniuart.desktop.views import (
     ConnectionToolbar,
     DashboardView,
     TelemetryPlotterView,
-    build_frame_payload,
 )
 
 logger = logging.getLogger(__name__)

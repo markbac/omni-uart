@@ -14,7 +14,7 @@ File transfer nested inside a normal MAVLink message: every FTP packet, of whate
 
 ### Category: GENERAL
 
-#### `FTP_OpenFileRO` (Command ID: `0x00`) - Opens a file for reading; the ack (FTP_Ack) returns a session id that scopes every subsequent read against this open file.
+#### `FTP_OpenFileRO` (Command ID: `0x04`) - Opens a file for reading; the ack (FTP_Ack) returns a session id that scopes every subsequent read against this open file.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
@@ -32,9 +32,7 @@ File transfer nested inside a normal MAVLink message: every FTP packet, of whate
 | `offset` | `bytes` | - | - | - |
 | `path` | `bytes` | - | - | - |
 
-### Category: DASHBOARD
-
-#### `FTP_BurstReadFile` (Command ID: `0x00`) - Requests the server stream the file from offset onward, without individual acks per chunk, until burstComplete is set on the final FTP_Ack.
+#### `FTP_BurstReadFile` (Command ID: `0x0F`) - Requests the server stream the file from offset onward, without individual acks per chunk, until burstComplete is set on the final FTP_Ack.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
@@ -50,6 +48,44 @@ File transfer nested inside a normal MAVLink message: every FTP packet, of whate
 | `burstComplete` | `bytes` | - | - | - |
 | `padding` | `bytes` | - | - | - |
 | `offset` | `bytes` | - | - | - |
+
+## Device-Initiated Messages
+
+#### `FTP_Ack` (Message ID: `0x80`) - Every burst-read data packet is this same message, distinguished only by offset (where this chunk goes) and burstComplete (whether more are coming) -- there is no separate 'initial'/'follow-on' message name the way G460 or XMODEM have.
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `seq` | `uint8` | - |
+| `sysId` | `uint8` | - |
+| `compId` | `uint8` | - |
+| `msgId` | `uint8` | - |
+| `seqNumber` | `bytes` | - |
+| `session` | `bytes` | - |
+| `opcode` | `enum` | - |
+| `size` | `bytes` | - |
+| `reqOpcode` | `bytes` | - |
+| `burstComplete` | `bytes` | - |
+| `padding` | `bytes` | - |
+| `offset` | `bytes` | - |
+| `data` | `bytes` | - |
+
+#### `FTP_Nak` (Message ID: `0x81`)
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `seq` | `uint8` | - |
+| `sysId` | `uint8` | - |
+| `compId` | `uint8` | - |
+| `msgId` | `uint8` | - |
+| `seqNumber` | `bytes` | - |
+| `session` | `bytes` | - |
+| `opcode` | `enum` | - |
+| `size` | `bytes` | - |
+| `reqOpcode` | `bytes` | - |
+| `burstComplete` | `bytes` | - |
+| `padding` | `bytes` | - |
+| `offset` | `bytes` | - |
+| `errorCode` | `bytes` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -79,7 +115,7 @@ servers:
 channels:
   omniuart/cmd/FTP_OpenFileRO:
     publish:
-      summary: 'Send command FTP_OpenFileRO (ID: 0x00)'
+      summary: 'Send command FTP_OpenFileRO (ID: 0x04)'
       description: Opens a file for reading; the ack (FTP_Ack) returns a session id
         that scopes every subsequent read against this open file.
       message:
@@ -89,7 +125,7 @@ channels:
           $ref: '#/components/schemas/FTP_OpenFileRO_Request'
   omniuart/cmd/FTP_BurstReadFile:
     publish:
-      summary: 'Send command FTP_BurstReadFile (ID: 0x00)'
+      summary: 'Send command FTP_BurstReadFile (ID: 0x0F)'
       description: Requests the server stream the file from offset onward, without
         individual acks per chunk, until burstComplete is set on the final FTP_Ack.
       message:
@@ -105,7 +141,7 @@ components:
       properties:
         command_id:
           type: integer
-          const: 0
+          const: 4
           description: Opcode ID for FTP_OpenFileRO
         seq:
           type: integer
@@ -140,7 +176,7 @@ components:
       properties:
         command_id:
           type: integer
-          const: 0
+          const: 15
           description: Opcode ID for FTP_BurstReadFile
         seq:
           type: integer

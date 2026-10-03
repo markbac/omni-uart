@@ -3,7 +3,7 @@
 **Version**: `DNP3-2013`  
 **Physical Layer**: `9600 bps, 8N1.0`  
 **Framing**: `binary`  
-**Integrity Algorithm**: `crc_16_dnp`  
+**Integrity Algorithm**: `crc16_dnp`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/dnp3-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/dnp3-uart-interface.html)
 
@@ -48,7 +48,7 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: crc_16_dnp
+        integrity: crc16_dnp
 channels:
   omniuart/cmd/DataLinkFrame:
     publish:

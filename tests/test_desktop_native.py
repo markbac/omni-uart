@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import os
 import time
-import tkinter as tk
-
 import pytest
+
+tk = pytest.importorskip("tkinter")
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.models import CommandSafety, ProtocolSpec
 from omniuart.core.transport import list_available_ports
 from omniuart.desktop.app import OmniUARTDesktopApp
-from omniuart.desktop.views import build_frame_payload
+from omniuart.core.codec import build_frame_payload
 
 
 def test_build_frame_payload(tmp_path):

@@ -1,9 +1,9 @@
 # Hardware Protocol Specification: NMEA 0183
 
 **Version**: `4.11`  
-**Physical Layer**: `115200 bps, 8N1.0`  
+**Physical Layer**: `4800 bps, 8N1.0`  
 **Framing**: `delimited`  
-**Integrity Algorithm**: `xor8`  
+**Integrity Algorithm**: `xor`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/nmea0183-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/nmea0183-uart-interface.html)
 
@@ -12,9 +12,22 @@ ASCII, delimiter-framed sentence protocol used by GPS/marine navigation equipmen
 
 ## Command Catalog & Message Signatures
 
-### Category: GENERAL
+## Device-Initiated Messages
 
-#### `ping` (Command ID: `0x01`)
+#### `GGA` (Message ID: `GPGGA`) - Global Positioning System Fix Data, e.g. $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `utcTime` | `bytes` | - |
+| `latitude` | `bytes` | - |
+| `latitudeHemisphere` | `bytes` | - |
+| `longitude` | `bytes` | - |
+| `longitudeHemisphere` | `bytes` | - |
+| `fixQuality` | `bytes` | - |
+| `satellitesUsed` | `bytes` | - |
+| `hdop` | `bytes` | - |
+| `altitude` | `bytes` | - |
+| `altitudeUnits` | `bytes` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -30,37 +43,20 @@ info:
     name: Mark Bacon
 servers:
   serial_link:
-    url: serial://tty/115200
+    url: serial://tty/4800
     protocol: serial
-    description: Physical UART Transport (115200 bps, 8N1.0)
+    description: Physical UART Transport (4800 bps, 8N1.0)
     bindings:
       serial:
-        baudRate: 115200
+        baudRate: 4800
         dataBits: 8
         parity: none
         stopBits: 1.0
         framingType: delimited
-        integrity: xor8
-channels:
-  omniuart/cmd/ping:
-    publish:
-      summary: 'Send command ping (ID: 0x01)'
-      description: Dispatch ping frame to microcontroller over serial line
-      message:
-        name: ping_Message
-        title: ping Command
-        payload:
-          $ref: '#/components/schemas/ping_Request'
+        integrity: xor
+channels: {}
 components:
   messages: {}
-  schemas:
-    ping_Request:
-      type: object
-      properties:
-        command_id:
-          type: integer
-          const: 1
-          description: Opcode ID for ping
-      description: Command payload for ping
+  schemas: {}
 
 ```

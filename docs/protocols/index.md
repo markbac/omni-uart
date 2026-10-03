@@ -29,7 +29,7 @@ Below is the complete catalog of auto-discovered hardware UART protocols with de
 
 ### [COBS-framed sensor stream](cobs-uart-interface.md) (v1.0)
 - **Description**: Consistent Overhead Byte Stuffing: the encoding itself guarantees the delimiter byte (0x00) never appears in the encoded data, so -- unlike delimiter-framed -- no escapeByte is needed at all.
-- **Framing**: `BINARY` | **Baudrate**: `115200 bps` | **Commands**: `1`
+- **Framing**: `BINARY` | **Baudrate**: `115200 bps` | **Commands**: `0`
 - **AsyncAPI**: [YAML Spec](asyncapi/cobs-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/cobs-uart-interface.html)
 
 ### [Serial console (VT100-style CLI), software flow control](console-xonxoff-uart-interface.md) (villustrative)
@@ -44,7 +44,7 @@ Below is the complete catalog of auto-discovered hardware UART protocols with de
 
 ### [DMX512](dmx512-uart-interface.md) (vUSITT DMX512-A)
 - **Description**: Unidirectional lighting-control broadcast. Frame boundary is a UART break condition (an extended low period), not a byte value, not silence, and not an identifier lookup -- none of which this schema's framing styles model precisely.
-- **Framing**: `BINARY` | **Baudrate**: `115200 bps` | **Commands**: `1`
+- **Framing**: `BINARY` | **Baudrate**: `250000 bps` | **Commands**: `1`
 - **AsyncAPI**: [YAML Spec](asyncapi/dmx512-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/dmx512-uart-interface.html)
 
 ### [DNP3 (Distributed Network Protocol), serial data link layer](dnp3-uart-interface.md) (vDNP3-2013)
@@ -84,12 +84,12 @@ Below is the complete catalog of auto-discovered hardware UART protocols with de
 
 ### [M-Bus (EN 13757-2/3), long/control frame](mbus-long-uart-interface.md) (vEN 13757-2)
 - **Description**: START L L START C A CI DATA CHECKSUM STOP -- the length is sent twice and the start byte repeats after it, both as on-wire redundancy checks; a STOP byte closes the frame after the checksum too.
-- **Framing**: `BINARY` | **Baudrate**: `9600 bps` | **Commands**: `1`
+- **Framing**: `BINARY` | **Baudrate**: `300 bps` | **Commands**: `0`
 - **AsyncAPI**: [YAML Spec](asyncapi/mbus-long-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/mbus-long-uart-interface.html)
 
 ### [M-Bus (EN 13757-2/3), short frame](mbus-short-uart-interface.md) (vEN 13757-2)
 - **Description**: Utility meter readout bus. 8E1 -- even parity, a format neither G460 nor any earlier test used -- at one of several fixed baud rates the spec enumerates (300/600/1200/2400/4800/9600).
-- **Framing**: `DELIMITED` | **Baudrate**: `9600 bps` | **Commands**: `1`
+- **Framing**: `DELIMITED` | **Baudrate**: `300 bps` | **Commands**: `1`
 - **AsyncAPI**: [YAML Spec](asyncapi/mbus-short-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/mbus-short-uart-interface.html)
 
 ### [Generic MCU normal operation (illustrative)](mcu-normal-mode-uart-interface.md) (villustrative)
@@ -114,7 +114,7 @@ Below is the complete catalog of auto-discovered hardware UART protocols with de
 
 ### [NMEA 0183](nmea0183-uart-interface.md) (v4.11)
 - **Description**: ASCII, delimiter-framed sentence protocol used by GPS/marine navigation equipment. No commands/responses in the request-reply sense -- the device streams sentences unsolicited.
-- **Framing**: `DELIMITED` | **Baudrate**: `115200 bps` | **Commands**: `1`
+- **Framing**: `DELIMITED` | **Baudrate**: `4800 bps` | **Commands**: `0`
 - **AsyncAPI**: [YAML Spec](asyncapi/nmea0183-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/nmea0183-uart-interface.html)
 
 ### [PPP (HDLC-like async framing, RFC 1662)](ppp-uart-interface.md) (vRFC 1662)
@@ -149,7 +149,7 @@ Below is the complete catalog of auto-discovered hardware UART protocols with de
 
 ### [u-blox UBX](ubx-uart-interface.md) (v34)
 - **Description**: GPS/GNSS receiver binary protocol. class+id sit between the sync pattern and the length field -- before the length-counted region, unlike MAVLink's after.
-- **Framing**: `BINARY` | **Baudrate**: `9600 bps` | **Commands**: `6`
+- **Framing**: `BINARY` | **Baudrate**: `4800 bps` | **Commands**: `6`
 - **AsyncAPI**: [YAML Spec](asyncapi/ubx-uart-interface.yaml) | [Interactive HTML Viewer](asyncapi/ubx-uart-interface.html)
 
 ### [XBee API Mode](xbee-api-uart-interface.md) (vS2C Zigbee firmware)

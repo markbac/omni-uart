@@ -1,7 +1,7 @@
 # Hardware Protocol Specification: DMX512
 
 **Version**: `USITT DMX512-A`  
-**Physical Layer**: `115200 bps, 8N2.0`  
+**Physical Layer**: `250000 bps, 8N2.0`  
 **Framing**: `binary`  
 **Integrity Algorithm**: `none`  
 
@@ -35,12 +35,12 @@ info:
     name: Mark Bacon
 servers:
   serial_link:
-    url: serial://tty/115200
+    url: serial://tty/250000
     protocol: serial
-    description: Physical UART Transport (115200 bps, 8N2.0)
+    description: Physical UART Transport (250000 bps, 8N2.0)
     bindings:
       serial:
-        baudRate: 115200
+        baudRate: 250000
         dataBits: 8
         parity: none
         stopBits: 2.0

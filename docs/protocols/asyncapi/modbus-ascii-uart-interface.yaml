@@ -18,7 +18,7 @@ servers:
         parity: even
         stopBits: 1.0
         framingType: delimited
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/ReadHoldingRegistersRequest:
     publish:
@@ -41,8 +41,6 @@ components:
           const: 3
           description: Opcode ID for ReadHoldingRegistersRequest
         slaveAddress:
-          type: integer
-        functionCode:
           type: integer
         startAddress:
           type: integer

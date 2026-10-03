@@ -436,7 +436,14 @@ def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bo
     """Launch local Uvicorn FastAPI server and open Desktop App window or browser tab."""
     import threading
     import uvicorn
-    from omniuart.ui.desktop import launch_desktop_window
+
+    if mode == "desktop":
+        from omniuart.core.runner import EXIT_INVALID
+        from omniuart.ui.desktop import TKINTER_MISSING_MESSAGE, launch_desktop_window, tkinter_available
+
+        if not tkinter_available():
+            print(f"Error: {TKINTER_MISSING_MESSAGE}", file=sys.stderr)
+            return EXIT_INVALID
 
     # Enforce loopback host safety for security (#131)
     if not host or host in ("0.0.0.0", "::"):

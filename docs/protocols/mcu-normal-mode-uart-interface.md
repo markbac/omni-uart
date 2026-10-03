@@ -3,7 +3,7 @@
 **Version**: `illustrative`  
 **Physical Layer**: `115200 bps, 8N1.0`  
 **Framing**: `binary`  
-**Integrity Algorithm**: `checksum_8`  
+**Integrity Algorithm**: `sum8`  
 
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML](asyncapi/mcu-normal-mode-uart-interface.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/mcu-normal-mode-uart-interface.html)
 
@@ -28,6 +28,15 @@ Minimal stand-in application-mode protocol, existing only to demonstrate a fully
 | `opcode` | `bytes` | - | - | - |
 | `reserved` | `bytes` | - | - | - |
 
+## Device-Initiated Messages
+
+#### `BootloaderEntryConfirmed` (Message ID: `0x01`) - Distinct from an ordinary ack -- confirms the device is about to reset into the bootloader, not that it merely accepted the command.
+
+| Field Name | Type | Unit |
+| :--- | :--- | :--- |
+| `status` | `bytes` | - |
+| `reserved` | `bytes` | - |
+
 ## Formal AsyncAPI 2.6.0 Specification
 
 ```yaml
@@ -51,7 +60,7 @@ servers:
         parity: none
         stopBits: 1.0
         framingType: binary
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/Ping:
     publish:

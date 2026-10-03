@@ -23,7 +23,7 @@ servers:
 channels:
   omniuart/cmd/FTP_OpenFileRO:
     publish:
-      summary: 'Send command FTP_OpenFileRO (ID: 0x00)'
+      summary: 'Send command FTP_OpenFileRO (ID: 0x04)'
       description: Opens a file for reading; the ack (FTP_Ack) returns a session id
         that scopes every subsequent read against this open file.
       message:
@@ -33,7 +33,7 @@ channels:
           $ref: '#/components/schemas/FTP_OpenFileRO_Request'
   omniuart/cmd/FTP_BurstReadFile:
     publish:
-      summary: 'Send command FTP_BurstReadFile (ID: 0x00)'
+      summary: 'Send command FTP_BurstReadFile (ID: 0x0F)'
       description: Requests the server stream the file from offset onward, without
         individual acks per chunk, until burstComplete is set on the final FTP_Ack.
       message:
@@ -49,7 +49,7 @@ components:
       properties:
         command_id:
           type: integer
-          const: 0
+          const: 4
           description: Opcode ID for FTP_OpenFileRO
         seq:
           type: integer
@@ -84,7 +84,7 @@ components:
       properties:
         command_id:
           type: integer
-          const: 0
+          const: 15
           description: Opcode ID for FTP_BurstReadFile
         seq:
           type: integer

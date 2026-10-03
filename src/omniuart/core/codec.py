@@ -609,3 +609,12 @@ class FrameCodec:
                 frame.fields = {p.name: v for p, v in zip(cmd.parameters, values)}
             frames.append(frame)
         return frames, buf
+
+
+def build_frame_payload(spec: ProtocolSpec, cmd: CommandSpec, params: Mapping[str, Any]) -> bytes:
+    """Build the raw wire frame for a command with the shared codec.
+
+    Raises :class:`CodecError` for missing, unknown, out-of-range or otherwise invalid parameters
+    instead of transmitting a guessed value.
+    """
+    return FrameCodec(spec).encode_command(cmd, params)

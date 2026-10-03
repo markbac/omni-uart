@@ -94,7 +94,7 @@ async def test_modbus_rtu_simulator_back_to_back_sequence() -> None:
 async def test_desktop_and_cli_against_simulator() -> None:
     """Smoke test CLI / Desktop payload builder sending AT commands directly to simulator."""
     from omniuart.core.catalog import CatalogManager
-    from omniuart.desktop.views import build_frame_payload
+    from omniuart.core.codec import build_frame_payload
 
     catalog = CatalogManager()
     at_spec = catalog.get_protocol("at-commands-uart-interface.json") or catalog.get_protocol("at-commands-uart-interface.yaml")

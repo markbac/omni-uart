@@ -9,17 +9,17 @@ info:
     name: Mark Bacon
 servers:
   serial_link:
-    url: serial://tty/9600
+    url: serial://tty/300
     protocol: serial
-    description: Physical UART Transport (9600 bps, 8N1.0)
+    description: Physical UART Transport (300 bps, 8N1.0)
     bindings:
       serial:
-        baudRate: 9600
+        baudRate: 300
         dataBits: 8
         parity: even
         stopBits: 1.0
         framingType: delimited
-        integrity: checksum_8
+        integrity: sum8
 channels:
   omniuart/cmd/ShortFrame:
     publish:
