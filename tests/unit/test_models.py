@@ -32,7 +32,7 @@ def test_load_all_example_protocols() -> None:
         assert protocol.metadata.name
         assert protocol.metadata.version
         assert protocol.serial_config.baudrate > 0
-        assert len(protocol.commands) >= 1
+        assert len(protocol.commands) + len(protocol.telemetry) >= 1  # stream-only protocols have no commands
         print(f"Verified protocol: {protocol.metadata.name} (version {protocol.metadata.version})")
 
 

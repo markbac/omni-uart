@@ -319,6 +319,9 @@ telemetry:
 
 ---
 
+### 6.1 Kit protocol import
+When a uart-interface-schema-kit protocol is loaded, its `commands` become commands and its `responses` become telemetry (device-initiated) messages. The kit does not say which request a response answers, so no response is attached to a command. A protocol with no `commands` (NMEA 0183, a COBS sensor stream, the M-Bus long frame) simply has an empty command list; the adapter never invents one. The message id is the constant of the field marked `role: discriminator` (else the first constant field), converted to an integer when it is an integer or a hex or decimal string, otherwise kept as text (an AT command line, an NMEA sentence id). A message without a discriminator constant uses its position as id (commands, with a warning) or its name (responses). Other constant fields remain ordinary fields whose default is the constant. On delimited framing the discriminator is not a parameter, because it is the message text.
+
 ## 7. AsyncAPI 2.6.0 Specification Generation & Tooling
 
 OmniUART natively converts all protocol definitions into formal **AsyncAPI 2.6.0 Specification** documents. The `omniuart.core.asyncapi_exporter` module maps serial hardware characteristics and protocol command schemas directly into event-driven AsyncAPI primitives:

@@ -142,6 +142,19 @@ def format_protocol_help(spec: ProtocolSpec) -> str:
                     rf_unit = f" [{rf.unit}]" if rf.unit else ""
                     lines.append(f"        <- {rf.name}: {rf.type.value}{rf_unit}")
 
+    if not spec.commands:
+        lines.append("  (no host-to-device commands defined)")
+
+    if spec.telemetry:
+        lines.append("\n DEVICE-INITIATED MESSAGES:")
+        lines.append("-" * 70)
+        for msg in spec.telemetry:
+            desc = f" - {msg.description}" if msg.description else ""
+            lines.append(f"    • {msg.name} (ID: {msg.id}){desc}")
+            for f in msg.fields:
+                f_unit = f" [{f.unit}]" if f.unit else ""
+                lines.append(f"        <- {f.name}: {f.type.value}{f_unit}")
+
     lines.append("\n" + "=" * 70)
     return "\n".join(lines)
 

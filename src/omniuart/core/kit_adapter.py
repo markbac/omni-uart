@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import yaml
 
@@ -25,9 +25,6 @@ from omniuart.core.models import (
     SerialConfig,
     TelemetrySpec,
 )
-
-EXCLUDED_PROTOCOLS = {"g460", "g460-uart-interface", "g460-uart-interface.json"}
-
 
 def _map_field_type(base_type: str, size_bytes: Optional[int] = None) -> FieldType:
     """Map generic schema base type and size to OmniUART FieldType."""
@@ -80,6 +77,24 @@ _COVERAGE = {
     "length-to-payload-inclusive": "after_header",
 }
 _TRANSFORMS = {"twosComplement": "twos_complement", "onesComplement": "ones_complement"}
+
+
+def _normalise_id(value: Any) -> Union[int, str]:
+    """A message id as an int where it looks like one (``1``, ``"0x01"``, ``"17"``), else unchanged text."""
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        try:
+            if text.lower().startswith("0x"):
+                return int(text, 16)
+            if text.isdigit():
+                return int(text)
+        except ValueError:
+            pass
+    return value
 
 
 def _first(params: Dict[str, Any], *names: str, default: Any = None) -> Any:
@@ -259,27 +274,42 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
             options=options_dict,
         )
 
-    # Extract commands
-    commands: List[CommandSpec] = []
-    raw_commands = data.get("commands", [])
-    for idx, cmd_data in enumerate(raw_commands):
-        cmd_name = cmd_data.get("name", f"command_{idx}")
-        cmd_id: Union[int, str] = idx
-        params: List[FieldSpec] = []
-
-        fields = cmd_data.get("fields", [])
-        for f in fields:
+    def build_message(msg: Dict[str, Any], index: int, kind: str) -> Tuple[Union[int, str], List[FieldSpec]]:
+        """Message id (the discriminator's constant, else a fallback) and its user-facing fields."""
+        msg_id: Optional[Union[int, str]] = None
+        fields_out: List[FieldSpec] = []
+        raw_fields = msg.get("fields", [])
+        # The discriminator is the field marked as such, else the first constant field. Any other
+        # constant field is an ordinary field whose value defaults to that constant.
+        discriminator = next((i for i, f in enumerate(raw_fields) if f.get("role") == "discriminator"), None)
+        if discriminator is None:
+            discriminator = next((i for i, f in enumerate(raw_fields) if "constValue" in f), None)
+        for i, f in enumerate(raw_fields):
             field_spec = resolve_field_type(f)
-            is_discriminator = f.get("role") == "discriminator" or "constValue" in f
-            if is_discriminator:
-                cmd_id = f.get("constValue", cmd_id)
+            if "constValue" in f:
+                field_spec.default = f["constValue"]
+            if i == discriminator:
                 if "constValue" in f:
-                    field_spec.default = f["constValue"]
+                    msg_id = _normalise_id(f["constValue"])
                 if framing_type is FramingType.DELIMITED:
-                    # On a delimited line the discriminator *is* the command text, so it is
-                    # carried by the command id and must not be asked for as a parameter.
+                    # On a delimited line the discriminator *is* the message text, so it is
+                    # carried by the id and must not be asked for as a parameter.
                     continue
-            params.append(field_spec)
+            fields_out.append(field_spec)
+        if msg_id is None:
+            if kind == "command":
+                # No discriminator to identify the command on the wire: fall back to its position.
+                msg_id = index
+                logger.warning("%s: command '%s' has no discriminator constValue, using its index %d as id", source_name or "kit protocol", msg.get("name"), index)
+            else:
+                msg_id = msg.get("name", f"message_{index}")
+        return msg_id, fields_out
+
+    # Commands: host-initiated messages
+    commands: List[CommandSpec] = []
+    for idx, cmd_data in enumerate(data.get("commands", [])):
+        cmd_name = cmd_data.get("name", f"command_{idx}")
+        cmd_id, params = build_message(cmd_data, idx, "command")
 
         response_spec = None
         if "response" in cmd_data:
@@ -307,9 +337,21 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
             )
         )
 
-    if not commands:
-        # Fallback dummy command if kit specification defined high-level messages without commands list
-        commands.append(CommandSpec(name="ping", id=1))
+    # Responses: device-initiated messages (a stream-only protocol such as NMEA 0183 has only these).
+    # The kit does not say which request a response answers, so they are exposed as telemetry
+    # messages rather than guessed into command responses.
+    telemetry: List[TelemetrySpec] = []
+    for idx, msg in enumerate(data.get("responses", [])):
+        msg_id, msg_fields = build_message(msg, idx, "response")
+        telemetry.append(
+            TelemetrySpec(
+                name=msg.get("name", f"message_{idx}"),
+                id=msg_id,
+                description=msg.get("description"),
+                tags=list(msg.get("tags", [])),
+                fields=msg_fields,
+            )
+        )
 
     return ProtocolSpec(
         schema_version="1.0.0",
@@ -317,6 +359,7 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
         serial_config=serial_config,
         framing=framing_config,
         commands=commands,
+        telemetry=telemetry,
     )
 
 
