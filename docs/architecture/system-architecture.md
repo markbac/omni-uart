@@ -97,6 +97,8 @@ flowchart TD
 
 ### 3.1 Catalog Manager & Adapters (`omniuart.core.catalog`)
 - **Auto-Discovery**: Scans registered protocol and script directories dynamically. Automatically picks up newly added protocol definition files (`.json`, `.yaml`) or test sequences without code changes.
+- **Search order** (highest precedence first): directories passed to `CatalogManager(protocol_dirs=..., script_dirs=...)`, which are the only ones searched when given; then the `OMNIUART_PROTOCOL_PATH` and `OMNIUART_SCRIPT_PATH` environment variables (directories separated by the platform path separator); then the existing default directories `examples/protocols`, `protocols` and `schemas` (scripts: `examples/scripts`, `scripts`) under the current directory, and under the executable's directory in a frozen binary. No machine-specific path is searched.
+- **Collisions**: results are sorted by file name. If two directories hold a file of the same name the earlier directory wins and the other is recorded in `CatalogManager.collisions` (with whether the content is identical), logged as a warning and listed under `collisions` in `catalog_summary()`, together with different files that declare the same protocol `name`.
 - **Kit & Sequence Adapters**:
   - `kit_adapter.py`: Converts standard `uart-interface-schema-kit` AsyncAPI protocol definitions into internal `ProtocolSpec` data models.
   - `sequence_adapter.py`: Converts sequence files into `ScriptSpec` models.
