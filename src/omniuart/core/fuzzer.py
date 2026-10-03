@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+from itertools import zip_longest
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -75,6 +76,7 @@ class FuzzReport(BaseModel):
     """Summary report of a protocol fuzzing campaign."""
 
     protocol_name: str
+    seed: Optional[int] = None
     total_vectors: int
     outcomes: Dict[str, int] = Field(default_factory=dict)
     results: List[FuzzResult] = Field(default_factory=list)
@@ -117,6 +119,7 @@ class ProtocolFuzzer:
     def __init__(self, spec: ProtocolSpec, seed: Optional[int] = None) -> None:
         self.spec = spec
         self.codec = FrameCodec(spec)
+        self.seed = seed
         self._rng = random.Random(seed)
 
     # ------------------------------------------------------------------ vector generation
@@ -197,6 +200,16 @@ class ProtocolFuzzer:
         )
         return vectors
 
+    def select_vectors(self, max_vectors: int) -> List[FuzzVector]:
+        """Up to ``max_vectors`` vectors spread across every command.
+
+        Vectors are interleaved round-robin (each command's valid baseline first, then its mutations)
+        so a small budget still touches every command instead of exhausting the first few.
+        """
+        per_command = [self.generate_vectors_for_command(cmd) for cmd in self.spec.commands]
+        interleaved = [v for group in zip_longest(*per_command) for v in group if v is not None]
+        return interleaved[:max_vectors]
+
     # ------------------------------------------------------------------ execution
     def _probe(self) -> Optional[Tuple[CommandSpec, bytes]]:
         """A valid request the device must always answer, used to detect lock-ups."""
@@ -249,14 +262,11 @@ class ProtocolFuzzer:
         if not transport.is_open:
             await transport.open()
 
-        vectors: List[FuzzVector] = []
-        for cmd in self.spec.commands:
-            vectors.extend(self.generate_vectors_for_command(cmd))
-        vectors = vectors[:max_vectors]
+        vectors = self.select_vectors(max_vectors)
 
         probe = self._probe()
         results = [await self._run_vector(transport, vec, timeout_ms, probe) for vec in vectors]
         outcomes: Dict[str, int] = {}
         for result in results:
             outcomes[result.status.value] = outcomes.get(result.status.value, 0) + 1
-        return FuzzReport(protocol_name=self.spec.metadata.name, total_vectors=len(results), outcomes=outcomes, results=results)
+        return FuzzReport(protocol_name=self.spec.metadata.name, seed=self.seed, total_vectors=len(results), outcomes=outcomes, results=results)

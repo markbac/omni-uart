@@ -85,8 +85,10 @@ Exit status: `0` all steps passed, `1` a step failed, `2` invalid script or inpu
 
 #### 5. `fuzz`: Boundary Mutation Campaign Engine
 ```bash
-omni-uart fuzz binary_sensor_node.yaml --vectors 50
+omni-uart fuzz binary_sensor_node.yaml --vectors 50 --seed 42
 ```
+`--seed` makes the random mutations reproducible. When `--vectors` is smaller than the full set, vectors are taken round-robin so every command is covered.
+
 Runs a 50-vector mutation campaign built from the protocol (a valid baseline, an out-of-bounds parameter, a corrupted integrity field, a truncated frame and a random byte mutation per command; strategies that do not apply to a command are skipped). Every vector is classified from what the device did:
 
 | Outcome | Meaning |
