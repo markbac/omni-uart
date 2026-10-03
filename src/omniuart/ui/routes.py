@@ -63,7 +63,9 @@ async def websocket_serial_stream(websocket: WebSocket) -> None:
             except Exception:
                 pass
     except WebSocketDisconnect:
-        active_connections.remove(websocket)
+        pass
+    finally:
+        active_connections.discard(websocket)
 
 
 @router.get("/api/protocols")

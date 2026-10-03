@@ -445,8 +445,11 @@ def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bo
             print(f"Error: {TKINTER_MISSING_MESSAGE}", file=sys.stderr)
             return EXIT_INVALID
 
-    # Enforce loopback host safety for security (#131)
-    if not host or host in ("0.0.0.0", "::"):
+    # The UI drives real hardware and has no login, so it only ever listens on a loopback address.
+    from omniuart.ui.security import is_loopback_host
+
+    if not is_loopback_host(host):
+        print(f"Warning: refusing to listen on '{host}': the web UI is local-only. Using 127.0.0.1 instead.", file=sys.stderr)
         host = "127.0.0.1"
 
     url = f"http://{host}:{port}"
