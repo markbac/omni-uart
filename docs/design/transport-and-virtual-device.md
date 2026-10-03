@@ -64,6 +64,14 @@ For RS-485 transceivers requiring Direction Control (DE/RE pins):
 - **Lifecycle and errors**: Operations on a closed transport raise `RuntimeError`; `close()` is idempotent. When the other end goes away, buffered bytes are still delivered, later reads return `b""` immediately, `peer_closed` becomes true and writes raise `ConnectionError`.
 - **Pins**: A pty has no DTR/RTS lines; `set_pin_state` is accepted and ignored.
 
+### 3.4 Windows Named-Pipe Transport
+`WindowsNamedPipeTransport` connects to a genuine Windows named pipe (`\\\\.\\pipe\\<name>`) using overlapped I/O on the asyncio Proactor event loop, so it interoperates with other processes (terminal emulators, hypervisor virtual COM ports, another OmniUART instance) and never blocks the loop:
+- **Roles**: `role="server"` creates the pipe on `open()` and serves the first client (`wait_connected()` waits for it); `role="client"` connects on `open()`, retrying while the server is starting or busy for up to `connect_timeout_s`, then raising `ConnectionError`. `WindowsNamedPipePair` runs both ends in one process for tests.
+- **Timeouts and partial reads**: `read(size, timeout_ms)` returns the bytes that arrived within the timeout (possibly none); `timeout_ms=None` waits forever and `0` polls.
+- **Back-pressure**: `write` waits while the pipe's write buffer is full.
+- **Lifecycle and errors**: Operations on a closed transport raise `RuntimeError`; `close()` is idempotent; `write` without a connected peer raises `ConnectionError`. When the peer disconnects, buffered bytes are still delivered, later reads return `b""` immediately, `peer_closed` becomes true and writes raise `ConnectionError`.
+- **Platform**: Windows only. Constructing it elsewhere raises `NotImplementedError`; use `PtyTransport` on Linux and macOS.
+
 ---
 
 ## 4. Virtual MCU Loopback Engine (`VirtualTransport`)

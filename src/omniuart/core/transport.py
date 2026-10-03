@@ -7,7 +7,7 @@ import asyncio
 import logging
 import random
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import serial
 import serial.tools.list_ports
@@ -361,6 +361,49 @@ class VirtualSerialPair:
         await self.device.close()
 
 
+class _ReadBuffer:
+    """Byte buffer with timed reads, shared by the descriptor-based transports.
+
+    ``read`` waits up to ``timeout_ms`` for ``size`` bytes and returns what has arrived (possibly
+    nothing). ``None`` waits forever and ``0`` polls. After :meth:`set_eof` buffered bytes are still
+    delivered and later reads return immediately.
+    """
+
+    def __init__(self) -> None:
+        self._data = bytearray()
+        self._event = asyncio.Event()
+        self.eof = False
+
+    def feed(self, chunk: bytes) -> None:
+        self._data.extend(chunk)
+        self._event.set()
+
+    def set_eof(self) -> None:
+        self.eof = True
+        self._event.set()
+
+    def wake(self) -> None:
+        self._event.set()
+
+    async def read(self, size: int, timeout_ms: Optional[int], is_open: Callable[[], bool]) -> bytes:
+        deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000.0
+        while len(self._data) < size and not self.eof and is_open():
+            self._event.clear()
+            if deadline is None:
+                await self._event.wait()
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                await asyncio.wait_for(self._event.wait(), timeout=remaining)
+            except asyncio.TimeoutError:
+                break
+        result = bytes(self._data[:size])
+        del self._data[:size]
+        return result
+
+
 class PtyTransport(AsyncTransport):
     """Asynchronous transport over a POSIX pseudo-terminal file descriptor (Linux and macOS).
 
@@ -386,11 +429,13 @@ class PtyTransport(AsyncTransport):
         self._fd = fd
         self._path = path
         self._owns_fd = owns_fd or path is not None
-        self._buffer = bytearray()
-        self._data_event: Optional[asyncio.Event] = None
+        self._rx = _ReadBuffer()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._is_open = False
-        self.peer_closed = False
+
+    @property
+    def peer_closed(self) -> bool:
+        return self._rx.eof
 
     @property
     def is_open(self) -> bool:
@@ -407,9 +452,8 @@ class PtyTransport(AsyncTransport):
         self._make_raw(self._fd)
         os.set_blocking(self._fd, False)
         self._loop = asyncio.get_running_loop()
-        self._data_event = asyncio.Event()
+        self._rx = _ReadBuffer()
         self._loop.add_reader(self._fd, self._on_readable)
-        self.peer_closed = False
         self._is_open = True
         logger.info("Opened PTY transport %s", self.port_name)
 
@@ -426,7 +470,7 @@ class PtyTransport(AsyncTransport):
     def _on_readable(self) -> None:
         import os
 
-        assert self._fd is not None and self._data_event is not None
+        assert self._fd is not None
         try:
             chunk = os.read(self._fd, 65536)
         except BlockingIOError:
@@ -434,12 +478,11 @@ class PtyTransport(AsyncTransport):
         except OSError:  # EIO: every other handle on the pty has been closed
             chunk = b""
         if chunk:
-            self._buffer.extend(chunk)
+            self._rx.feed(chunk)
         else:
-            self.peer_closed = True
             if self._loop is not None:
                 self._loop.remove_reader(self._fd)
-        self._data_event.set()
+            self._rx.set_eof()
 
     async def close(self) -> None:
         import os
@@ -456,8 +499,7 @@ class PtyTransport(AsyncTransport):
                 except OSError:
                     pass
                 self._fd = None
-        if self._data_event is not None:
-            self._data_event.set()  # wake any reader so it can see the transport is closed
+        self._rx.wake()  # let a waiting reader notice the transport is closed
         logger.info("Closed PTY transport %s", self.port_name)
 
     async def write(self, data: bytes) -> int:
@@ -477,7 +519,7 @@ class PtyTransport(AsyncTransport):
                 continue
             except OSError as exc:
                 if exc.errno == errno.EIO:
-                    self.peer_closed = True
+                    self._rx.set_eof()
                     raise ConnectionError("PTY peer has closed the connection") from exc
                 raise
             view = view[written:]
@@ -494,26 +536,9 @@ class PtyTransport(AsyncTransport):
                 self._loop.remove_writer(self._fd)
 
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
-        if not self._is_open or self._data_event is None:
+        if not self._is_open:
             raise RuntimeError("PtyTransport is not open.")
-
-        deadline = None if timeout_ms is None else time.monotonic() + timeout_ms / 1000.0
-        while len(self._buffer) < size and not self.peer_closed and self._is_open:
-            self._data_event.clear()
-            if deadline is None:
-                await self._data_event.wait()
-                continue
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            try:
-                await asyncio.wait_for(self._data_event.wait(), timeout=remaining)
-            except asyncio.TimeoutError:
-                break
-
-        result = bytes(self._buffer[:size])
-        del self._buffer[:size]
-        return result
+        return await self._rx.read(size, timeout_ms, lambda: self._is_open)
 
     async def set_pin_state(self, pin: str, state: bool) -> None:
         """A pty has no modem control lines; the request is accepted and ignored."""
@@ -560,49 +585,165 @@ class PtySerialPair:
 
 
 class WindowsNamedPipeTransport(AsyncTransport):
-    """Windows Named Pipe virtual serial transport (\\\\.\\pipe\\omniuart_<name>)."""
+    """Genuine Windows named-pipe transport (``\\\\.\\pipe\\<name>``) built on the asyncio Proactor loop.
 
-    def __init__(self, pipe_name: str = "omniuart_vcom") -> None:
-        self.pipe_name = f"\\\\.\\pipe\\{pipe_name}"
+    Two roles connect through the operating system's pipe, in this or another process (for example
+    a terminal emulator, a hypervisor virtual COM port or another OmniUART instance):
+
+    - ``role="server"`` creates the pipe on :meth:`open` and serves the first client that connects;
+      :meth:`wait_connected` waits for it.
+    - ``role="client"`` connects to an existing pipe on :meth:`open`, retrying while the server is
+      still starting or busy, for up to ``connect_timeout_s``.
+
+    I/O is overlapped, so nothing blocks the event loop. ``read`` waits up to ``timeout_ms`` for
+    ``size`` bytes and returns what arrived (``None`` waits forever, ``0`` polls). When the peer
+    disconnects, buffered bytes are still delivered, later reads return ``b""`` at once,
+    ``peer_closed`` is true and writes raise :class:`ConnectionError`. Operations on a closed
+    transport raise :class:`RuntimeError`. Only available on Windows.
+    """
+
+    PIPE_PREFIX = "\\\\.\\pipe\\"
+
+    def __init__(self, pipe_name: str = "omniuart_vcom", role: str = "server", connect_timeout_s: float = 5.0) -> None:
+        import os
+
+        if os.name != "nt":
+            raise NotImplementedError("WindowsNamedPipeTransport is only supported on Windows.")
+        if role not in ("server", "client"):
+            raise ValueError("role must be 'server' or 'client'")
+        self.role = role
+        self.pipe_name = pipe_name if pipe_name.startswith(self.PIPE_PREFIX) else f"{self.PIPE_PREFIX}{pipe_name}"
+        self.connect_timeout_s = connect_timeout_s
+        self._rx = _ReadBuffer()
+        self._pipe: Optional[asyncio.BaseTransport] = None
+        self._servers: List[Any] = []
+        self._connected = asyncio.Event()
+        self._resume = asyncio.Event()
+        self._resume.set()
         self._is_open = False
-        self._queue: asyncio.Queue[bytes] = asyncio.Queue()
-
-    async def open(self) -> None:
-        self._is_open = True
-        logger.info(f"Connected Windows Virtual Named Pipe: {self.pipe_name}")
-
-    async def close(self) -> None:
-        self._is_open = False
-        logger.info(f"Closed Windows Virtual Named Pipe: {self.pipe_name}")
 
     @property
     def is_open(self) -> bool:
         return self._is_open
 
+    @property
+    def peer_closed(self) -> bool:
+        return self._rx.eof
+
+    @property
+    def connected(self) -> bool:
+        """True while a peer is attached to the pipe."""
+        return self._pipe is not None and not self._rx.eof
+
+    def _protocol(self) -> asyncio.Protocol:
+        owner = self
+
+        class _Protocol(asyncio.Protocol):
+            def connection_made(self, transport: asyncio.BaseTransport) -> None:
+                if owner._pipe is not None:  # a pipe serves one peer; refuse extra clients
+                    transport.close()
+                    return
+                owner._pipe = transport
+                owner._connected.set()
+
+            def data_received(self, data: bytes) -> None:
+                owner._rx.feed(data)
+
+            def connection_lost(self, exc: Optional[Exception]) -> None:
+                owner._rx.set_eof()
+                owner._resume.set()
+
+            def pause_writing(self) -> None:
+                owner._resume.clear()
+
+            def resume_writing(self) -> None:
+                owner._resume.set()
+
+        return _Protocol()
+
+    async def open(self) -> None:
+        if self._is_open:
+            return
+        loop = asyncio.get_running_loop()
+        if not hasattr(loop, "start_serving_pipe"):
+            raise RuntimeError("Named pipes need the asyncio Proactor event loop (the Windows default).")
+        self._rx = _ReadBuffer()
+        self._connected = asyncio.Event()
+        self._resume = asyncio.Event()
+        self._resume.set()
+        self._pipe = None
+        if self.role == "server":
+            self._servers = await loop.start_serving_pipe(self._protocol, self.pipe_name)
+        else:
+            deadline = time.monotonic() + self.connect_timeout_s
+            while True:
+                try:
+                    await loop.create_pipe_connection(self._protocol, self.pipe_name)
+                    break
+                except (FileNotFoundError, OSError) as exc:
+                    # ERROR_FILE_NOT_FOUND: server not created yet; ERROR_PIPE_BUSY (231): all instances in use
+                    if time.monotonic() >= deadline or (isinstance(exc, OSError) and getattr(exc, "winerror", None) not in (2, 231, None)):
+                        raise ConnectionError(f"cannot connect to {self.pipe_name}: {exc}") from exc
+                    await asyncio.sleep(0.05)
+        self._is_open = True
+        logger.info("Opened Windows named pipe %s as %s", self.pipe_name, self.role)
+
+    async def wait_connected(self, timeout_s: Optional[float] = 5.0) -> bool:
+        """Wait until a peer is attached. Returns False on timeout."""
+        try:
+            await asyncio.wait_for(self._connected.wait(), timeout=timeout_s)
+            return True
+        except asyncio.TimeoutError:
+            return False
+
+    async def close(self) -> None:
+        if not self._is_open:
+            return
+        self._is_open = False
+        if self._pipe is not None:
+            self._pipe.close()
+        for server in self._servers:
+            server.close()
+        self._servers = []
+        self._rx.wake()
+        self._resume.set()
+        await asyncio.sleep(0)  # let the loop run connection_lost
+        logger.info("Closed Windows named pipe %s", self.pipe_name)
+
     async def write(self, data: bytes) -> int:
         if not self._is_open:
             raise RuntimeError("WindowsNamedPipeTransport is not open.")
-        await self._queue.put(data)
+        if self._pipe is None or self._rx.eof:
+            raise ConnectionError("no peer is connected to the named pipe")
+        self._pipe.write(data)  # type: ignore[attr-defined]
+        await self._resume.wait()  # back-pressure: wait while the pipe's write buffer is full
         return len(data)
 
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:
         if not self._is_open:
             raise RuntimeError("WindowsNamedPipeTransport is not open.")
-
-        timeout_sec = (timeout_ms / 1000.0) if timeout_ms else None
-        try:
-            buf = bytearray()
-            while len(buf) < size:
-                if timeout_sec is not None:
-                    chunk = await asyncio.wait_for(self._queue.get(), timeout=timeout_sec)
-                else:
-                    chunk = await self._queue.get()
-                buf.extend(chunk)
-            return bytes(buf[:size])
-        except asyncio.TimeoutError:
-            return bytes()
+        return await self._rx.read(size, timeout_ms, lambda: self._is_open)
 
     async def set_pin_state(self, pin: str, state: bool) -> None:
-        pass
+        """A named pipe has no modem control lines; the request is accepted and ignored."""
 
 
+class WindowsNamedPipePair:
+    """A named-pipe server (``host``) and client (``device``) in one process, for tests and simulation."""
+
+    def __init__(self, name: Optional[str] = None) -> None:
+        import uuid
+
+        pipe = name or f"omniuart_{uuid.uuid4().hex[:12]}"
+        self.host = WindowsNamedPipeTransport(pipe, role="server")
+        self.device = WindowsNamedPipeTransport(pipe, role="client")
+
+    async def open(self) -> None:
+        await self.host.open()
+        await self.device.open()
+        if not await self.host.wait_connected():
+            raise ConnectionError("named pipe client did not connect")
+
+    async def close(self) -> None:
+        await self.device.close()
+        await self.host.close()
