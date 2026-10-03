@@ -29,7 +29,7 @@ def test_convert_protocol_to_kit() -> None:
     """Verify converting a legacy protocol into kit schema dictionary."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         out_file = Path(tmp_dir) / "converted.json"
-        kit_data = convert_protocol_to_kit(PROTO_FILE, output_path=out_file)
+        kit_data = convert_protocol_to_kit(PROTO_FILE, output_path=out_file, lossy=True)
 
         assert out_file.exists()
         assert kit_data["title"] == "BinarySensorNode"
@@ -48,6 +48,6 @@ def test_cli_lint_and_convert_commands(capsys) -> None:
     # Test convert
     with tempfile.TemporaryDirectory() as tmp_dir:
         out_path = Path(tmp_dir) / "out.json"
-        exit_code = cli_main(["convert", str(PROTO_FILE), "-o", str(out_path)])
+        exit_code = cli_main(["convert", str(PROTO_FILE), "-o", str(out_path), "--lossy"])
         assert exit_code == 0
         assert out_path.exists()

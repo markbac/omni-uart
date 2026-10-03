@@ -22,15 +22,15 @@ File transfer nested inside a normal MAVLink message: every FTP packet, of whate
 | `sysId` | `uint8` | - | - | - |
 | `compId` | `uint8` | - | - | - |
 | `msgId` | `uint8` | - | - | - |
-| `seqNumber` | `bytes` | - | - | - |
-| `session` | `bytes` | - | - | - |
+| `seqNumber` | `uint16` | - | - | - |
+| `session` | `uint8` | - | - | - |
 | `opcode` | `enum` | - | - | `{'4': 'OpenFileRO', '15': 'BurstReadFile', '128': 'Ack', '129': 'Nak'}` |
-| `size` | `bytes` | - | - | - |
-| `reqOpcode` | `bytes` | - | - | - |
-| `burstComplete` | `bytes` | - | - | - |
-| `padding` | `bytes` | - | - | - |
-| `offset` | `bytes` | - | - | - |
-| `path` | `bytes` | - | - | - |
+| `size` | `uint8` | - | - | - |
+| `reqOpcode` | `uint8` | - | - | - |
+| `burstComplete` | `uint8` | - | - | - |
+| `padding` | `uint8` | - | - | - |
+| `offset` | `uint32` | - | - | - |
+| `path` | `string` | - | - | - |
 
 #### `FTP_BurstReadFile` (Command ID: `0x0F`) - Requests the server stream the file from offset onward, without individual acks per chunk, until burstComplete is set on the final FTP_Ack.
 
@@ -40,14 +40,14 @@ File transfer nested inside a normal MAVLink message: every FTP packet, of whate
 | `sysId` | `uint8` | - | - | - |
 | `compId` | `uint8` | - | - | - |
 | `msgId` | `uint8` | - | - | - |
-| `seqNumber` | `bytes` | - | - | - |
-| `session` | `bytes` | - | - | - |
+| `seqNumber` | `uint16` | - | - | - |
+| `session` | `uint8` | - | - | - |
 | `opcode` | `enum` | - | - | `{'4': 'OpenFileRO', '15': 'BurstReadFile', '128': 'Ack', '129': 'Nak'}` |
-| `size` | `bytes` | - | - | - |
-| `reqOpcode` | `bytes` | - | - | - |
-| `burstComplete` | `bytes` | - | - | - |
-| `padding` | `bytes` | - | - | - |
-| `offset` | `bytes` | - | - | - |
+| `size` | `uint8` | - | - | - |
+| `reqOpcode` | `uint8` | - | - | - |
+| `burstComplete` | `uint8` | - | - | - |
+| `padding` | `uint8` | - | - | - |
+| `offset` | `uint32` | - | - | - |
 
 ## Device-Initiated Messages
 
@@ -59,14 +59,14 @@ File transfer nested inside a normal MAVLink message: every FTP packet, of whate
 | `sysId` | `uint8` | - |
 | `compId` | `uint8` | - |
 | `msgId` | `uint8` | - |
-| `seqNumber` | `bytes` | - |
-| `session` | `bytes` | - |
+| `seqNumber` | `uint16` | - |
+| `session` | `uint8` | - |
 | `opcode` | `enum` | - |
-| `size` | `bytes` | - |
-| `reqOpcode` | `bytes` | - |
-| `burstComplete` | `bytes` | - |
-| `padding` | `bytes` | - |
-| `offset` | `bytes` | - |
+| `size` | `uint8` | - |
+| `reqOpcode` | `uint8` | - |
+| `burstComplete` | `uint8` | - |
+| `padding` | `uint8` | - |
+| `offset` | `uint32` | - |
 | `data` | `bytes` | - |
 
 #### `FTP_Nak` (Message ID: `0x81`)
@@ -77,15 +77,15 @@ File transfer nested inside a normal MAVLink message: every FTP packet, of whate
 | `sysId` | `uint8` | - |
 | `compId` | `uint8` | - |
 | `msgId` | `uint8` | - |
-| `seqNumber` | `bytes` | - |
-| `session` | `bytes` | - |
+| `seqNumber` | `uint16` | - |
+| `session` | `uint8` | - |
 | `opcode` | `enum` | - |
-| `size` | `bytes` | - |
-| `reqOpcode` | `bytes` | - |
-| `burstComplete` | `bytes` | - |
-| `padding` | `bytes` | - |
-| `offset` | `bytes` | - |
-| `errorCode` | `bytes` | - |
+| `size` | `uint8` | - |
+| `reqOpcode` | `uint8` | - |
+| `burstComplete` | `uint8` | - |
+| `padding` | `uint8` | - |
+| `offset` | `uint32` | - |
+| `errorCode` | `uint8` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 

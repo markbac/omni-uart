@@ -18,9 +18,9 @@ SCADA/utility protocol. Its data-link CRC is exactly this schema's existing crc-
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `control` | `bytes` | - | - | - |
-| `destination` | `bytes` | - | - | - |
-| `source` | `bytes` | - | - | - |
+| `control` | `uint8` | - | - | - |
+| `destination` | `uint16` | - | - | - |
+| `source` | `uint16` | - | - | - |
 | `userData` | `bytes` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification

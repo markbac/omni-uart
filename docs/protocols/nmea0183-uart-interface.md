@@ -18,16 +18,16 @@ ASCII, delimiter-framed sentence protocol used by GPS/marine navigation equipmen
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `utcTime` | `bytes` | - |
-| `latitude` | `bytes` | - |
-| `latitudeHemisphere` | `bytes` | - |
-| `longitude` | `bytes` | - |
-| `longitudeHemisphere` | `bytes` | - |
-| `fixQuality` | `bytes` | - |
-| `satellitesUsed` | `bytes` | - |
-| `hdop` | `bytes` | - |
-| `altitude` | `bytes` | - |
-| `altitudeUnits` | `bytes` | - |
+| `utcTime` | `string` | - |
+| `latitude` | `string` | - |
+| `latitudeHemisphere` | `enum` | - |
+| `longitude` | `string` | - |
+| `longitudeHemisphere` | `enum` | - |
+| `fixQuality` | `enum` | - |
+| `satellitesUsed` | `string` | - |
+| `hdop` | `string` | - |
+| `altitude` | `string` | - |
+| `altitudeUnits` | `enum` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 

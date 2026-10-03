@@ -18,7 +18,7 @@ Unidirectional lighting-control broadcast. Frame boundary is a UART break condit
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `startCode` | `bytes` | - | - | - |
+| `startCode` | `uint8` | - | - | - |
 | `channelData` | `bytes` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification

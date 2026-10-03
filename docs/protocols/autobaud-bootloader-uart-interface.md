@@ -18,28 +18,28 @@ Not modelling any specific vendor's exact protocol -- illustrates the auto-baud 
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `syncByte` | `bytes` | - | - | - |
+| `syncByte` | `uint8` | - | - | - |
 
 #### `GetVersion` (Command ID: `0x01`)
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `opcode` | `bytes` | - | - | - |
+| `opcode` | `uint8` | - | - | - |
 
 #### `WriteMemory` (Command ID: `0x02`)
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `opcode` | `bytes` | - | - | - |
-| `address` | `bytes` | - | - | - |
+| `opcode` | `uint8` | - | - | - |
+| `address` | `uint32` | - | - | - |
 | `data` | `bytes` | - | - | - |
 
 #### `Go` (Command ID: `0x03`) - Jumps to application code at the given address, ending the bootloader session.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `opcode` | `bytes` | - | - | - |
-| `address` | `bytes` | - | - | - |
+| `opcode` | `uint8` | - | - | - |
+| `address` | `uint32` | - | - | - |
 
 ## Device-Initiated Messages
 
@@ -47,13 +47,13 @@ Not modelling any specific vendor's exact protocol -- illustrates the auto-baud 
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `controlByte` | `bytes` | - |
+| `controlByte` | `uint8` | - |
 
 #### `Nack` (Message ID: `0x1F`)
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `controlByte` | `bytes` | - |
+| `controlByte` | `uint8` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 

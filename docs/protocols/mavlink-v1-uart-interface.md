@@ -22,12 +22,12 @@ Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit b
 | `sysId` | `uint8` | - | - | - |
 | `compId` | `uint8` | - | - | - |
 | `msgId` | `uint8` | - | - | - |
-| `customMode` | `bytes` | - | - | - |
-| `vehicleType` | `bytes` | - | - | - |
-| `autopilot` | `bytes` | - | - | - |
-| `baseMode` | `bytes` | - | - | - |
-| `systemStatus` | `bytes` | - | - | - |
-| `mavlinkVersion` | `bytes` | - | - | - |
+| `customMode` | `uint32` | - | - | - |
+| `vehicleType` | `uint8` | - | - | - |
+| `autopilot` | `uint8` | - | - | - |
+| `baseMode` | `uint8` | - | - | - |
+| `systemStatus` | `uint8` | - | - | - |
+| `mavlinkVersion` | `uint8` | - | - | - |
 
 ### Category: DASHBOARD
 
@@ -39,12 +39,12 @@ Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit b
 | `sysId` | `uint8` | - | - | - |
 | `compId` | `uint8` | - | - | - |
 | `msgId` | `uint8` | - | - | - |
-| `customMode` | `bytes` | - | - | - |
-| `vehicleType` | `bytes` | - | - | - |
-| `autopilot` | `bytes` | - | - | - |
-| `baseMode` | `bytes` | - | - | - |
-| `systemStatus` | `bytes` | - | - | - |
-| `mavlinkVersion` | `bytes` | - | - | - |
+| `customMode` | `uint32` | - | - | - |
+| `vehicleType` | `uint8` | - | - | - |
+| `autopilot` | `uint8` | - | - | - |
+| `baseMode` | `uint8` | - | - | - |
+| `systemStatus` | `uint8` | - | - | - |
+| `mavlinkVersion` | `uint8` | - | - | - |
 
 #### `SYS_STATUS` (Command ID: `0x01`) - Message ID 1. System status, battery voltage, current draw, and sensor health.
 
@@ -54,13 +54,13 @@ Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit b
 | `sysId` | `uint8` | - | - | - |
 | `compId` | `uint8` | - | - | - |
 | `msgId` | `uint8` | - | - | - |
-| `onboardSensorsPresent` | `bytes` | - | - | - |
-| `onboardSensorsEnabled` | `bytes` | - | - | - |
-| `onboardSensorsHealth` | `bytes` | - | - | - |
-| `load` | `bytes` | - | - | - |
-| `voltageBattery` | `bytes` | - | - | - |
-| `currentBattery` | `bytes` | - | - | - |
-| `batteryRemaining` | `bytes` | - | - | - |
+| `onboardSensorsPresent` | `uint32` | - | - | - |
+| `onboardSensorsEnabled` | `uint32` | - | - | - |
+| `onboardSensorsHealth` | `uint32` | - | - | - |
+| `load` | `uint16` | - | - | - |
+| `voltageBattery` | `uint16` | - | - | - |
+| `currentBattery` | `int16` | - | - | - |
+| `batteryRemaining` | `int8` | - | - | - |
 
 ### Category: TELEMETRY/STATUS
 
@@ -72,13 +72,13 @@ Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit b
 | `sysId` | `uint8` | - | - | - |
 | `compId` | `uint8` | - | - | - |
 | `msgId` | `uint8` | - | - | - |
-| `onboardSensorsPresent` | `bytes` | - | - | - |
-| `onboardSensorsEnabled` | `bytes` | - | - | - |
-| `onboardSensorsHealth` | `bytes` | - | - | - |
-| `load` | `bytes` | - | - | - |
-| `voltageBattery` | `bytes` | - | - | - |
-| `currentBattery` | `bytes` | - | - | - |
-| `batteryRemaining` | `bytes` | - | - | - |
+| `onboardSensorsPresent` | `uint32` | - | - | - |
+| `onboardSensorsEnabled` | `uint32` | - | - | - |
+| `onboardSensorsHealth` | `uint32` | - | - | - |
+| `load` | `uint16` | - | - | - |
+| `voltageBattery` | `uint16` | - | - | - |
+| `currentBattery` | `int16` | - | - | - |
+| `batteryRemaining` | `int8` | - | - | - |
 
 ### Category: TELEMETRY/GPS
 
@@ -90,16 +90,16 @@ Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit b
 | `sysId` | `uint8` | - | - | - |
 | `compId` | `uint8` | - | - | - |
 | `msgId` | `uint8` | - | - | - |
-| `timeUsec` | `bytes` | - | - | - |
-| `fixType` | `bytes` | - | - | - |
-| `lat` | `bytes` | - | - | - |
-| `lon` | `bytes` | - | - | - |
-| `alt` | `bytes` | - | - | - |
-| `eph` | `bytes` | - | - | - |
-| `epv` | `bytes` | - | - | - |
-| `vel` | `bytes` | - | - | - |
-| `cog` | `bytes` | - | - | - |
-| `satellitesVisible` | `bytes` | - | - | - |
+| `timeUsec` | `uint64` | - | - | - |
+| `fixType` | `uint8` | - | - | - |
+| `lat` | `int32` | - | - | - |
+| `lon` | `int32` | - | - | - |
+| `alt` | `int32` | - | - | - |
+| `eph` | `uint16` | - | - | - |
+| `epv` | `uint16` | - | - | - |
+| `vel` | `uint16` | - | - | - |
+| `cog` | `uint16` | - | - | - |
+| `satellitesVisible` | `uint8` | - | - | - |
 
 ### Category: SENSOR
 
@@ -111,16 +111,16 @@ Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit b
 | `sysId` | `uint8` | - | - | - |
 | `compId` | `uint8` | - | - | - |
 | `msgId` | `uint8` | - | - | - |
-| `timeUsec` | `bytes` | - | - | - |
-| `fixType` | `bytes` | - | - | - |
-| `lat` | `bytes` | - | - | - |
-| `lon` | `bytes` | - | - | - |
-| `alt` | `bytes` | - | - | - |
-| `eph` | `bytes` | - | - | - |
-| `epv` | `bytes` | - | - | - |
-| `vel` | `bytes` | - | - | - |
-| `cog` | `bytes` | - | - | - |
-| `satellitesVisible` | `bytes` | - | - | - |
+| `timeUsec` | `uint64` | - | - | - |
+| `fixType` | `uint8` | - | - | - |
+| `lat` | `int32` | - | - | - |
+| `lon` | `int32` | - | - | - |
+| `alt` | `int32` | - | - | - |
+| `eph` | `uint16` | - | - | - |
+| `epv` | `uint16` | - | - | - |
+| `vel` | `uint16` | - | - | - |
+| `cog` | `uint16` | - | - | - |
+| `satellitesVisible` | `uint8` | - | - | - |
 
 ### Category: TELEMETRY/ATTITUDE
 
@@ -132,13 +132,13 @@ Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit b
 | `sysId` | `uint8` | - | - | - |
 | `compId` | `uint8` | - | - | - |
 | `msgId` | `uint8` | - | - | - |
-| `timeBootMs` | `bytes` | - | - | - |
-| `roll` | `bytes` | - | - | - |
-| `pitch` | `bytes` | - | - | - |
-| `yaw` | `bytes` | - | - | - |
-| `rollspeed` | `bytes` | - | - | - |
-| `pitchspeed` | `bytes` | - | - | - |
-| `yawspeed` | `bytes` | - | - | - |
+| `timeBootMs` | `uint32` | - | - | - |
+| `roll` | `float32` | - | - | - |
+| `pitch` | `float32` | - | - | - |
+| `yaw` | `float32` | - | - | - |
+| `rollspeed` | `float32` | - | - | - |
+| `pitchspeed` | `float32` | - | - | - |
+| `yawspeed` | `float32` | - | - | - |
 
 ### Category: COMMAND/ACTION
 
@@ -150,17 +150,17 @@ Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid) sit b
 | `sysId` | `uint8` | - | - | - |
 | `compId` | `uint8` | - | - | - |
 | `msgId` | `uint8` | - | - | - |
-| `targetSystem` | `bytes` | - | - | - |
-| `targetComponent` | `bytes` | - | - | - |
-| `command` | `bytes` | - | - | - |
-| `confirmation` | `bytes` | - | - | - |
-| `param1` | `bytes` | - | - | - |
-| `param2` | `bytes` | - | - | - |
-| `param3` | `bytes` | - | - | - |
-| `param4` | `bytes` | - | - | - |
-| `param5` | `bytes` | - | - | - |
-| `param6` | `bytes` | - | - | - |
-| `param7` | `bytes` | - | - | - |
+| `targetSystem` | `uint8` | - | - | - |
+| `targetComponent` | `uint8` | - | - | - |
+| `command` | `uint16` | - | - | - |
+| `confirmation` | `uint8` | - | - | - |
+| `param1` | `float32` | - | - | - |
+| `param2` | `float32` | - | - | - |
+| `param3` | `float32` | - | - | - |
+| `param4` | `float32` | - | - | - |
+| `param5` | `float32` | - | - | - |
+| `param6` | `float32` | - | - | - |
+| `param7` | `float32` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 
@@ -352,17 +352,17 @@ components:
         timeBootMs:
           type: integer
         roll:
-          type: integer
+          type: number
         pitch:
-          type: integer
+          type: number
         yaw:
-          type: integer
+          type: number
         rollspeed:
-          type: integer
+          type: number
         pitchspeed:
-          type: integer
+          type: number
         yawspeed:
-          type: integer
+          type: number
       description: Message ID 30. Vehicle roll, pitch, and yaw angles and angular
         velocity.
     COMMAND_LONG_Request:
@@ -389,19 +389,19 @@ components:
         confirmation:
           type: integer
         param1:
-          type: integer
+          type: number
         param2:
-          type: integer
+          type: number
         param3:
-          type: integer
+          type: number
         param4:
-          type: integer
+          type: number
         param5:
-          type: integer
+          type: number
         param6:
-          type: integer
+          type: number
         param7:
-          type: integer
+          type: number
       description: Message ID 76. Generic command dispatch to vehicle autopilot.
 
 ```

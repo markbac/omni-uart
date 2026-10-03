@@ -18,9 +18,9 @@ Building-automation token-passing bus over RS-485. Has TWO independent CRCs in o
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `frameType` | `bytes` | - | - | - |
-| `destinationAddress` | `bytes` | - | - | - |
-| `sourceAddress` | `bytes` | - | - | - |
+| `frameType` | `uint8` | - | - | - |
+| `destinationAddress` | `uint8` | - | - | - |
+| `sourceAddress` | `uint8` | - | - | - |
 | `data` | `bytes` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification

@@ -18,9 +18,9 @@ START L L START C A CI DATA CHECKSUM STOP -- the length is sent twice and the st
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `cField` | `bytes` | - |
-| `aField` | `bytes` | - |
-| `ciField` | `bytes` | - |
+| `cField` | `uint8` | - |
+| `aField` | `uint8` | - |
+| `ciField` | `uint8` | - |
 | `data` | `bytes` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification

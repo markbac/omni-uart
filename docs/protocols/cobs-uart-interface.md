@@ -18,8 +18,8 @@ Consistent Overhead Byte Stuffing: the encoding itself guarantees the delimiter 
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `sensorId` | `bytes` | - |
-| `value` | `bytes` | - |
+| `sensorId` | `uint8` | - |
+| `value` | `float32` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 

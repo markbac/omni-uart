@@ -18,9 +18,9 @@ RS-485 multidrop scheme common on small microcontroller UARTs: a 9th data bit (n
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `address` | `bytes` | - | - | - |
+| `address` | `uint8` | - | - | - |
 | `data` | `bytes` | - | - | - |
-| `checksum` | `bytes` | - | - | - |
+| `checksum` | `uint8` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 

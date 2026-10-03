@@ -19,8 +19,8 @@ Modbus over serial, ASCII transmission mode. Every logical byte is sent as 2 ASC
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
 | `slaveAddress` | `uint8` | - | - | - |
-| `startAddress` | `bytes` | - | - | - |
-| `quantity` | `bytes` | - | - | - |
+| `startAddress` | `uint16` | - | - | - |
+| `quantity` | `uint16` | - | - | - |
 
 ## Formal AsyncAPI 2.6.0 Specification
 

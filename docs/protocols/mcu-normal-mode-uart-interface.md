@@ -18,14 +18,14 @@ Minimal stand-in application-mode protocol, existing only to demonstrate a fully
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `opcode` | `bytes` | - | - | - |
+| `opcode` | `uint8` | - | - | - |
 | `reserved` | `bytes` | - | - | - |
 
 #### `EnterBootloader` (Command ID: `0xFF`) - Requests a jump into the ROM bootloader for firmware update. See relatedInterfaces for exactly what happens next.
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `opcode` | `bytes` | - | - | - |
+| `opcode` | `uint8` | - | - | - |
 | `reserved` | `bytes` | - | - | - |
 
 ## Device-Initiated Messages
@@ -34,7 +34,7 @@ Minimal stand-in application-mode protocol, existing only to demonstrate a fully
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `status` | `bytes` | - |
+| `status` | `uint8` | - |
 | `reserved` | `bytes` | - |
 
 ## Formal AsyncAPI 2.6.0 Specification

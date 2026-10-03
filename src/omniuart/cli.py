@@ -79,6 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     convert_parser = subparsers.add_parser("convert", help="Convert legacy protocol into standard uart-interface.schema.json format")
     convert_parser.add_argument("file", help="Path to legacy protocol definition file")
     convert_parser.add_argument("--output", "-o", help="Output JSON file path")
+    convert_parser.add_argument("--lossy", action="store_true", help="Convert even if the kit format cannot express every setting (the losses are listed on stderr)")
 
     # 8. fuzz (Protocol Fuzzer & MCU Stress Tester)
     fuzz_parser = subparsers.add_parser("fuzz", help="Run automated fuzzing & MCU firmware stress testing campaign")
@@ -380,8 +381,23 @@ def main(argv: Optional[List[str]] = None) -> int:
             return 1
 
     elif args.subcommand == "convert":
-        from omniuart.linter import convert_protocol_to_kit
-        kit_data = convert_protocol_to_kit(args.file, output_path=args.output)
+        from omniuart.linter import ConversionLossError, convert_protocol_to_kit
+        try:
+            kit_data = convert_protocol_to_kit(args.file, output_path=args.output, lossy=args.lossy)
+        except ConversionLossError as exc:
+            print(f"Error: converting '{args.file}' would lose {len(exc.losses)} value(s) the kit format cannot express:", file=sys.stderr)
+            for loss in exc.losses[:40]:
+                print(f"  - {loss}", file=sys.stderr)
+            if len(exc.losses) > 40:
+                print(f"  ... and {len(exc.losses) - 40} more", file=sys.stderr)
+            print("Nothing was written. Re-run with --lossy to convert anyway.", file=sys.stderr)
+            return 1
+        if args.lossy:
+            from omniuart.linter import find_conversion_losses
+            from omniuart.core.models import load_protocol
+            lost = find_conversion_losses(load_protocol(args.file), kit_data)
+            if lost:
+                print(f"Warning: {len(lost)} value(s) were not preserved (first: {lost[0]})", file=sys.stderr)
         if args.output:
             print(f"Successfully converted '{args.file}' to kit schema format: {args.output}")
         else:
