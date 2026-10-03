@@ -13,6 +13,10 @@ The schema governs:
 
 ---
 
+## Authoritative definition
+
+The Pydantic models in `omniuart.core.models` are the canonical definition of the native protocol and script formats. `schemas/protocol.schema.json` and `schemas/script.schema.json` are generated from them (`python -m omniuart.schema_export`) and a test fails if the committed files drift. A JSON Schema cannot express every rule the models enforce (for example the CRC width and polynomial checks or the discriminator rules), so the models, and `omni-uart lint`, decide validity; the schema is for editor completion and early structural checks. The kit format (`uart-interface.schema.json`) is a separate, externally defined schema read through the kit adapter.
+
 ## 2. Top-Level Schema Structure
 
 > **Important:** Unknown keys are errors. A misspelled or unsupported key (for example `comands`, `sufix` or `safty`) in a protocol or script makes loading and `lint` fail with the key's location, instead of being ignored. This applies to every section of both native formats.

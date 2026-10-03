@@ -1,191 +1,705 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/markbac/omni-uart/schemas/protocol.schema.json",
-  "title": "OmniUART Protocol Specification Schema",
-  "description": "Schema definition for universal UART protocol specification files (YAML or JSON).",
-  "type": "object",
-  "required": ["schema_version", "metadata", "serial_config", "framing", "commands"],
-  "properties": {
-    "schema_version": {
-      "type": "string",
-      "enum": ["1.0.0"]
-    },
-    "metadata": {
-      "type": "object",
-      "required": ["name", "version"],
-      "properties": {
-        "name": { "type": "string" },
-        "version": {
-          "type": "string",
-          "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
-          "description": "SemVer 2.0.0 semantic version string with optional pre-release and logical build/hardware metadata (e.g. 1.2.0+hw.revB)"
-        },
-        "description": { "type": "string" },
-        "author": { "type": "string" }
-      }
-    },
-    "serial_config": {
-      "type": "object",
-      "required": ["baudrate"],
-      "properties": {
-        "baudrate": { "type": "integer", "minimum": 1, "examples": [9600, 115200, 250000] },
-        "bytesize": { "type": "integer", "enum": [5, 6, 7, 8], "default": 8 },
-        "parity": { "type": "string", "enum": ["none", "even", "odd", "mark", "space"], "default": "none" },
-        "stopbits": { "type": "number", "enum": [1, 1.5, 2], "default": 1 },
-        "flow_control": { "type": "string", "enum": ["none", "hardware", "software"], "default": "none" },
-        "timeout_ms": { "type": "integer", "default": 1000 }
-      }
-    },
-    "framing": {
-      "type": "object",
-      "required": ["type"],
-      "properties": {
-        "type": { "type": "string", "enum": ["binary", "delimited"] },
-        "header": {
-          "oneOf": [
-            { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
-            { "type": "string" }
-          ]
-        },
-        "length": {
-          "type": "object",
-          "properties": {
-            "type": { "type": "string", "enum": ["uint8", "uint16", "uint32"] },
-            "endian": { "type": "string", "enum": ["little", "big"], "default": "little" },
-            "includes": { "type": "string", "enum": ["payload_only", "payload_and_cmd", "full_frame"], "default": "payload_only" }
-          }
-        },
-        "command_id": {
-          "type": "object",
-          "properties": {
-            "type": { "type": "string", "enum": ["uint8", "uint16", "uint32"] },
-            "endian": { "type": "string", "enum": ["little", "big"], "default": "little" }
-          }
-        },
-        "integrity": {
-          "type": "object",
-          "required": ["algorithm"],
-          "properties": {
-            "algorithm": {
-              "type": "string",
-              "enum": ["none", "sum8", "sum16", "xor", "crc8", "crc16_modbus", "crc16_ccitt", "crc32", "custom"]
-            },
-            "width": { "type": "integer", "enum": [8, 16, 24, 32] },
-            "poly": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
-            "init": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
-            "refin": { "type": "boolean", "default": false },
-            "refout": { "type": "boolean", "default": false },
-            "xorout": { "oneOf": [{ "type": "integer" }, { "type": "string" }], "default": 0 },
-            "endian": { "type": "string", "enum": ["little", "big"], "default": "little" },
-            "check": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
-            "covers": {
-              "type": "string",
-              "enum": ["after_header", "full_frame", "payload_only"],
-              "default": "after_header"
-            }
-          }
-        },
-        "footer": {
-          "oneOf": [
-            { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 255 } },
-            { "type": "string" }
-          ]
-        },
-        "prefix": { "type": "string" },
-        "delimiter": { "type": "string" },
-        "suffix": { "type": "string" }
-      }
-    },
-    "commands": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/command" }
-    },
-    "telemetry": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/telemetry" }
-    }
-  },
   "$defs": {
-    "field": {
-      "type": "object",
-      "required": ["name", "type"],
+    "CommandIdSpec": {
+      "additionalProperties": false,
+      "description": "Opcode/Command ID field descriptor.",
       "properties": {
-        "name": { "type": "string" },
         "type": {
-          "type": "string",
-          "enum": ["uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64", "float32", "float64", "bool", "enum", "string", "bytes"]
+          "default": "uint8",
+          "title": "Type",
+          "type": "string"
         },
-        "endian": { "type": "string", "enum": ["little", "big"], "default": "little" },
-        "default": {},
-        "min": { "type": "number" },
-        "max": { "type": "number" },
-        "unit": { "type": "string" },
-        "scale": { "type": "number" },
-        "options": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
-        "length": { "type": "integer" }
-      }
+        "endian": {
+          "default": "little",
+          "title": "Endian",
+          "type": "string"
+        }
+      },
+      "title": "CommandIdSpec",
+      "type": "object"
     },
-    "command": {
-      "type": "object",
-      "required": ["name", "id"],
+    "CommandSafety": {
+      "description": "What a command can do to the device. Anything not declared is treated as ``mutating``.\n\n- ``read_only``: queries state, changes nothing. The only level that may run automatically\n  (dashboard auto-run, auto-poll).\n- ``idempotent``: changes state, but sending it again has the same effect (set a value).\n- ``mutating``: changes state and is not safe to repeat.\n- ``destructive``: erases data, resets or reprograms the device.",
+      "enum": [
+        "read_only",
+        "idempotent",
+        "mutating",
+        "destructive"
+      ],
+      "title": "CommandSafety",
+      "type": "string"
+    },
+    "CommandSpec": {
+      "additionalProperties": false,
+      "description": "Definition of an outbound command and its parameter signature.",
       "properties": {
-        "name": { "type": "string" },
-        "id": {
-          "oneOf": [
-            { "type": "integer" },
-            { "type": "string" }
-          ]
+        "name": {
+          "title": "Name",
+          "type": "string"
         },
-        "description": { "type": "string" },
-        "tags": { "type": "array", "items": { "type": "string" } },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Id"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
         "safety": {
-          "type": "string",
-          "enum": ["read_only", "idempotent", "mutating", "destructive"],
-          "default": "mutating",
-          "description": "What the command can do to the device. Only read_only commands run automatically; unspecified means mutating."
+          "$ref": "#/$defs/CommandSafety",
+          "default": "mutating"
         },
         "parameters": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/field" }
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "Parameters",
+          "type": "array"
         },
         "response": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "oneOf": [
-                { "type": "integer" },
-                { "type": "string" }
-              ]
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResponseSpec"
             },
-            "timeout_ms": { "type": "integer" },
-            "fields": {
-              "type": "array",
-              "items": { "$ref": "#/$defs/field" }
+            {
+              "type": "null"
             }
-          }
+          ],
+          "default": null
         }
-      }
+      },
+      "required": [
+        "name",
+        "id"
+      ],
+      "title": "CommandSpec",
+      "type": "object"
+    },
+    "FieldSpec": {
+      "additionalProperties": false,
+      "description": "Specification for an individual payload or response field.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/FieldType"
+        },
+        "endian": {
+          "default": "little",
+          "title": "Endian",
+          "type": "string"
+        },
+        "default": {
+          "default": null,
+          "title": "Default"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min"
+        },
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "options": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Options"
+        },
+        "length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "FieldSpec",
+      "type": "object"
+    },
+    "FieldType": {
+      "description": "Supported primitive field data types.",
+      "enum": [
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "bool",
+        "enum",
+        "string",
+        "bytes"
+      ],
+      "title": "FieldType",
+      "type": "string"
+    },
+    "FramingConfig": {
+      "additionalProperties": false,
+      "description": "Envelope framing parameters for binary or delimited stream protocols.",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/FramingType"
+        },
+        "header": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Header"
+        },
+        "length": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LengthSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "command_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommandIdSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "integrity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntegritySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "footer": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Footer"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
+        },
+        "delimiter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delimiter"
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suffix"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "FramingConfig",
+      "type": "object"
+    },
+    "FramingType": {
+      "description": "Protocol framing architecture.",
+      "enum": [
+        "binary",
+        "delimited"
+      ],
+      "title": "FramingType",
+      "type": "string"
+    },
+    "IntegritySpec": {
+      "additionalProperties": false,
+      "description": "Checksum or CRC calculation specification.",
+      "properties": {
+        "algorithm": {
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "poly": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Poly"
+        },
+        "init": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Init"
+        },
+        "refin": {
+          "default": false,
+          "title": "Refin",
+          "type": "boolean"
+        },
+        "refout": {
+          "default": false,
+          "title": "Refout",
+          "type": "boolean"
+        },
+        "xorout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0,
+          "title": "Xorout"
+        },
+        "endian": {
+          "default": "little",
+          "title": "Endian",
+          "type": "string"
+        },
+        "check": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Check"
+        },
+        "covers": {
+          "default": "after_header",
+          "title": "Covers",
+          "type": "string"
+        },
+        "transform": {
+          "default": "none",
+          "title": "Transform",
+          "type": "string"
+        },
+        "carry_wrap": {
+          "default": false,
+          "title": "Carry Wrap",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "IntegritySpec",
+      "type": "object"
+    },
+    "LengthSpec": {
+      "additionalProperties": false,
+      "description": "Dynamic frame length field configuration.",
+      "properties": {
+        "type": {
+          "default": "uint16",
+          "title": "Type",
+          "type": "string"
+        },
+        "endian": {
+          "default": "little",
+          "title": "Endian",
+          "type": "string"
+        },
+        "includes": {
+          "default": "payload_only",
+          "title": "Includes",
+          "type": "string"
+        }
+      },
+      "title": "LengthSpec",
+      "type": "object"
+    },
+    "ProtocolMeta": {
+      "additionalProperties": false,
+      "description": "Metadata block for a protocol definition.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "ProtocolMeta",
+      "type": "object"
+    },
+    "ResponseSpec": {
+      "additionalProperties": false,
+      "description": "Expected response structure corresponding to an outbound command.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "timeout_ms": {
+          "default": 1000,
+          "title": "Timeout Ms",
+          "type": "integer"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "Fields",
+          "type": "array"
+        }
+      },
+      "title": "ResponseSpec",
+      "type": "object"
+    },
+    "SerialConfig": {
+      "additionalProperties": false,
+      "description": "Default physical hardware serial communication settings.",
+      "properties": {
+        "baudrate": {
+          "title": "Baudrate",
+          "type": "integer"
+        },
+        "bytesize": {
+          "default": 8,
+          "title": "Bytesize",
+          "type": "integer"
+        },
+        "parity": {
+          "default": "none",
+          "title": "Parity",
+          "type": "string"
+        },
+        "stopbits": {
+          "default": 1,
+          "title": "Stopbits",
+          "type": "number"
+        },
+        "flow_control": {
+          "default": "none",
+          "title": "Flow Control",
+          "type": "string"
+        },
+        "timeout_ms": {
+          "default": 1000,
+          "title": "Timeout Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "baudrate"
+      ],
+      "title": "SerialConfig",
+      "type": "object"
+    },
+    "TelemetrySpec": {
+      "additionalProperties": false,
+      "description": "Definition of an unsolicited broadcast or periodic sensor frame.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Id"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "id"
+      ],
+      "title": "TelemetrySpec",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Root model for an OmniUART protocol specification.",
+  "properties": {
+    "schema_version": {
+      "default": "1.0.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "metadata": {
+      "$ref": "#/$defs/ProtocolMeta"
+    },
+    "serial_config": {
+      "$ref": "#/$defs/SerialConfig"
+    },
+    "framing": {
+      "$ref": "#/$defs/FramingConfig"
+    },
+    "commands": {
+      "items": {
+        "$ref": "#/$defs/CommandSpec"
+      },
+      "title": "Commands",
+      "type": "array"
     },
     "telemetry": {
-      "type": "object",
-      "required": ["name", "id"],
-      "properties": {
-        "name": { "type": "string" },
-        "id": {
-          "oneOf": [
-            { "type": "integer" },
-            { "type": "string" }
-          ]
-        },
-        "description": { "type": "string" },
-        "fields": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/field" }
-        }
-      }
+      "items": {
+        "$ref": "#/$defs/TelemetrySpec"
+      },
+      "title": "Telemetry",
+      "type": "array"
     }
-  }
+  },
+  "required": [
+    "metadata",
+    "serial_config",
+    "framing"
+  ],
+  "title": "OmniUART Protocol Specification Schema",
+  "type": "object"
 }
