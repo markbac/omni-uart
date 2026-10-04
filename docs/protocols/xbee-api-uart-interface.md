@@ -18,7 +18,6 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
 | `frameId` | `uint8` | - | - | - |
 | `atCommand` | `string` | - | - | - |
 | `parameterValue` | `uint8` | - | - | - |
@@ -29,7 +28,6 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
 | `frameId` | `uint8` | - | - | - |
 | `atCommand` | `string` | - | - | - |
 | `parameterValue` | `uint8` | - | - | - |
@@ -40,7 +38,6 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
 | `frameId` | `uint8` | - | - | - |
 | `dest64` | `bytes` | - | - | - |
 | `dest16` | `uint16` | - | - | - |
@@ -54,7 +51,6 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 
 | Parameter | Type | Unit | Range / Constraints | Options |
 | :--- | :--- | :--- | :--- | :--- |
-| `frameType` | `enum` | - | - | `{'8': 'ATCommand', '16': 'TransmitRequest', '23': 'RemoteATCommand', '136': 'ATCommandResponse'}` |
 | `frameId` | `uint8` | - | - | - |
 | `dest64` | `bytes` | - | - | - |
 | `dest16` | `uint16` | - | - | - |
@@ -67,7 +63,6 @@ Digi XBee radio module binary command protocol, including an AT Command frame se
 
 | Field Name | Type | Unit |
 | :--- | :--- | :--- |
-| `frameType` | `enum` | - |
 | `frameId` | `uint8` | - |
 | `atCommand` | `string` | - |
 | `commandStatus` | `uint8` | - |
@@ -135,8 +130,6 @@ components:
           type: integer
           const: 8
           description: Opcode ID for SetChannelATCommand
-        frameType:
-          type: integer
         frameId:
           type: integer
         atCommand:
@@ -152,8 +145,6 @@ components:
           type: integer
           const: 16
           description: Opcode ID for TransmitRequest
-        frameType:
-          type: integer
         frameId:
           type: integer
         dest64:
@@ -174,8 +165,6 @@ components:
           type: integer
           const: 23
           description: Opcode ID for RemoteATCommand
-        frameType:
-          type: integer
         frameId:
           type: integer
         dest64:

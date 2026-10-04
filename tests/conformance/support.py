@@ -104,5 +104,4 @@ KNOWN_GAPS: Dict[Tuple[str, str], str] = {
     ("ubx-uart-interface.json", "NAV-PVT"): KIT_FRAMING_GAP,
     ("ubx-uart-interface.json", "NAV-STATUS"): KIT_FRAMING_GAP,
     ("xbee-api-uart-interface.json", "SetChannelATCommand"): KIT_FRAMING_GAP,
-    ("xbee-api-uart-interface.json", "TransmitRequest"): KIT_FRAMING_GAP,
 }

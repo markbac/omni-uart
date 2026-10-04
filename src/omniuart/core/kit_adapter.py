@@ -18,6 +18,8 @@ from omniuart.core.models import (
     FramingConfig,
     FramingType,
     IntegritySpec,
+    CommandIdSpec,
+    LengthSpec,
     ProtocolMeta,
     ProtocolSpec,
     ResponseSpec,
@@ -162,6 +164,77 @@ def _parse_baud(value: Any, source_name: Optional[str]) -> int:
     return candidate
 
 
+_UNMAPPED_FRAMING_KEYS = ("preLengthHeaderBytes", "escapeByte", "escapeScheme", "syncRepeatsAfterLength", "trailingDelimiter")
+
+
+def _wire_id_field(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The message's first field when it is an integer-constant discriminator (so it is the id on the wire)."""
+    fields = msg.get("fields") or []
+    first = fields[0] if fields else None
+    if not isinstance(first, dict) or "constValue" not in first or isinstance(_normalise_id(first["constValue"]), str):
+        return None
+    if first.get("role") not in (None, "discriminator"):
+        return None
+    return first
+
+
+def _map_sync_length_framing(
+    framing_raw: Dict[str, Any],
+    data: Dict[str, Any],
+    source_name: Optional[str],
+) -> Optional[Tuple[List[int], LengthSpec, CommandIdSpec]]:
+    """Map a kit ``sync-length-payload-crc`` frame onto the native ``header`` + ``length`` + ``command_id`` model.
+
+    Only a frame laid out exactly as ``<sync><length><id><fields...><integrity>`` is representable, where
+    ``<id>`` is every message's first field, an integer constant of one common size. A kit ``payload-only``
+    length counts all message fields including that id, so it becomes ``payload_and_cmd``. Anything else
+    (bytes between the sync and the length or between the length and the id, a repeated length, escaping,
+    a trailing delimiter, a length that counts itself, messages with no leading id constant) cannot be
+    represented. A warning names the protocol and what blocked the mapping, and ``None`` is returned: the
+    frame is left unframed rather than approximated by a layout that would not match the wire.
+    """
+    where = source_name or "kit protocol"
+    sync = framing_raw.get("syncBytes")
+    lengthfield = framing_raw.get("lengthField")
+    if not isinstance(sync, list) or not sync or not isinstance(lengthfield, dict):
+        return None
+    blockers = [key for key in _UNMAPPED_FRAMING_KEYS if key in framing_raw]
+    if lengthfield.get("precedingHeaderBytes"):
+        blockers.append("lengthField.precedingHeaderBytes")
+    if lengthfield.get("repeated"):
+        blockers.append("lengthField.repeated")
+    includes = {"payload-only": "payload_and_cmd", "whole-frame": "full_frame"}.get(str(lengthfield.get("countsFrom")))
+    if includes is None:
+        blockers.append(f"lengthField.countsFrom={lengthfield.get('countsFrom')!r}")
+    size_type = {1: "uint8", 2: "uint16", 4: "uint32"}.get(lengthfield.get("sizeBytes", 0))
+    if size_type is None:
+        blockers.append("lengthField.sizeBytes")
+
+    messages = list(data.get("commands", [])) + list(data.get("responses", []))
+    id_fields = [_wire_id_field(m) for m in messages]
+    custom = data.get("fieldTypes") or {}
+
+    def id_size(field: Dict[str, Any]) -> Any:
+        declared = custom.get(field.get("type"), {}) if isinstance(custom, dict) else {}
+        return field.get("sizeBytes", declared.get("sizeBytes") if isinstance(declared, dict) else None)
+
+    sizes = {id_size(f) for f in id_fields if f}
+    if not messages or any(f is None for f in id_fields):
+        blockers.append("messages without an integer constant as their first field (no id on the wire)")
+    elif len(sizes) != 1 or next(iter(sizes)) not in (1, 2, 4):
+        blockers.append("message ids of different or unsupported sizes")
+    if blockers or size_type is None or includes is None:
+        logger.warning("%s: framing uses %s, which the native model cannot express, so syncBytes and lengthField are not mapped and frames cannot be delimited", where, "; ".join(blockers))
+        return None
+
+    def order(node: Dict[str, Any]) -> str:
+        raw = str(node.get("byteOrder", data.get("encoding", {}).get("byteOrder", "little")))
+        return "big" if "big" in raw.lower() else "little"
+    first = id_fields[0] or {}
+    id_type = {1: "uint8", 2: "uint16", 4: "uint32"}[next(iter(sizes))]
+    return list(sync), LengthSpec(type=size_type, endian=order({}), includes=includes), CommandIdSpec(type=id_type, endian=order(first))
+
+
 def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) -> ProtocolSpec:
     """Parse a uart-interface-schema-kit dictionary into an OmniUART ProtocolSpec.
 
@@ -237,9 +310,20 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
     if integrity_raw and "algorithm" in integrity_raw:
         integrity_spec = _parse_integrity(integrity_raw, source_name)
 
+    length_spec = None
+    command_id_spec = None
+    id_on_wire = False
+    if style == "sync-length-payload-crc":
+        mapped = _map_sync_length_framing(framing_raw, data, source_name)
+        if mapped:
+            header_bytes, length_spec, command_id_spec = mapped
+            id_on_wire = True
+
     framing_config = FramingConfig(
         type=framing_type,
         header=header_bytes,
+        length=length_spec,
+        command_id=command_id_spec,
         integrity=integrity_spec,
         footer=footer_bytes,
         delimiter=framing_raw.get("startDelimiter") if isinstance(framing_raw.get("startDelimiter"), str) else None,
@@ -298,7 +382,7 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
             if i == discriminator:
                 if "constValue" in f:
                     msg_id = _normalise_id(f["constValue"])
-                if framing_type is FramingType.DELIMITED:
+                if framing_type is FramingType.DELIMITED or id_on_wire:
                     # On a delimited line the discriminator *is* the message text, so it is
                     # carried by the id and must not be asked for as a parameter.
                     continue
