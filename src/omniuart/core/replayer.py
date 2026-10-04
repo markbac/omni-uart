@@ -18,13 +18,37 @@ from omniuart.core.transport import AsyncTransport
 logger = logging.getLogger(__name__)
 
 
-class SessionReplayer:
-    """Replays transaction logs onto a target UART transport."""
+from enum import Enum
 
-    def __init__(self, transport: AsyncTransport, speed_multiplier: float = 1.0, max_duration_s: Optional[float] = None) -> None:
-        self.max_duration_s = max_duration_s if max_duration_s is not None else get_limits().replay_duration_s
+
+class ReplayTimingMode(str, Enum):
+    """Timing policies for session replay."""
+
+    FAITHFUL = "faithful"  # Exact inter-packet delays without artificial capping
+    CAPPED = "capped"  # Inter-packet delays capped at max_gap_s (default 5.0 s)
+    ACCELERATED = "accelerated"  # High-speed accelerated replay
+    FIXED_RATE = "fixed_rate"  # Uniform interval between packets (fixed_interval_s)
+    DETERMINISTIC = "deterministic"  # Immediate zero-delay replay for tests
+
+
+class SessionReplayer:
+    """Replays transaction logs onto a target UART transport with configurable timing control."""
+
+    def __init__(
+        self,
+        transport: AsyncTransport,
+        timing_mode: Union[ReplayTimingMode, str] = ReplayTimingMode.CAPPED,
+        speed_multiplier: float = 1.0,
+        max_gap_s: Optional[float] = 5.0,
+        fixed_interval_s: float = 0.01,
+        max_duration_s: Optional[float] = None,
+    ) -> None:
         self.transport = transport
+        self.timing_mode = ReplayTimingMode(timing_mode) if isinstance(timing_mode, str) else timing_mode
         self.speed_multiplier = max(0.0, float(speed_multiplier))
+        self.max_gap_s = max_gap_s
+        self.fixed_interval_s = fixed_interval_s
+        self.max_duration_s = max_duration_s if max_duration_s is not None else get_limits().replay_duration_s
 
     async def replay_file(self, jsonl_path: Union[str, Path]) -> int:
         """Replay a recorded .jsonl session log file. Returns count of replayed frames."""
@@ -57,17 +81,29 @@ class SessionReplayer:
         waited = 0.0
 
         for event in events:
-            if prev_ts is not None and self.speed_multiplier > 0:
-                raw_delay = (event.timestamp - prev_ts) / self.speed_multiplier
-                delay = min(raw_delay, 5.0)  # cap a single gap at 5 s
-                if raw_delay > 5.0:
-                    logger.info("Inter-packet gap of %.2f s capped to 5.0 s maximum", raw_delay)
-                if delay > 0:
-                    if waited + delay > self.max_duration_s:
-                        logger.warning("Replay stopped after %d frame(s): it would exceed the %g s duration limit", count, self.max_duration_s)
-                        break
-                    await asyncio.sleep(delay)
-                    waited += delay
+            delay = 0.0
+            if prev_ts is not None:
+                if self.timing_mode == ReplayTimingMode.DETERMINISTIC or self.speed_multiplier == 0:
+                    delay = 0.0
+                elif self.timing_mode == ReplayTimingMode.FIXED_RATE:
+                    delay = self.fixed_interval_s / max(0.001, self.speed_multiplier)
+                else:  # FAITHFUL, CAPPED, ACCELERATED
+                    raw_delay = (event.timestamp - prev_ts) / self.speed_multiplier
+                    if self.timing_mode == ReplayTimingMode.CAPPED and self.max_gap_s is not None:
+                        delay = min(raw_delay, self.max_gap_s)
+                        if raw_delay > self.max_gap_s:
+                            logger.info("Inter-packet gap of %.2f s capped to %.2f s maximum", raw_delay, self.max_gap_s)
+                    elif self.max_gap_s is not None:
+                        delay = min(raw_delay, self.max_gap_s)
+                    else:
+                        delay = raw_delay
+
+            if delay > 0:
+                if waited + delay > self.max_duration_s:
+                    logger.warning("Replay stopped after %d frame(s): it would exceed the %g s duration limit", count, self.max_duration_s)
+                    break
+                await asyncio.sleep(delay)
+                waited += delay
 
             prev_ts = event.timestamp
             hex_clean = event.raw_hex.replace(" ", "")
@@ -78,3 +114,4 @@ class SessionReplayer:
                 logger.info(f"Replayed TX frame ({len(raw_bytes)} bytes): {event.command_name or 'custom'}")
 
         return count
+
