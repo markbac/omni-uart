@@ -20,6 +20,33 @@ from omniuart.core.transport import AsyncTransport, VirtualTransport
 logger = logging.getLogger(__name__)
 
 
+import re
+from dataclasses import dataclass, field
+
+
+@dataclass
+class SimulatorRule:
+    """Declarative simulation rule for request matching, response rendering, state changes and delays."""
+
+    match_pattern: Optional[str] = None  # Exact string prefix or Regex pattern for delimited commands
+    command_name: Optional[str] = None  # Command spec name for binary frames
+    response_template: Optional[str] = None  # Output string template, e.g. "\r\n+CSQ: {signal_quality},99\r\n\r\nOK\r\n"
+    response_fields: Optional[Dict[str, Any]] = None  # Binary response fields
+    state_updates: Optional[Dict[str, Any]] = None  # Dict of state keys to update upon match
+    delay_ms: float = 0.0
+    error_response: Optional[bytes] = None
+    generated_values: Optional[Dict[str, str]] = None  # Expression mapping for fields
+    sequence: Optional[List[Dict[str, Any]]] = None  # Sequence of responses for repeated invocations
+
+
+@dataclass
+class DeclarativeBehavior:
+    """Declarative specification of device simulation behavior."""
+
+    initial_state: Dict[str, Any] = field(default_factory=dict)
+    rules: List[SimulatorRule] = field(default_factory=list)
+
+
 class BaseDeviceSimulator:
     """Stateful virtual device emulator driven by an OmniUART ProtocolSpec."""
 
@@ -30,16 +57,20 @@ class BaseDeviceSimulator:
         latency_ms: float = 5.0,
         fault_drop_rate: float = 0.0,
         frame_timeout_ms: float = 50.0,
+        behavior: Optional[DeclarativeBehavior] = None,
+        rules: Optional[List[SimulatorRule]] = None,
     ) -> None:
         self.spec = spec
         self.frame_timeout_ms = frame_timeout_ms
         self.transport = transport or VirtualTransport(protocol=spec)
         self.latency_ms = latency_ms
         self.fault_drop_rate = fault_drop_rate
+        self.behavior = behavior or DeclarativeBehavior(rules=rules or [])
 
         self._running = False
         self._task: Optional[asyncio.Task[None]] = None
         self._state: Dict[str, Any] = {"power": True, "rx_count": 0, "rx_errors": 0, "tx_count": 0}
+        self._state.update(self.behavior.initial_state)
         self.codec = FrameCodec(spec)
 
     async def start(self) -> None:
@@ -72,8 +103,6 @@ class BaseDeviceSimulator:
             try:
                 chunk = await self.transport.read(size=1, timeout_ms=50)
                 if not chunk:
-                    # Like a real UART receiver, abandon a partial frame after an idle gap so that
-                    # one truncated frame cannot swallow the start of the next request.
                     if buf and (time.monotonic() - last_rx) * 1000.0 >= self.frame_timeout_ms:
                         logger.debug("Discarding %d byte(s) of incomplete frame after idle timeout", len(buf))
                         buf.clear()
@@ -97,18 +126,12 @@ class BaseDeviceSimulator:
                 await asyncio.sleep(0.05)
 
     def process_incoming_bytes(self, buf: bytearray) -> Optional[bytes]:
-        """Consume complete request frames from ``buf`` and return the concatenated responses.
-
-        Bytes that belong to an incomplete frame stay in ``buf`` until more arrive. Binary
-        requests are located, validated and identified by the protocol's :class:`FrameCodec`.
-        """
+        """Consume complete request frames from ``buf`` and return the concatenated responses."""
         if not buf:
             return None
 
         framing_type = getattr(self.spec.framing.type, "value", self.spec.framing.type)
 
-        # Handle delimited ASCII protocols (e.g. AT commands): one command per line, and the
-        # empty line left by a CR LF terminator pair is not a command.
         if str(framing_type).lower() == "delimited":
             raw_text = buf.decode("utf-8", errors="ignore")
             responses = bytearray()
@@ -120,7 +143,7 @@ class BaseDeviceSimulator:
                 if line:
                     self._state["rx_count"] += 1
                     responses.extend(self.handle_delimited_command(line))
-            if len(raw_text) > 128:  # no terminator in sight: treat the overlong input as one command
+            if len(raw_text) > 128:
                 self._state["rx_count"] += 1
                 responses.extend(self.handle_delimited_command(raw_text.strip()))
                 raw_text = ""
@@ -133,7 +156,6 @@ class BaseDeviceSimulator:
         for frame in frames:
             self._state["rx_count"] += 1
             if not frame.ok:
-                # A device ignores frames it cannot validate; it does not answer them.
                 self._state["rx_errors"] += 1
                 logger.debug("Ignoring invalid request frame: %s", frame.error)
                 continue
@@ -149,7 +171,6 @@ class BaseDeviceSimulator:
             return b""
         violation = validate_fields(cmd.parameters, frame.fields)
         if violation:
-            # A compliant device refuses out-of-range parameters rather than acting on them.
             self._state["rx_errors"] += 1
             logger.debug("Ignoring '%s': %s", cmd.name, violation)
             return b""
@@ -165,23 +186,47 @@ class BaseDeviceSimulator:
             return b""
 
     def handle_command(self, cmd: CommandSpec, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Behaviour hook: return response field values for ``cmd``, or ``None`` to stay silent.
-
-        The default answers every command that declares a response using the declared field
-        defaults. Subclasses override this to model device state.
-        """
+        """Behaviour hook: return response field values for ``cmd``, or ``None`` to stay silent."""
+        for rule in self.behavior.rules:
+            if rule.command_name == cmd.name:
+                if rule.state_updates:
+                    self._state.update(rule.state_updates)
+                if rule.response_fields is not None:
+                    return dict(rule.response_fields)
         return {}
 
     def handle_delimited_command(self, cmd_str: str) -> bytes:
         """Handle ASCII delimited text command string."""
         if not cmd_str:
             return b""
-        suffix = self.spec.framing.suffix or "\r\n"
+        cmd_upper = cmd_str.strip().upper()
 
-        if cmd_str.upper() in ("AT", "PING"):
-            return f"OK{suffix}".encode("utf-8")
+        sorted_rules = sorted(
+            [r for r in self.behavior.rules if r.match_pattern],
+            key=lambda r: len(r.match_pattern or ""),
+            reverse=True,
+        )
 
-        return f"OK{suffix}".encode("utf-8")
+        for rule in sorted_rules:
+            pat = (rule.match_pattern or "").upper()
+            matched = False
+            if pat in ("AT", "PING"):
+                matched = (cmd_upper == pat)
+            elif "ENTERDATAMODE" in pat:
+                matched = ("ENTERDATAMODE" in cmd_upper)
+            elif pat.endswith("=") or pat.endswith("?"):
+                matched = cmd_upper.startswith(pat)
+            else:
+                matched = (cmd_upper == pat or cmd_upper.startswith(pat))
+
+            if matched:
+                if rule.state_updates:
+                    self._state.update(rule.state_updates)
+                if rule.response_template:
+                    return rule.response_template.format(**self._state).encode("utf-8")
+
+        return b""
+
 
 
 class ATModemSimulator(BaseDeviceSimulator):
@@ -191,6 +236,7 @@ class ATModemSimulator(BaseDeviceSimulator):
         self,
         spec: Optional[ProtocolSpec] = None,
         transport: Optional[AsyncTransport] = None,
+        behavior: Optional[DeclarativeBehavior] = None,
     ) -> None:
         if spec is None:
             spec = ProtocolSpec(
@@ -199,10 +245,47 @@ class ATModemSimulator(BaseDeviceSimulator):
                 framing=FramingConfig(type=FramingType.DELIMITED, prefix="AT", suffix="\r\n"),
                 commands=[],
             )
-        super().__init__(spec=spec, transport=transport)
-        self.signal_quality = 24
-        self.battery_mv = 3850
-        self.creg_status = 1  # 1 = Registered, home network
+        if behavior is None:
+            behavior = DeclarativeBehavior(
+                initial_state={"signal_quality": 24, "battery_mv": 3850, "creg_status": 1},
+                rules=[
+                    SimulatorRule(match_pattern="AT+CSQ", response_template="\r\n+CSQ: {signal_quality},99\r\n\r\nOK\r\n"),
+                    SimulatorRule(match_pattern="AT+CBC", response_template="\r\n+CBC: 0,{battery_mv}\r\n\r\nOK\r\n"),
+                    SimulatorRule(match_pattern="AT+CREG?", response_template="\r\n+CREG: 0,{creg_status}\r\n\r\nOK\r\n"),
+                    SimulatorRule(match_pattern="AT+CGREG?", response_template="\r\n+CGREG: 0,1\r\n\r\nOK\r\n"),
+                    SimulatorRule(match_pattern="AT+GSN", response_template="\r\n867530901234567\r\n\r\nOK\r\n"),
+                    SimulatorRule(match_pattern="AT+CGSN", response_template="\r\n867530901234567\r\n\r\nOK\r\n"),
+                    SimulatorRule(match_pattern="ATD", response_template="\r\nCONNECT 115200\r\n"),
+                    SimulatorRule(match_pattern="ENTERDATAMODE", response_template="\r\nCONNECT 115200\r\n"),
+                    SimulatorRule(match_pattern="AT+CMGS=", response_template="\r\n> "),
+                    SimulatorRule(match_pattern="AT", response_template="\r\nOK\r\n"),
+                ],
+            )
+        super().__init__(spec=spec, transport=transport, behavior=behavior)
+
+    @property
+    def signal_quality(self) -> int:
+        return self._state.get("signal_quality", 24)
+
+    @signal_quality.setter
+    def signal_quality(self, val: int) -> None:
+        self._state["signal_quality"] = val
+
+    @property
+    def battery_mv(self) -> int:
+        return self._state.get("battery_mv", 3850)
+
+    @battery_mv.setter
+    def battery_mv(self, val: int) -> None:
+        self._state["battery_mv"] = val
+
+    @property
+    def creg_status(self) -> int:
+        return self._state.get("creg_status", 1)
+
+    @creg_status.setter
+    def creg_status(self, val: int) -> None:
+        self._state["creg_status"] = val
 
     @staticmethod
     def _final(result: str) -> bytes:
@@ -216,23 +299,11 @@ class ATModemSimulator(BaseDeviceSimulator):
         cmd = cmd_str.strip().upper()
         if not cmd:
             return b""  # an empty line is not a command
-        if cmd == "AT":
-            return self._final("OK")
-        if cmd.startswith("AT+CSQ"):
-            return self._info(f"+CSQ: {self.signal_quality},99")
-        if cmd.startswith("AT+CBC"):
-            return self._info(f"+CBC: 0,{self.battery_mv}")
-        if cmd.startswith("AT+CREG?"):
-            return self._info(f"+CREG: 0,{self.creg_status}")
-        if cmd.startswith("AT+CGREG?"):
-            return self._info("+CGREG: 0,1")
-        if cmd.startswith("AT+GSN") or cmd.startswith("AT+CGSN"):
-            return self._info("867530901234567")
-        if cmd.startswith("ATD") or "ENTERDATAMODE" in cmd:
-            return self._final("CONNECT 115200")
-        if cmd.startswith("AT+CMGS="):
-            return b"\r\n> "
+        res = super().handle_delimited_command(cmd_str)
+        if res:
+            return res
         return self._final("ERROR")  # unknown command, so typos do not pass silently
+
 
 
 class IoTSensorSimulator(BaseDeviceSimulator):
