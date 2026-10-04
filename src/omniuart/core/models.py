@@ -280,6 +280,9 @@ class SerialConfig(BaseModel):
     stopbits: float = 1
     flow_control: str = "none"
     timeout_ms: int = 1000
+    rs485_rts_mode: bool = False
+    rs485_turnaround_ms: float = 0.0
+    pulse_pins: List[Dict[str, Any]] = Field(default_factory=list)
 
     @field_validator("baudrate")
     @classmethod

@@ -112,6 +112,8 @@ class VirtualTransport(AsyncTransport):
         fragment_rate: float = 0.0,
         duplicate_rate: float = 0.0,
         truncate_rate: float = 0.0,
+        rs485_rts_mode: bool = False,
+        rs485_turnaround_ms: float = 0.0,
     ) -> None:
         self.protocol = protocol
         self.latency_ms = latency_ms
@@ -126,6 +128,9 @@ class VirtualTransport(AsyncTransport):
         self.fragment_rate = fragment_rate
         self.duplicate_rate = duplicate_rate
         self.truncate_rate = truncate_rate
+        self.rs485_rts_mode = rs485_rts_mode
+        self.rs485_turnaround_ms = rs485_turnaround_ms
+        self.line_errors: Dict[str, int] = {"break": 0, "framing": 0, "parity": 0}
 
         self._rx = _ReadBuffer()
         self._is_open = False
@@ -164,6 +169,11 @@ class VirtualTransport(AsyncTransport):
             logger.warning("Fault injection: Dropped outbound frame.")
             return len(data)
 
+        if self.rs485_rts_mode:
+            await self.set_pin_state("rts", True)
+            if self.rs485_turnaround_ms > 0:
+                await asyncio.sleep(self.rs485_turnaround_ms / 1000.0)
+
         # Simulate transmission latency and jitter
         jitter = self.rng.uniform(-self.jitter_ms, self.jitter_ms) if self.jitter_ms > 0 else 0.0
         delay = max(0.001, (self.latency_ms + jitter) / 1000.0)
@@ -171,6 +181,12 @@ class VirtualTransport(AsyncTransport):
 
         # Generate response byte frame
         resp_bytes = self._generate_response(data)
+
+        if self.rs485_rts_mode:
+            if self.rs485_turnaround_ms > 0:
+                await asyncio.sleep(self.rs485_turnaround_ms / 1000.0)
+            await self.set_pin_state("rts", False)
+
         if not resp_bytes:
             return len(data)
 
@@ -824,3 +840,31 @@ class WindowsNamedPipePair:
     async def close(self) -> None:
         await self.device.close()
         await self.host.close()
+
+
+async def auto_detect_baudrate(
+    transport_creator: Callable[[int], AsyncTransport],
+    spec: ProtocolSpec,
+    candidate_baudrates: Optional[List[int]] = None,
+    timeout_ms: int = 500,
+) -> Optional[int]:
+    """Auto-detect UART baud rate by probing candidate rates with the protocol's first command."""
+    candidates = candidate_baudrates or [9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600]
+    if not spec.commands:
+        return None
+
+    cmd = spec.commands[0]
+    for baud in candidates:
+        transport = transport_creator(baud)
+        try:
+            await transport.open()
+            from omniuart.core.session import DeviceSession
+            session = DeviceSession(spec, transport)
+            exchange = await session.send(cmd.name, timeout_ms=timeout_ms)
+            if exchange.response_bytes or exchange.status.value in ("ok", "success"):
+                return baud
+        except Exception:
+            pass
+        finally:
+            await transport.close()
+    return None
