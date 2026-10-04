@@ -92,11 +92,53 @@ class AsyncTransport(abc.ABC):
                 await asyncio.sleep(duration)
 
 
+TransportFactory = Callable[..., AsyncTransport]
+
+
+class TransportRegistry:
+    """Registry for transport plugins (serial, virtual, named pipe, pty, socket/tcp/udp)."""
+
+    def __init__(self) -> None:
+        self._factories: Dict[str, TransportFactory] = {}
+
+    def register(self, name: str, factory: TransportFactory) -> None:
+        """Register a transport plugin factory under `name`."""
+        key = name.lower().strip()
+        self._factories[key] = factory
+        logger.info(f"Registered transport plugin '{key}'")
+
+    def unregister(self, name: str) -> None:
+        key = name.lower().strip()
+        self._factories.pop(key, None)
+
+    def get_factory(self, name: str) -> Optional[TransportFactory]:
+        return self._factories.get(name.lower().strip())
+
+    def list_transports(self) -> List[str]:
+        return sorted(self._factories.keys())
+
+    def create(self, scheme_or_name: str, **kwargs: Any) -> AsyncTransport:
+        key = scheme_or_name.lower().strip()
+        factory = self.get_factory(key)
+        if factory is None:
+            raise ValueError(f"Unknown transport plugin '{scheme_or_name}'. Registered: {', '.join(self.list_transports())}")
+        return factory(**kwargs)
+
+
+transport_registry = TransportRegistry()
+
+
+def register_transport(name: str, factory: TransportFactory) -> None:
+    """Global helper to register custom transport plugin."""
+    transport_registry.register(name, factory)
+
+
 class VirtualTransport(AsyncTransport):
     """In-memory virtual MCU transport simulating hardware UART over async queues.
 
     Supports offline loopback, latency jitter, fault injection, and simulated DTR/RTS pins.
     """
+
 
     def __init__(
         self,
@@ -868,3 +910,10 @@ async def auto_detect_baudrate(
         finally:
             await transport.close()
     return None
+
+
+transport_registry.register("virtual", lambda **kwargs: VirtualTransport(**kwargs))
+transport_registry.register("serial", lambda **kwargs: HardwareSerialTransport(**kwargs))
+transport_registry.register("hardware", lambda **kwargs: HardwareSerialTransport(**kwargs))
+transport_registry.register("pipe", lambda **kwargs: WindowsNamedPipeTransport(**kwargs))
+
