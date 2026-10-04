@@ -58,8 +58,6 @@ components:
           type: integer
           const: 8
           description: Opcode ID for SetChannelATCommand
-        frameType:
-          type: integer
         frameId:
           type: integer
         atCommand:
@@ -75,8 +73,6 @@ components:
           type: integer
           const: 16
           description: Opcode ID for TransmitRequest
-        frameType:
-          type: integer
         frameId:
           type: integer
         dest64:
@@ -97,8 +93,6 @@ components:
           type: integer
           const: 23
           description: Opcode ID for RemoteATCommand
-        frameType:
-          type: integer
         frameId:
           type: integer
         dest64:

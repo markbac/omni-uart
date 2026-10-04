@@ -989,18 +989,35 @@
     "atCommand": "AA",
     "dest16": 0,
     "dest64": "0101010100000000",
-    "frameId": 0,
-    "frameType": 23
+    "frameId": 0
    },
    "params": {
     "applyOptions": 0,
     "atCommand": "AA",
     "dest16": 0,
     "dest64": "01 01 01 01",
-    "frameId": 0,
-    "frameType": 23
+    "frameId": 0
    },
-   "request": "17 17 00 01 01 01 01 00 00 00 00 00 00 00 41 41 62"
+   "request": "7E 00 0F 17 00 01 01 01 01 00 00 00 00 00 00 00 41 41 79"
+  },
+  "TransmitRequest": {
+   "decoded": {
+    "broadcastRadius": 0,
+    "dest16": 0,
+    "dest64": "0101010100000000",
+    "frameId": 0,
+    "options": 0,
+    "payload": "01"
+   },
+   "params": {
+    "broadcastRadius": 0,
+    "dest16": 0,
+    "dest64": "01 01 01 01",
+    "frameId": 0,
+    "options": 0,
+    "payload": "01"
+   },
+   "request": "7E 00 0F 10 00 01 01 01 01 00 00 00 00 00 00 00 00 01 FA"
   }
  },
  "xmodem-uart-interface.json": {
