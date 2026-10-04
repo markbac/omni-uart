@@ -1,0 +1,2 @@
+{"direction": "TX", "command_name": "status", "raw_hex": "AA55000001B00055AA", "length_bytes": 9, "timestamp": 1700000000.0}
+{"direction": "RX", "command_name": "status", "raw_hex": "AA5503008101E80362DE55AA", "length_bytes": 13, "timestamp": 1700000000.005}

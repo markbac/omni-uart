@@ -1,0 +1,56 @@
+schema_version: "1.0.0"
+metadata:
+  name: "RegressionDevice"
+  version: "1.0.0"
+  description: "End-to-end regression test protocol fixture"
+  author: "QA Hardware Automation"
+
+serial_config:
+  baudrate: 115200
+  bytesize: 8
+  parity: "none"
+  stopbits: 1
+
+framing:
+  type: "binary"
+  header: [0xAA, 0x55]
+  length:
+    type: "uint16"
+    endian: "little"
+    includes: "payload_only"
+  command_id:
+    type: "uint8"
+  integrity:
+    algorithm: "crc16_modbus"
+  footer: [0x55, 0xAA]
+
+commands:
+  - name: "status"
+    id: 0x01
+    description: "Query device status"
+    safety: "read_only"
+    parameters: []
+    response:
+      id: 0x81
+      fields:
+        - name: "system_state"
+          type: "uint8"
+        - name: "voltage_mv"
+          type: "uint16"
+          endian: "little"
+
+  - name: "configure"
+    id: 0x02
+    description: "Set operating parameters"
+    safety: "idempotent"
+    parameters:
+      - name: "mode"
+        type: "uint8"
+      - name: "frequency_hz"
+        type: "uint32"
+        endian: "little"
+    response:
+      id: 0x82
+      fields:
+        - name: "result_code"
+          type: "uint8"
