@@ -238,7 +238,8 @@ class ScriptRunner:
                 if self.on_log:
                     self.on_log(message)
             if not step.command:
-                return StepResult(index, name, StepStatus.PASSED, message if step.log else f"waited {step.delay_ms} ms")
+                delay_msg = f"waited {step.delay_ms} ms" if step.delay_ms is not None else "completed step"
+                return StepResult(index, name, StepStatus.PASSED, message if step.log else delay_msg)
             return await self._run_command(index, name, step)
         except ScriptError as exc:
             return StepResult(index, name, StepStatus.ERROR, str(exc))

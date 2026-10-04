@@ -24,7 +24,7 @@ class SessionReplayer:
     def __init__(self, transport: AsyncTransport, speed_multiplier: float = 1.0, max_duration_s: Optional[float] = None) -> None:
         self.max_duration_s = max_duration_s if max_duration_s is not None else get_limits().replay_duration_s
         self.transport = transport
-        self.speed_multiplier = max(0.1, speed_multiplier)
+        self.speed_multiplier = max(0.0, float(speed_multiplier))
 
     async def replay_file(self, jsonl_path: Union[str, Path]) -> int:
         """Replay a recorded .jsonl session log file. Returns count of replayed frames."""
@@ -34,10 +34,16 @@ class SessionReplayer:
 
         events = []
         with path.open("r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    data = json.loads(line)
-                    events.append(PacketEvent(**data))
+            for line_num, line in enumerate(f, 1):
+                line_str = line.strip()
+                if line_str:
+                    try:
+                        data = json.loads(line_str)
+                        events.append(PacketEvent(**data))
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(f"Line {line_num}: invalid JSON in session log '{path.name}': {exc.msg}") from exc
+                    except Exception as exc:
+                        raise ValueError(f"Line {line_num}: invalid packet event in session log '{path.name}': {exc}") from exc
 
         if not events:
             logger.warning("No events found in session file.")
@@ -51,8 +57,11 @@ class SessionReplayer:
         waited = 0.0
 
         for event in events:
-            if prev_ts is not None:
-                delay = min((event.timestamp - prev_ts) / self.speed_multiplier, 5.0)  # cap a single gap at 5 s
+            if prev_ts is not None and self.speed_multiplier > 0:
+                raw_delay = (event.timestamp - prev_ts) / self.speed_multiplier
+                delay = min(raw_delay, 5.0)  # cap a single gap at 5 s
+                if raw_delay > 5.0:
+                    logger.info("Inter-packet gap of %.2f s capped to 5.0 s maximum", raw_delay)
                 if delay > 0:
                     if waited + delay > self.max_duration_s:
                         logger.warning("Replay stopped after %d frame(s): it would exceed the %g s duration limit", count, self.max_duration_s)

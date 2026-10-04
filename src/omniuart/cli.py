@@ -90,7 +90,10 @@ def build_parser() -> argparse.ArgumentParser:
     # 9. replay (Session Replay Engine)
     replay_parser = subparsers.add_parser("replay", help="Replay recorded session transactions onto a serial transport")
     replay_parser.add_argument("session_file", help="Path to recorded .jsonl session file")
-    replay_parser.add_argument("--speed", type=float, default=1.0, help="Playback speed multiplier (default: 1.0)")
+    replay_parser.add_argument("--speed", type=float, default=1.0, help="Playback speed multiplier (0 = max speed, default: 1.0)")
+    replay_parser.add_argument("--port", "-P", help="Serial port to target (e.g. COM3, /dev/ttyUSB0, loop://)")
+    replay_parser.add_argument("--baudrate", "-b", type=int, default=115200, help="Baud rate (default: 115200)")
+    replay_parser.add_argument("--virtual", action="store_true", help="Target VirtualTransport instead of physical serial port")
 
     # 10. ui (Interactive Dynamic UI Launcher)
     ui_parser = subparsers.add_parser("ui", help="Launch interactive UI application")
@@ -434,13 +437,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     elif args.subcommand == "replay":
         import asyncio
         from omniuart.core.replayer import SessionReplayer
-        from omniuart.core.transport import VirtualTransport
-        print(f"Replaying session file: {args.session_file} (speed: {args.speed}x)...")
-        transport = VirtualTransport(latency_ms=1.0)
+        from omniuart.core.transport import HardwareSerialTransport, VirtualTransport
+
+        if getattr(args, "port", None) and not getattr(args, "virtual", False):
+            transport = HardwareSerialTransport(port=args.port, baudrate=args.baudrate)
+        else:
+            transport = VirtualTransport(latency_ms=1.0)
+
+        speed_str = "max" if args.speed == 0 else f"{args.speed}x"
+        print(f"Replaying session file: {args.session_file} (speed: {speed_str})...")
         replayer = SessionReplayer(transport, speed_multiplier=args.speed)
-        count = asyncio.run(replayer.replay_file(args.session_file))
-        print(f"Replayed {count} packet(s).")
-        return 0
+        try:
+            count = asyncio.run(replayer.replay_file(args.session_file))
+            print(f"Successfully replayed {count} frame(s).")
+            return 0
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"Replay error: {exc}", file=sys.stderr)
+            return 1
     elif args.subcommand == "ui":
         return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode)
 
