@@ -47,7 +47,8 @@ def generate_markdown_docs(spec: ProtocolSpec, safe_stem: Optional[str] = None) 
         for cmd in cmds:
             desc = f" - {cmd.description}" if cmd.description else ""
             cmd_id_str = f"0x{cmd.id:02X}" if isinstance(cmd.id, int) else str(cmd.id)
-            lines.append(f"#### `{cmd.name}` (Command ID: `{cmd_id_str}`){desc}\n")
+            lines.append(f"#### `{cmd.name}` (Command ID: `{cmd_id_str}`){desc}")
+            lines.append("")
             if cmd.parameters:
                 lines.append("| Parameter | Type | Unit | Range / Constraints | Options |")
                 lines.append("| :--- | :--- | :--- | :--- | :--- |")
@@ -58,7 +59,8 @@ def generate_markdown_docs(spec: ProtocolSpec, safe_stem: Optional[str] = None) 
                     lines.append(f"| `{p.name}` | `{p.type.value}` | {unit} | {rng} | {opts} |")
                 lines.append("")
             if cmd.response:
-                lines.append(f"**Expected Response Payload** (Timeout: `{cmd.response.timeout_ms} ms`):\n")
+                lines.append(f"**Expected Response Payload** (Timeout: `{cmd.response.timeout_ms} ms`):")
+                lines.append("")
                 lines.append("| Field Name | Type | Unit |")
                 lines.append("| :--- | :--- | :--- |")
                 for rf in cmd.response.fields:
@@ -67,11 +69,13 @@ def generate_markdown_docs(spec: ProtocolSpec, safe_stem: Optional[str] = None) 
                 lines.append("")
 
     if spec.telemetry:
-        lines.append("## Device-Initiated Messages\n")
+        lines.append("## Device-Initiated Messages")
+        lines.append("")
         for msg in spec.telemetry:
             desc = f" - {msg.description}" if msg.description else ""
             msg_id_str = f"0x{msg.id:02X}" if isinstance(msg.id, int) else str(msg.id)
-            lines.append(f"#### `{msg.name}` (Message ID: `{msg_id_str}`){desc}\n")
+            lines.append(f"#### `{msg.name}` (Message ID: `{msg_id_str}`){desc}")
+            lines.append("")
             if msg.fields:
                 lines.append("| Field Name | Type | Unit |")
                 lines.append("| :--- | :--- | :--- |")
