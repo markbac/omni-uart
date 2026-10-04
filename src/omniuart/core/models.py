@@ -205,7 +205,14 @@ class IntegritySpec(BaseModel):
         """Fail at load time when the algorithm is unknown or a custom model is incomplete or inconsistent."""
         algo = resolve_algorithm(self.algorithm)
         if algo is CrcAlgorithm.CUSTOM:
-            self.to_crc_model()
+            crc_model = self.to_crc_model()
+            if crc_model and crc_model.check is not None:
+                from omniuart.core.crc import calculate_custom_crc
+                calculated_check = calculate_custom_crc(b"123456789", crc_model)
+                if calculated_check != crc_model.check:
+                    raise ValueError(
+                        f"Custom CRC check vector validation failed: calculated 0x{calculated_check:X}, declared check 0x{crc_model.check:X}"
+                    )
         return self
 
     @field_validator("covers")

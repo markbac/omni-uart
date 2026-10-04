@@ -108,3 +108,19 @@ def test_load_protocol_and_script_missing_file_raises_filenotfounderror() -> Non
 
     with pytest.raises(FileNotFoundError):
         load_script("examples/scripts/does-not-exist.yaml")
+
+
+def test_custom_crc_invalid_check_vector_fails_load() -> None:
+    """Verify that an incorrect check vector for a custom CRC fails model validation on load."""
+    from omniuart.core.models import IntegritySpec
+    with pytest.raises(ValueError, match="check value mismatch"):
+        IntegritySpec(
+            algorithm="custom",
+            width=16,
+            poly=0x1021,
+            init=0xFFFF,
+            refin=False,
+            refout=False,
+            xorout=0x0000,
+            check=0x9999,  # incorrect check vector (expected 0x29B1 for CRC-16/CCITT-FALSE)
+        )

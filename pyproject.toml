@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
-    { name = "Mark Bacon", email = "mark@example.com" }
+    { name = "Mark Bacon", email = "markbac@users.noreply.github.com" }
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -20,7 +20,7 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Embedded Systems",
     "Topic :: Terminals :: Serial",
 ]
