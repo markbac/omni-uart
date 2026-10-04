@@ -74,8 +74,33 @@ async def read_available(transport: AsyncTransport, timeout_ms: int, gap_ms: int
     return bytes(data)
 
 
-class DeviceSession:
-    """A protocol bound to an open (or openable) transport."""
+class SessionState(str, Enum):
+    """Session operational state."""
+
+    CLOSED = "closed"
+    OPEN = "open"
+    ERROR = "error"
+
+
+@dataclass
+class SessionStatistics:
+    """Telemetry and execution metrics for a session."""
+
+    total_requests: int = 0
+    successful_requests: int = 0
+    failed_requests: int = 0
+    bytes_sent: int = 0
+    bytes_received: int = 0
+    total_latency_ms: float = 0.0
+    error_count: int = 0
+
+    @property
+    def average_latency_ms(self) -> float:
+        return self.total_latency_ms / max(1, self.total_requests)
+
+
+class SerialSession:
+    """Canonical execution layer: frame encode/decode, request/response lifecycle, state, statistics, and retries."""
 
     def __init__(
         self,
@@ -99,8 +124,20 @@ class DeviceSession:
         self.recorder = recorder
         self.read_only = read_only
         self.codec = FrameCodec(spec)
+        self.stats = SessionStatistics()
+        self.state = SessionState.CLOSED
 
-    async def __aenter__(self) -> "DeviceSession":
+    @property
+    def is_open(self) -> bool:
+        return self.transport.is_open and self.state == SessionState.OPEN
+
+    def reset_statistics(self) -> None:
+        self.stats = SessionStatistics()
+
+    def get_statistics(self) -> SessionStatistics:
+        return self.stats
+
+    async def __aenter__(self) -> "SerialSession":
         await self.open()
         return self
 
@@ -110,10 +147,12 @@ class DeviceSession:
     async def open(self) -> None:
         if not self.transport.is_open:
             await self.transport.open()
+        self.state = SessionState.OPEN
 
     async def close(self) -> None:
         if self.transport.is_open:
             await self.transport.close()
+        self.state = SessionState.CLOSED
 
     def resolve(self, command: Union[str, CommandSpec]) -> CommandSpec:
         """Find a command by name, falling back to its id."""
@@ -129,13 +168,30 @@ class DeviceSession:
         command: Union[str, CommandSpec],
         params: Optional[Mapping[str, Any]] = None,
         timeout_ms: Optional[int] = None,
+        retries: int = 0,
         matcher: Optional[ResponseMatcher] = None,
     ) -> Exchange:
-        """Transmit ``command`` and wait for its response.
+        """Transmit ``command`` and wait for its response, optionally retrying on failure.
 
         Invalid parameters raise :class:`CodecError`, and a non-``read_only`` command in a read-only session raises :class:`CommandBlockedError`, before anything is written. Failures on the
         link or in the response are reported through the returned :class:`Exchange` instead.
         """
+        attempts = max(1, retries + 1)
+        last_exchange: Optional[Exchange] = None
+        for _ in range(attempts):
+            exchange = await self._send_once(command, params=params, timeout_ms=timeout_ms, matcher=matcher)
+            last_exchange = exchange
+            if exchange.ok:
+                break
+        return last_exchange  # type: ignore[return-value]
+
+    async def _send_once(
+        self,
+        command: Union[str, CommandSpec],
+        params: Optional[Mapping[str, Any]] = None,
+        timeout_ms: Optional[int] = None,
+        matcher: Optional[ResponseMatcher] = None,
+    ) -> Exchange:
         cmd = self.resolve(command)
         if self.read_only and not cmd.is_read_only:
             raise CommandBlockedError(
@@ -150,6 +206,8 @@ class DeviceSession:
         try:
             await self.transport.write(request)
             if cmd.response is None:
+                exchange.latency_ms = (loop.time() - start) * 1000.0
+                self._update_stats(exchange, len(request), 0)
                 return exchange
             wait_ms = timeout_ms if timeout_ms is not None else cmd.response.timeout_ms
             await self._await_response(cmd, exchange, wait_ms, self._request_values(cmd, params), matcher or self.matcher)
@@ -157,6 +215,7 @@ class DeviceSession:
             exchange.status = ExchangeStatus.TRANSPORT_ERROR
             exchange.error = f"{type(exc).__name__}: {exc}"
         exchange.latency_ms = (loop.time() - start) * 1000.0
+        self._update_stats(exchange, len(request), len(exchange.response_bytes))
         if self.recorder and exchange.response_bytes:
             self.recorder.record(
                 "rx",
@@ -169,6 +228,15 @@ class DeviceSession:
             )
         return exchange
 
+    def _update_stats(self, exchange: Exchange, tx_len: int, rx_len: int) -> None:
+        self.stats.total_requests += 1
+        self.stats.bytes_sent += tx_len
+        self.stats.bytes_received += rx_len
+        self.stats.total_latency_ms += exchange.latency_ms
+        if exchange.ok:
+            self.stats.successful_requests += 1
+        else:
+            self.stats.failed_requests += 1
     @staticmethod
     def _request_values(cmd: CommandSpec, params: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
         given = params or {}
@@ -242,6 +310,11 @@ class DeviceSession:
         else:
             exchange.status = ExchangeStatus.TIMEOUT
             exchange.error = f"no response to '{cmd.name}' within {timeout_ms} ms"
+
+
+class DeviceSession(SerialSession):
+    """A protocol bound to an open (or openable) transport (alias / subclass of SerialSession)."""
+
 
 
 def create_transport(spec: ProtocolSpec, port: Optional[str] = None, baudrate: Optional[int] = None, virtual: bool = False) -> AsyncTransport:
