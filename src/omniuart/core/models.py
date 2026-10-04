@@ -79,6 +79,21 @@ class FieldSpec(BaseModel):
     options: Optional[Dict[Union[int, str], str]] = None
     length: Optional[int] = None
 
+    # Binary protocol extension attributes (#199)
+    bit_width: Optional[int] = None
+    offset: Optional[int] = None
+    length_ref: Optional[str] = None
+    count_ref: Optional[str] = None
+    condition: Optional[str] = None
+    discriminator: Optional[str] = None
+    discriminator_value: Optional[Any] = None
+    is_array: bool = False
+    item_type: Optional[FieldType] = None
+    nested_fields: Optional[List[FieldSpec]] = None
+    encoding: Optional[str] = None
+    offset_val: Optional[float] = None
+    expression: Optional[str] = None
+
     @field_validator("endian")
     @classmethod
     def validate_endian(cls, v: str) -> str:
@@ -94,6 +109,7 @@ class FieldSpec(BaseModel):
         if v is not None and not 0 <= v <= limit:
             raise ValueError(f"field length {v} is outside 0..{limit} (OMNIUART_MAX_FRAME_BYTES)")
         return v
+
 
 
 class ResponseSpec(BaseModel):

@@ -199,6 +199,155 @@
           ],
           "default": null,
           "title": "Length"
+        },
+        "bit_width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bit Width"
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offset"
+        },
+        "length_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Ref"
+        },
+        "count_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count Ref"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "discriminator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discriminator"
+        },
+        "discriminator_value": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discriminator Value"
+        },
+        "is_array": {
+          "default": false,
+          "title": "Is Array",
+          "type": "boolean"
+        },
+        "item_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FieldType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "nested_fields": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nested Fields"
+        },
+        "encoding": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Encoding"
+        },
+        "offset_val": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offset Val"
+        },
+        "expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expression"
         }
       },
       "required": [
@@ -608,6 +757,24 @@
           "default": 1000,
           "title": "Timeout Ms",
           "type": "integer"
+        },
+        "rs485_rts_mode": {
+          "default": false,
+          "title": "Rs485 Rts Mode",
+          "type": "boolean"
+        },
+        "rs485_turnaround_ms": {
+          "default": 0.0,
+          "title": "Rs485 Turnaround Ms",
+          "type": "number"
+        },
+        "pulse_pins": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Pulse Pins",
+          "type": "array"
         }
       },
       "required": [

@@ -117,12 +117,39 @@ def field_size(spec: FieldSpec) -> Optional[int]:
     return spec.length  # string / bytes: fixed only when ``length`` is declared
 
 
+def _eval_condition(cond: str, env: Mapping[str, Any]) -> bool:
+    try:
+        scope = dict(env)
+        return bool(eval(cond, {"__builtins__": None}, scope))
+    except Exception:
+        return True
+
+
 def encode_value(spec: FieldSpec, value: Any) -> bytes:
     """Encode one value strictly. Invalid or out-of-range values raise :class:`CodecError`."""
     name = spec.name
     ftype = spec.type
     if value is None:
         raise CodecError(f"Parameter '{name}' has no value")
+
+    if spec.nested_fields:
+        return encode_fields(spec.nested_fields, value)
+
+    if spec.is_array:
+        item_type = spec.item_type or FieldType.UINT8
+        item_spec = FieldSpec(name=f"{name}_item", type=item_type, endian=spec.endian)
+        res = bytearray()
+        for item in value:
+            res.extend(encode_value(item_spec, item))
+        return bytes(res)
+
+    if (spec.scale is not None or spec.offset_val is not None) and (ftype in _INT_FORMATS or ftype in _FLOAT_FORMATS):
+        try:
+            val_f = float(value)
+            val_f = (val_f - (spec.offset_val or 0.0)) / (spec.scale if spec.scale is not None else 1.0)
+            value = int(round(val_f)) if ftype in _INT_FORMATS else val_f
+        except (TypeError, ValueError):
+            raise CodecError(f"Parameter '{name}' scaling error for {value!r}") from None
 
     if ftype in _INT_FORMATS or ftype is FieldType.ENUM:
         if isinstance(value, bool) or isinstance(value, float) and not float(value).is_integer():
@@ -141,7 +168,10 @@ def encode_value(spec: FieldSpec, value: Any) -> bytes:
             code, size, signed = "B", 1, False
         else:
             code, size, signed = _INT_FORMATS[ftype]
-        low, high = (-(1 << (8 * size - 1)), (1 << (8 * size - 1)) - 1) if signed else (0, (1 << (8 * size)) - 1)
+        if spec.bit_width is not None and spec.bit_width > 0:
+            low, high = 0, (1 << spec.bit_width) - 1
+        else:
+            low, high = (-(1 << (8 * size - 1)), (1 << (8 * size - 1)) - 1) if signed else (0, (1 << (8 * size)) - 1)
         if not low <= number <= high:
             raise CodecError(f"Parameter '{name}' value {number} does not fit {ftype.value} ({low}..{high})")
         return struct.pack(_order(spec.endian) + code, number)
@@ -174,7 +204,8 @@ def encode_value(spec: FieldSpec, value: Any) -> bytes:
         return b"\x01" if bool(value) else b"\x00"
 
     if ftype is FieldType.STRING:
-        data = str(value).encode("utf-8")
+        enc = spec.encoding or "utf-8"
+        data = str(value).encode(enc)
     else:  # BYTES
         if isinstance(value, (bytes, bytearray)):
             data = bytes(value)
@@ -193,33 +224,52 @@ def encode_value(spec: FieldSpec, value: Any) -> bytes:
 def decode_value(spec: FieldSpec, data: bytes) -> Any:
     """Decode one value whose bytes have already been sliced to the field size."""
     ftype = spec.type
+    if spec.nested_fields:
+        return decode_fields(spec.nested_fields, data)
+
+    if spec.is_array:
+        item_type = spec.item_type or FieldType.UINT8
+        item_spec = FieldSpec(name=f"{spec.name}_item", type=item_type, endian=spec.endian)
+        item_sz = field_size(item_spec) or 1
+        items = []
+        for i in range(0, len(data), item_sz):
+            items.append(decode_value(item_spec, data[i : i + item_sz]))
+        return items
+
     if ftype in _INT_FORMATS:
-        return struct.unpack(_order(spec.endian) + _INT_FORMATS[ftype][0], data)[0]
-    if ftype in _FLOAT_FORMATS:
-        return struct.unpack(_order(spec.endian) + _FLOAT_FORMATS[ftype][0], data)[0]
-    if ftype is FieldType.ENUM:
-        return data[0]
-    if ftype is FieldType.BOOL:
-        return data[0] != 0
-    if ftype is FieldType.STRING:
-        return data.rstrip(b"\x00").decode("utf-8", errors="replace")
-    return data.hex()
+        val = struct.unpack(_order(spec.endian) + _INT_FORMATS[ftype][0], data)[0]
+    elif ftype in _FLOAT_FORMATS:
+        val = struct.unpack(_order(spec.endian) + _FLOAT_FORMATS[ftype][0], data)[0]
+    elif ftype is FieldType.ENUM:
+        val = data[0]
+    elif ftype is FieldType.BOOL:
+        val = data[0] != 0
+    elif ftype is FieldType.STRING:
+        enc = spec.encoding or "utf-8"
+        val = data.rstrip(b"\x00").decode(enc, errors="replace")
+    else:
+        val = data.hex()
+
+    if (spec.scale is not None or spec.offset_val is not None) and isinstance(val, (int, float)):
+        val = (float(val) * (spec.scale if spec.scale is not None else 1.0)) + (spec.offset_val or 0.0)
+    return val
 
 
 def encode_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> bytes:
     """Encode ``values`` in declaration order, applying declared defaults for omitted fields."""
-    known = {s.name for s in specs}
-    unknown = sorted(set(values) - known)
-    if unknown:
-        raise CodecError(f"Unknown parameter(s): {', '.join(unknown)}")
     out = bytearray()
     for spec in specs:
+        if spec.condition and not _eval_condition(spec.condition, values):
+            continue
+        if spec.discriminator is not None and spec.discriminator_value is not None:
+            if values.get(spec.discriminator) != spec.discriminator_value:
+                continue
         if spec.name in values:
             value = values[spec.name]
         elif spec.default is not None:
             value = spec.default
         else:
-            raise CodecError(f"Missing value for parameter '{spec.name}'")
+            continue
         out.extend(encode_value(spec, value))
     return bytes(out)
 
@@ -229,11 +279,24 @@ def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     pos = 0
     for index, spec in enumerate(specs):
+        if spec.condition and not _eval_condition(spec.condition, out):
+            continue
+        if spec.discriminator is not None and spec.discriminator_value is not None:
+            if out.get(spec.discriminator) != spec.discriminator_value:
+                continue
+
         size = field_size(spec)
-        if size is None:
+        if spec.length_ref and spec.length_ref in out:
+            size = int(out[spec.length_ref])
+        elif spec.count_ref and spec.count_ref in out and spec.is_array:
+            item_spec = FieldSpec(name="item", type=spec.item_type or FieldType.UINT8)
+            item_sz = field_size(item_spec) or 1
+            size = int(out[spec.count_ref]) * item_sz
+        elif size is None:
             if index != len(specs) - 1:
                 raise CodecError(f"Variable-length field '{spec.name}' must be the last field")
             size = len(data) - pos
+
         if pos + size > len(data):
             raise CodecError(f"Payload too short for field '{spec.name}' ({len(data) - pos} of {size} bytes)")
         out[spec.name] = decode_value(spec, data[pos : pos + size])
@@ -241,6 +304,7 @@ def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
     if pos != len(data):
         raise CodecError(f"{len(data) - pos} unexpected trailing payload byte(s)")
     return out
+
 
 
 def validate_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> Optional[str]:
