@@ -90,7 +90,11 @@ def generate_markdown_docs(spec: ProtocolSpec, safe_stem: Optional[str] = None) 
 def generate_html_docs(spec: ProtocolSpec) -> str:
     """Generate standalone HTML specification page for a protocol."""
     md_content = generate_markdown_docs(spec)
-    body_html = html.escape(md_content).replace("\n", "<br>")
+    try:
+        import markdown
+        body_html = markdown.markdown(md_content, extensions=["tables", "fenced_code"])
+    except ImportError:
+        body_html = html.escape(md_content).replace("\n", "<br>")
 
     return f"""<!DOCTYPE html>
 <html lang="en">

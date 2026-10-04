@@ -25,6 +25,9 @@ def test_generate_markdown_and_html_docs() -> None:
     html_str = generate_html_docs(spec)
     assert "<!DOCTYPE html>" in html_str
     assert spec.metadata.name in html_str
+    assert "<table>" in html_str
+    assert "<h2>" in html_str or "<h3>" in html_str
+    assert "<th>" in html_str
 
 
 def test_build_site_documentation() -> None:
