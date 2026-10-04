@@ -99,3 +99,12 @@ def test_lookup_command() -> None:
 
     assert proto.get_command("nonexistent") is None
     assert proto.get_command_by_id(999) is None
+
+
+def test_load_protocol_and_script_missing_file_raises_filenotfounderror() -> None:
+    """Verify load_protocol and load_script raise FileNotFoundError for missing path strings."""
+    with pytest.raises(FileNotFoundError):
+        load_protocol("examples/protocols/does-not-exist.yaml")
+
+    with pytest.raises(FileNotFoundError):
+        load_script("examples/scripts/does-not-exist.yaml")

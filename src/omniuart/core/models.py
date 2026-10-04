@@ -430,15 +430,25 @@ def _parse_document(raw: str, is_yaml: bool) -> Any:
         raise ValueError(f"cannot parse definition: {exc}") from exc
 
 
-def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
-    """Load and validate a ProtocolSpec from a file path or raw text string."""
-    source_name = None
+def _is_path_like(source: Union[str, Path]) -> bool:
+    """True if ``source`` looks like a file path rather than raw inline YAML/JSON content."""
     if isinstance(source, Path):
-        source_name = source.name
-        raw = _read_limited(source)
-        data = _parse_document(raw, source.suffix.lower() in (".yaml", ".yml"))
-    elif isinstance(source, str) and _is_existing_file(source):
+        return True
+    if not isinstance(source, str) or "\n" in source or "\r" in source:
+        return False
+    s = source.strip()
+    if s.endswith((".yaml", ".yml", ".json")) or "/" in s or "\\" in s or s.startswith((".", "..")):
+        return True
+    return False
+
+
+def _load_definition_data(source: Union[str, Path]) -> tuple[Any, Optional[str]]:
+    """Helper to read and parse raw document data from file path or text string."""
+    source_name = None
+    if isinstance(source, Path) or _is_path_like(source) or _is_existing_file(str(source)):
         path = Path(source)
+        if not path.exists():
+            raise FileNotFoundError(f"Protocol or script file not found: {source}")
         source_name = path.name
         raw = _read_limited(path)
         data = _parse_document(raw, path.suffix.lower() in (".yaml", ".yml"))
@@ -449,6 +459,33 @@ def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
             data = _parse_document(raw_text, True)
         except ValueError:
             data = _parse_document(raw_text, False)
+    return data, source_name
+
+
+def load_protocol_file(path: Union[str, Path]) -> ProtocolSpec:
+    """Load ProtocolSpec explicitly from a file path, raising FileNotFoundError if missing."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Protocol file not found: {path}")
+    return load_protocol(p)
+
+
+def load_protocol_text(text: str) -> ProtocolSpec:
+    """Load ProtocolSpec explicitly from raw YAML or JSON text."""
+    _check_definition_size(len(text.encode("utf-8")), "definition text")
+    try:
+        data = _parse_document(text, True)
+    except ValueError:
+        data = _parse_document(text, False)
+    if isinstance(data, dict) and ("physicalLayer" in data or "commandResponseModel" in data or "integrityCheck" in data):
+        from omniuart.core.kit_adapter import parse_kit_protocol
+        return parse_kit_protocol(data, source_name=None)
+    return ProtocolSpec.model_validate(data)
+
+
+def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
+    """Load and validate a ProtocolSpec from a file path or raw text string."""
+    data, source_name = _load_definition_data(source)
 
     if isinstance(data, dict) and ("physicalLayer" in data or "commandResponseModel" in data or "integrityCheck" in data):
         from omniuart.core.kit_adapter import parse_kit_protocol
@@ -457,25 +494,35 @@ def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
     return ProtocolSpec.model_validate(data)
 
 
+def load_script_file(path: Union[str, Path]) -> ScriptSpec:
+    """Load ScriptSpec explicitly from a file path, raising FileNotFoundError if missing."""
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"Script file not found: {path}")
+    return load_script(p)
+
+
+def load_script_text(text: str) -> ScriptSpec:
+    """Load ScriptSpec explicitly from raw YAML or JSON text."""
+    _check_definition_size(len(text.encode("utf-8")), "definition text")
+    try:
+        data = _parse_document(text, True)
+    except ValueError:
+        data = _parse_document(text, False)
+    if isinstance(data, dict) and ("interfaceRef" in data or "onSequenceFailure" in data):
+        from omniuart.core.sequence_adapter import parse_kit_sequence
+        return parse_kit_sequence(data, source_name=None)
+
+    script = ScriptSpec.model_validate(data)
+    max_steps = get_limits().script_steps
+    if len(script.steps) > max_steps:
+        raise ValueError(f"script has {len(script.steps)} steps, over the limit of {max_steps} (OMNIUART_MAX_SCRIPT_STEPS)")
+    return script
+
+
 def load_script(source: Union[str, Path]) -> ScriptSpec:
     """Load and validate a ScriptSpec from a file path or raw text string."""
-    source_name = None
-    if isinstance(source, Path):
-        source_name = source.name
-        raw = _read_limited(source)
-        data = _parse_document(raw, source.suffix.lower() in (".yaml", ".yml"))
-    elif isinstance(source, str) and _is_existing_file(source):
-        path = Path(source)
-        source_name = path.name
-        raw = _read_limited(path)
-        data = _parse_document(raw, path.suffix.lower() in (".yaml", ".yml"))
-    else:
-        raw_text = str(source)
-        _check_definition_size(len(raw_text.encode("utf-8")), "definition text")
-        try:
-            data = _parse_document(raw_text, True)
-        except ValueError:
-            data = _parse_document(raw_text, False)
+    data, source_name = _load_definition_data(source)
 
     if isinstance(data, dict) and ("interfaceRef" in data or "onSequenceFailure" in data):
         from omniuart.core.sequence_adapter import parse_kit_sequence
