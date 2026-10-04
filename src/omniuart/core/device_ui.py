@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 import yaml
 
+from omniuart.core.models import CommandSafety, FieldSpec, ProtocolSpec
+
 
 class DeviceIdentity(BaseModel):
     """Device identity metadata."""
@@ -98,3 +100,81 @@ def load_device_ui(source: Union[str, Path, Dict[str, Any]]) -> DeviceUISpec:
 def generate_device_ui_schema() -> Dict[str, Any]:
     """Generate JSON Schema dict for DeviceUISpec validation."""
     return DeviceUISpec.model_json_schema()
+
+
+def infer_widget_for_field(
+    field: FieldSpec,
+    is_writable: bool = True,
+    safety: Optional[CommandSafety] = None,
+) -> WidgetSpec:
+    """Infer intelligent control widget type and presentation parameters from field metadata (#231)."""
+    val_type = field.type.value if hasattr(field.type, "value") else str(field.type)
+    type_lower = val_type.lower()
+    label = field.name.replace("_", " ").title()
+
+    if not is_writable:
+        if type_lower in ("bool", "boolean"):
+            return WidgetSpec(widget_type="badge", field_ref=field.name, label=label)
+        if type_lower in ("float32", "float64", "float", "double", "int8", "uint8", "int16", "uint16", "int32", "uint32"):
+            return WidgetSpec(widget_type="gauge", field_ref=field.name, label=label, unit=field.unit, min=field.min, max=field.max)
+        return WidgetSpec(widget_type="text", field_ref=field.name, label=label, unit=field.unit)
+
+    if field.options or type_lower == "enum":
+        return WidgetSpec(widget_type="dropdown", field_ref=field.name, label=label, options=field.options, unit=field.unit)
+
+    if type_lower in ("bool", "boolean"):
+        return WidgetSpec(widget_type="switch", field_ref=field.name, label=label)
+
+    if field.min is not None and field.max is not None:
+        if (field.max - field.min) <= 100 or type_lower.startswith("float"):
+            step = 0.1 if type_lower.startswith("float") else 1.0
+            return WidgetSpec(widget_type="slider", field_ref=field.name, label=label, min=field.min, max=field.max, step=step, unit=field.unit)
+        return WidgetSpec(widget_type="number_input", field_ref=field.name, label=label, min=field.min, max=field.max, unit=field.unit)
+
+    if type_lower in ("float32", "float64", "float", "double", "int8", "uint8", "int16", "uint16", "int32", "uint32", "int64", "uint64"):
+        return WidgetSpec(widget_type="number_input", field_ref=field.name, label=label, unit=field.unit)
+
+    return WidgetSpec(widget_type="text_input", field_ref=field.name, label=label)
+
+
+def infer_device_ui_from_spec(spec: ProtocolSpec) -> DeviceUISpec:
+    """Intelligently generate DeviceUISpec layout and control widgets from ProtocolSpec metadata (#231)."""
+    identity = DeviceIdentity(
+        name=spec.metadata.name,
+        version=spec.metadata.version,
+        description=spec.metadata.description,
+        vendor=spec.metadata.author,
+    )
+
+    control_widgets: List[WidgetSpec] = []
+    safety_rules: List[SafetyRuleSpec] = []
+
+    for cmd in spec.commands:
+        if cmd.safety is CommandSafety.MUTATING:
+            safety_rules.append(SafetyRuleSpec(command=cmd.name, require_confirmation=True, danger_zone=True))
+
+        if cmd.parameters:
+            for p in cmd.parameters:
+                control_widgets.append(infer_widget_for_field(p, is_writable=True, safety=cmd.safety))
+        else:
+            control_widgets.append(WidgetSpec(widget_type="button", field_ref=cmd.name, label=f"Execute {cmd.name.title()}"))
+
+    telemetry_widgets: List[WidgetSpec] = []
+    for tel in spec.telemetry:
+        for f in tel.fields:
+            telemetry_widgets.append(infer_widget_for_field(f, is_writable=False))
+
+    groups: List[GroupSpec] = []
+    if control_widgets:
+        groups.append(GroupSpec(name="controls", title="Device Controls", layout="grid", widgets=control_widgets))
+    if telemetry_widgets:
+        groups.append(GroupSpec(name="telemetry", title="Live Telemetry", layout="grid", widgets=telemetry_widgets))
+
+    panels = [PanelSpec(name="main", title="Main Workspace", groups=groups)]
+
+    return DeviceUISpec(
+        identity=identity,
+        protocol_ref=spec.metadata.name,
+        panels=panels,
+        safety_rules=safety_rules,
+    )
