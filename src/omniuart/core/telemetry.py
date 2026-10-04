@@ -11,12 +11,113 @@ import logging
 import time
 import urllib.request
 from urllib.parse import urlparse
-from typing import Dict, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, Tuple
 
 from omniuart.core.limits import get_limits
 from omniuart.core.recorder import PacketEvent
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PerformanceMetrics:
+    """Instrumentation metrics for throughput, latencies, error counts and queues (#223)."""
+
+    tx_bytes: int = 0
+    rx_bytes: int = 0
+    decoded_frames: int = 0
+    total_decode_latency_ms: float = 0.0
+    min_decode_latency_ms: float = float("inf")
+    max_decode_latency_ms: float = 0.0
+    total_transport_latency_ms: float = 0.0
+    min_transport_latency_ms: float = float("inf")
+    max_transport_latency_ms: float = 0.0
+    timeouts: int = 0
+    retries: int = 0
+    errors: int = 0
+    queue_depth: int = 0
+
+    @property
+    def avg_decode_latency_ms(self) -> float:
+        return self.total_decode_latency_ms / max(1, self.decoded_frames)
+
+    @property
+    def avg_transport_latency_ms(self) -> float:
+        total_ops = self.decoded_frames + self.timeouts + self.errors
+        return self.total_transport_latency_ms / max(1, total_ops)
+
+    def to_dict(self) -> Dict[str, Any]:
+        limits = get_limits()
+        return {
+            "tx_bytes": self.tx_bytes,
+            "rx_bytes": self.rx_bytes,
+            "decoded_frames": self.decoded_frames,
+            "decode_latency_ms": {
+                "total": round(self.total_decode_latency_ms, 3),
+                "avg": round(self.avg_decode_latency_ms, 3),
+                "min": round(self.min_decode_latency_ms if self.decoded_frames > 0 else 0.0, 3),
+                "max": round(self.max_decode_latency_ms, 3),
+            },
+            "transport_latency_ms": {
+                "total": round(self.total_transport_latency_ms, 3),
+                "avg": round(self.avg_transport_latency_ms, 3),
+                "min": round(self.min_transport_latency_ms if self.total_transport_latency_ms > 0 else 0.0, 3),
+                "max": round(self.max_transport_latency_ms, 3),
+            },
+            "timeouts": self.timeouts,
+            "retries": self.retries,
+            "errors": self.errors,
+            "queue_depth": self.queue_depth,
+            "resource_limits": {
+                "max_retries": limits.retries,
+                "script_duration_s": limits.script_duration_s,
+                "frame_bytes": limits.frame_bytes,
+            },
+        }
+
+
+class MetricsCollector:
+    """Thread-safe collector for performance profiling telemetry (#223)."""
+
+    def __init__(self) -> None:
+        self.metrics = PerformanceMetrics()
+
+    def record_tx(self, count: int) -> None:
+        self.metrics.tx_bytes += count
+
+    def record_rx(self, count: int) -> None:
+        self.metrics.rx_bytes += count
+
+    def record_decode(self, latency_ms: float) -> None:
+        self.metrics.decoded_frames += 1
+        self.metrics.total_decode_latency_ms += latency_ms
+        if latency_ms < self.metrics.min_decode_latency_ms:
+            self.metrics.min_decode_latency_ms = latency_ms
+        if latency_ms > self.metrics.max_decode_latency_ms:
+            self.metrics.max_decode_latency_ms = latency_ms
+
+    def record_transport_latency(self, latency_ms: float) -> None:
+        self.metrics.total_transport_latency_ms += latency_ms
+        if latency_ms < self.metrics.min_transport_latency_ms:
+            self.metrics.min_transport_latency_ms = latency_ms
+        if latency_ms > self.metrics.max_transport_latency_ms:
+            self.metrics.max_transport_latency_ms = latency_ms
+
+    def record_timeout(self) -> None:
+        self.metrics.timeouts += 1
+
+    def record_retry(self) -> None:
+        self.metrics.retries += 1
+
+    def record_error(self) -> None:
+        self.metrics.errors += 1
+
+    def update_queue_depth(self, depth: int) -> None:
+        self.metrics.queue_depth = depth
+
+    def snapshot(self) -> Dict[str, Any]:
+        return self.metrics.to_dict()
 
 
 ALLOWED_WEBHOOK_SCHEMES = ("http", "https")
