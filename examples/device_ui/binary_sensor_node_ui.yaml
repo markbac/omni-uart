@@ -1,0 +1,54 @@
+schema_version: "1.0.0"
+identity:
+  name: "Environmental Sensor Node"
+  model: "BSN-200"
+  vendor: "IoT Hardware Corp"
+  version: "1.1.0"
+  description: "Multi-channel environmental sensor node"
+  icon: "sensor"
+
+protocol_ref: "binary_sensor_node"
+
+panels:
+  - name: "dashboard"
+    title: "Environment Dashboard"
+    icon: "dashboard"
+    groups:
+      - name: "telemetry"
+        title: "Live Sensor Readings"
+        layout: "grid"
+        widgets:
+          - widget_type: "gauge"
+            field_ref: "temperature"
+            label: "Temperature"
+            unit: "°C"
+            min: -40.0
+            max: 85.0
+          - widget_type: "gauge"
+            field_ref: "humidity"
+            label: "Humidity"
+            unit: "%"
+            min: 0.0
+            max: 100.0
+
+  - name: "controls"
+    title: "Device Controls"
+    icon: "settings"
+    groups:
+      - name: "sampling"
+        title: "Sampling Configuration"
+        layout: "vertical"
+        widgets:
+          - widget_type: "dropdown"
+            field_ref: "rate_hz"
+            label: "Sensor Update Frequency"
+            options:
+              1: "1 Hz"
+              5: "5 Hz"
+              10: "10 Hz"
+              50: "50 Hz"
+
+safety_rules:
+  - command: "set_sampling_rate"
+    require_confirmation: false
+    danger_zone: false
