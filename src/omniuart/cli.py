@@ -102,6 +102,12 @@ def build_parser() -> argparse.ArgumentParser:
     ui_parser.add_argument("--mode", choices=["desktop", "web"], default="desktop", help="UI display mode: 'desktop' (native window) or 'web' (browser tab)")
     ui_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open browser in web mode")
 
+    # 11. generate (Artefact Generator)
+    gen_parser = subparsers.add_parser("generate", help="Generate Wireshark dissector, C header, Python dataclasses, or JSON Schema")
+    gen_parser.add_argument("target", choices=["wireshark", "c", "python", "schema"], help="Generation target: wireshark, c, python, or schema")
+    gen_parser.add_argument("protocol", nargs="?", help="Protocol name or file (required except for schema target)")
+    gen_parser.add_argument("--output", "-o", help="Target output file path")
+
     return parser
 
 
@@ -454,6 +460,40 @@ def main(argv: Optional[List[str]] = None) -> int:
         except (FileNotFoundError, ValueError) as exc:
             print(f"Replay error: {exc}", file=sys.stderr)
             return 1
+    elif args.subcommand == "generate":
+        from omniuart.generators import (
+            generate_c_header,
+            generate_json_schema,
+            generate_python_dataclasses,
+            generate_wireshark_dissector,
+        )
+
+        if args.target == "schema":
+            out_str = generate_json_schema()
+        else:
+            if not args.protocol:
+                print(f"Error: protocol identifier is required for target '{args.target}'", file=sys.stderr)
+                return 1
+            spec = catalog.get_protocol(args.protocol, first=True)
+            if not spec:
+                print(f"Error: protocol '{args.protocol}' not found", file=sys.stderr)
+                return 1
+
+            if args.target == "wireshark":
+                out_str = generate_wireshark_dissector(spec)
+            elif args.target == "c":
+                out_str = generate_c_header(spec)
+            elif args.target == "python":
+                out_str = generate_python_dataclasses(spec)
+            else:
+                out_str = generate_json_schema()
+
+        if args.output:
+            Path(args.output).write_text(out_str, encoding="utf-8")
+            print(f"Generated {args.target} artefact at {args.output}")
+        else:
+            print(out_str)
+        return 0
     elif args.subcommand == "ui":
         return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode)
 
