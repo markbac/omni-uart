@@ -464,8 +464,6 @@ info:
     escaping -- a delimiter-framed protocol with only an end marker, CRLF, for almost
     every message. One command (SendSmsBody) is the exception: its body is terminated
     by Ctrl-Z instead, via endDelimiterOverride -- see its own description.'
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/9600
@@ -1163,6 +1161,340 @@ channels:
         title: SendSmsBody Command
         payload:
           $ref: '#/components/schemas/SendSmsBody_Request'
+  omniuart/telemetry/Ok:
+    subscribe:
+      summary: 'Unsolicited telemetry message Ok (ID: OK)'
+      description: The generic success response to almost any command.
+      message:
+        name: Ok_Telemetry_Message
+        title: Ok Telemetry
+        payload:
+          $ref: '#/components/schemas/Ok_Telemetry'
+  omniuart/telemetry/Error:
+    subscribe:
+      summary: 'Unsolicited telemetry message Error (ID: ERROR)'
+      description: Generic failure with no further detail -- contrast CmeError, which
+        at least gives a code.
+      message:
+        name: Error_Telemetry_Message
+        title: Error Telemetry
+        payload:
+          $ref: '#/components/schemas/Error_Telemetry'
+  omniuart/telemetry/CmeError:
+    subscribe:
+      summary: 'Unsolicited telemetry message CmeError (ID: +CME ERROR:)'
+      description: '+CME ERROR: <code> -- an extended error report, typically only
+        enabled after AT+CMEE=1 (not separately modeled here).'
+      message:
+        name: CmeError_Telemetry_Message
+        title: CmeError Telemetry
+        payload:
+          $ref: '#/components/schemas/CmeError_Telemetry'
+  omniuart/telemetry/PinStatusResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message PinStatusResult (ID: +CPIN:)'
+      description: '+CPIN: READY (no PIN needed) or +CPIN: SIM PIN (one is required),
+        among other states.'
+      message:
+        name: PinStatusResult_Telemetry_Message
+        title: PinStatusResult Telemetry
+        payload:
+          $ref: '#/components/schemas/PinStatusResult_Telemetry'
+  omniuart/telemetry/NetworkRegistrationResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message NetworkRegistrationResult (ID: +CREG:)'
+      description: '+CREG: <n>,<stat> -- n is the reporting mode previously set; stat
+        is the registration state (1=registered home, 5=registered roaming, etc.).'
+      message:
+        name: NetworkRegistrationResult_Telemetry_Message
+        title: NetworkRegistrationResult Telemetry
+        payload:
+          $ref: '#/components/schemas/NetworkRegistrationResult_Telemetry'
+  omniuart/telemetry/SignalQueryResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message SignalQueryResult (ID: +CSQ:)'
+      description: '+CSQ: 15,99 followed by OK, each its own CRLF-terminated line.'
+      message:
+        name: SignalQueryResult_Telemetry_Message
+        title: SignalQueryResult Telemetry
+        payload:
+          $ref: '#/components/schemas/SignalQueryResult_Telemetry'
+  omniuart/telemetry/ExtendedSignalQualityResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message ExtendedSignalQualityResult (ID: +CESQ:)'
+      description: '+CESQ: <rssi>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp> -- 6 comma-separated
+        values, most using 99/255-style sentinels for ''not known/not detectable''
+        on fields that don''t apply to the current radio access technology.'
+      message:
+        name: ExtendedSignalQualityResult_Telemetry_Message
+        title: ExtendedSignalQualityResult Telemetry
+        payload:
+          $ref: '#/components/schemas/ExtendedSignalQualityResult_Telemetry'
+  omniuart/telemetry/OperatorResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message OperatorResult (ID: +COPS:)'
+      description: '+COPS: <mode>[,<format>,<oper>][,<AcT>] -- per the manual (section
+        7.2): format/oper/AcT are genuinely OPTIONAL, omitted together when no operator
+        is selected -- modeled below as always-present for simplicity, a real gap
+        against the manual''s own read-command response shape, not fixed here. AcT
+        on THIS module is 9 (E-UTRAN NB-S1 mode) -- an earlier version of this file
+        used 7 (generic LTE from the wider 3GPP TS 27.007 AcT table), which is wrong
+        for this specific module; corrected.'
+      message:
+        name: OperatorResult_Telemetry_Message
+        title: OperatorResult Telemetry
+        payload:
+          $ref: '#/components/schemas/OperatorResult_Telemetry'
+  omniuart/telemetry/TestOperators:
+    subscribe:
+      summary: 'Unsolicited telemetry message TestOperators (ID: AT+COPS=?)'
+      description: 'AT+COPS=? -- the test command form, genuinely distinct from GetOperator
+        (AT+COPS?): scans and lists every operator the module currently sees, not
+        just the selected one. Response (OperatorScanResult) is a compound per-operator
+        list, not the simple mode/format/oper/AcT shape.'
+      message:
+        name: TestOperators_Telemetry_Message
+        title: TestOperators Telemetry
+        payload:
+          $ref: '#/components/schemas/TestOperators_Telemetry'
+  omniuart/telemetry/OperatorScanResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message OperatorScanResult (ID: +COPS:)'
+      description: '+COPS: (<stat>,<longOper>,<shortOper>,<numericOper>,<AcT>),(...),...,,(list
+        of supported <mode>s),(list of supported <format>s) -- TestOperators''s response,
+        and genuinely too structurally complex for this schema to decompose field-by-field:
+        an arbitrary-count LIST of parenthesized 5-tuples (one per operator the module
+        currently sees), followed by two more parenthesized compound lists for supported
+        modes/formats. Nothing in this schema models ''a variable number of grouped,
+        parenthesized sub-fields'' -- there''s no equivalent to variableLength for
+        a repeating STRUCTURED group, only for a single flat run of bytes/text. Modeled
+        as one opaque remainder string rather than force a wrong decomposition; a
+        real implementation needs its own parser for this one response, not this schema''s
+        ordinary field model. stat: 0=unknown, 1=available, 2=currently selected,
+        3=forbidden.'
+      message:
+        name: OperatorScanResult_Telemetry_Message
+        title: OperatorScanResult Telemetry
+        payload:
+          $ref: '#/components/schemas/OperatorScanResult_Telemetry'
+  omniuart/telemetry/OperatorNameResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message OperatorNameResult (ID: +COPN:)'
+      description: '+COPN: <numeric>,<alpha> -- one line per operator in the modem''s
+        built-in table; GetOperatorNames''s own description covers the multi-line
+        pattern this and PreferredOperatorResult both share.'
+      message:
+        name: OperatorNameResult_Telemetry_Message
+        title: OperatorNameResult Telemetry
+        payload:
+          $ref: '#/components/schemas/OperatorNameResult_Telemetry'
+  omniuart/telemetry/PreferredListSelectionResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message PreferredListSelectionResult (ID: +CPLS:)'
+      description: '+CPLS: <list>'
+      message:
+        name: PreferredListSelectionResult_Telemetry_Message
+        title: PreferredListSelectionResult Telemetry
+        payload:
+          $ref: '#/components/schemas/PreferredListSelectionResult_Telemetry'
+  omniuart/telemetry/PreferredOperatorResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message PreferredOperatorResult (ID: +CPOL:)'
+      description: '+CPOL: <index>,<format>,<oper> -- one line per stored preferred-operator
+        entry.'
+      message:
+        name: PreferredOperatorResult_Telemetry_Message
+        title: PreferredOperatorResult Telemetry
+        payload:
+          $ref: '#/components/schemas/PreferredOperatorResult_Telemetry'
+  omniuart/telemetry/ImsiResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message ImsiResult (ID: ImsiResult)'
+      description: 'Raw IMSI digit string, no +CIMI: prefix -- unlike almost every
+        other query response here, so nothing to use as role=discriminator. Worth
+        flagging: IMSI and IMEI (SerialNumberLegacyResult) are both commonly 15 prefix-less
+        digits, so if their lengths coincide, this schema''s dispatch algorithm genuinely
+        cannot tell them apart by content alone -- real disambiguation relies entirely
+        on which request (GetImsi vs GetSerialNumberLegacy) is outstanding, the same
+        correlation problem noted for G460''s AckResponse.'
+      message:
+        name: ImsiResult_Telemetry_Message
+        title: ImsiResult Telemetry
+        payload:
+          $ref: '#/components/schemas/ImsiResult_Telemetry'
+  omniuart/telemetry/IccidResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message IccidResult (ID: +CCID:)'
+      description: '+CCID: <iccid> as modeled here (vendor-specific -- see GetIccid).'
+      message:
+        name: IccidResult_Telemetry_Message
+        title: IccidResult Telemetry
+        payload:
+          $ref: '#/components/schemas/IccidResult_Telemetry'
+  omniuart/telemetry/IccidQuectelResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message IccidQuectelResult (ID: +QCCID:)'
+      description: '+QCCID: <ICCID> -- the Quectel BC660K-GL manual''s actual response
+        to AT+QCCID (GetIccidQuectel), with its own distinct prefix from the generic
+        IccidResult above.'
+      message:
+        name: IccidQuectelResult_Telemetry_Message
+        title: IccidQuectelResult Telemetry
+        payload:
+          $ref: '#/components/schemas/IccidQuectelResult_Telemetry'
+  omniuart/telemetry/FacilityLockResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message FacilityLockResult (ID: +CLCK:)'
+      description: '+CLCK: <status>[,<class>] -- QueryFacilityLock''s response. class
+        is optional and omitted here for simplicity; a real implementation may see
+        it, or several repeated lines for different classes.'
+      message:
+        name: FacilityLockResult_Telemetry_Message
+        title: FacilityLockResult Telemetry
+        payload:
+          $ref: '#/components/schemas/FacilityLockResult_Telemetry'
+  omniuart/telemetry/DataInactTimerResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message DataInactTimerResult (ID: +QCFG:\"DataInactTimer\",)'
+      description: '+QCFG: "DataInactTimer",<value> -- QcfgGetDataInactTimer''s response.'
+      message:
+        name: DataInactTimerResult_Telemetry_Message
+        title: DataInactTimerResult Telemetry
+        payload:
+          $ref: '#/components/schemas/DataInactTimerResult_Telemetry'
+  omniuart/telemetry/GpioStatusResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message GpioStatusResult (ID: +QCFG:\"GPIO\",)'
+      description: '+QCFG: "GPIO",<level>[,<level>,<level>,<level>] -- QcfgGpioQuery''s
+        response: one level if a specific pin was queried, four (comma-joined) if
+        all were. Modeled as a single variable-length string covering however many
+        comma-separated levels are actually present, rather than as separate optional
+        fields -- this schema has no clean way to say ''either 1 or 4 of this field,
+        never 2 or 3.'''
+      message:
+        name: GpioStatusResult_Telemetry_Message
+        title: GpioStatusResult Telemetry
+        payload:
+          $ref: '#/components/schemas/GpioStatusResult_Telemetry'
+  omniuart/telemetry/FirmwareRevisionResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message FirmwareRevisionResult (ID: Revision:)'
+      description: 'Revision: <revision> -- see GetFirmwareRevision for why this doesn''t
+        follow the usual ''+CGMR:'' shape.'
+      message:
+        name: FirmwareRevisionResult_Telemetry_Message
+        title: FirmwareRevisionResult Telemetry
+        payload:
+          $ref: '#/components/schemas/FirmwareRevisionResult_Telemetry'
+  omniuart/telemetry/BaudRateResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message BaudRateResult (ID: +IPR:)'
+      description: '+IPR: <rate> -- GetBaudRate''s response.'
+      message:
+        name: BaudRateResult_Telemetry_Message
+        title: BaudRateResult Telemetry
+        payload:
+          $ref: '#/components/schemas/BaudRateResult_Telemetry'
+  omniuart/telemetry/PdpAddressResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message PdpAddressResult (ID: +CGPADDR:)'
+      description: '+CGPADDR: <cid>,<address> -- GetPdpAddress''s response.'
+      message:
+        name: PdpAddressResult_Telemetry_Message
+        title: PdpAddressResult Telemetry
+        payload:
+          $ref: '#/components/schemas/PdpAddressResult_Telemetry'
+  omniuart/telemetry/ControlPlaneDataReceived:
+    subscribe:
+      summary: 'Unsolicited telemetry message ControlPlaneDataReceived (ID: +CRTDCP:)'
+      description: '+CRTDCP: <cid>,<cpdataLength>,<cpdata> -- an unsolicited result
+        code (URC), not a reply to any specific command: arrives whenever the network
+        sends downlink data via the control plane, once SetControlPlaneDataReporting
+        has enabled it.'
+      message:
+        name: ControlPlaneDataReceived_Telemetry_Message
+        title: ControlPlaneDataReceived Telemetry
+        payload:
+          $ref: '#/components/schemas/ControlPlaneDataReceived_Telemetry'
+  omniuart/telemetry/NonIpDataReceived:
+    subscribe:
+      summary: 'Unsolicited telemetry message NonIpDataReceived (ID: +RECVNONIP:)'
+      description: '+RECVNONIP: <cid>,<dataLength>,<data> -- a second, distinct URC
+        for incoming non-IP data, via the user plane rather than SendControlPlaneData/ControlPlaneDataReceived''s
+        control-plane path.'
+      message:
+        name: NonIpDataReceived_Telemetry_Message
+        title: NonIpDataReceived Telemetry
+        payload:
+          $ref: '#/components/schemas/NonIpDataReceived_Telemetry'
+  omniuart/telemetry/BatteryVoltageResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message BatteryVoltageResult (ID: +CBC:)'
+      description: '+CBC: <voltage> in mV -- GetBatteryVoltage''s response.'
+      message:
+        name: BatteryVoltageResult_Telemetry_Message
+        title: BatteryVoltageResult Telemetry
+        payload:
+          $ref: '#/components/schemas/BatteryVoltageResult_Telemetry'
+  omniuart/telemetry/ClockResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message ClockResult (ID: +CCLK:)'
+      description: '+CCLK: <time> -- GetClock''s response.'
+      message:
+        name: ClockResult_Telemetry_Message
+        title: ClockResult Telemetry
+        payload:
+          $ref: '#/components/schemas/ClockResult_Telemetry'
+  omniuart/telemetry/SerialNumberLegacyResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message SerialNumberLegacyResult (ID: SerialNumberLegacyResult)'
+      description: Raw IMEI digit string, no prefix -- same shape as ImsiResult; see
+        its description for the resulting dispatch ambiguity when lengths coincide.
+      message:
+        name: SerialNumberLegacyResult_Telemetry_Message
+        title: SerialNumberLegacyResult Telemetry
+        payload:
+          $ref: '#/components/schemas/SerialNumberLegacyResult_Telemetry'
+  omniuart/telemetry/GprsRegistrationResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message GprsRegistrationResult (ID: +CGREG:)'
+      description: '+CGREG: <n>,<stat> -- same stat encoding as NetworkRegistrationResult,
+        for packet-switched registration.'
+      message:
+        name: GprsRegistrationResult_Telemetry_Message
+        title: GprsRegistrationResult Telemetry
+        payload:
+          $ref: '#/components/schemas/GprsRegistrationResult_Telemetry'
+  omniuart/telemetry/EpsRegistrationResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message EpsRegistrationResult (ID: +CEREG:)'
+      description: '+CEREG: <n>,<stat> -- same shape again, for LTE/EPS registration.'
+      message:
+        name: EpsRegistrationResult_Telemetry_Message
+        title: EpsRegistrationResult Telemetry
+        payload:
+          $ref: '#/components/schemas/EpsRegistrationResult_Telemetry'
+  omniuart/telemetry/SmsSentResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message SmsSentResult (ID: +CMGS:)'
+      description: '+CMGS: <messageReference> -- confirms SendSmsBody''s message was
+        actually sent, with a reference number for delivery-status tracking.'
+      message:
+        name: SmsSentResult_Telemetry_Message
+        title: SmsSentResult Telemetry
+        payload:
+          $ref: '#/components/schemas/SmsSentResult_Telemetry'
+  omniuart/telemetry/Connect:
+    subscribe:
+      summary: 'Unsolicited telemetry message Connect (ID: CONNECT)'
+      description: 'Sent instead of OK for EnterDataMode: confirms the switch, after
+        which every byte on the wire is PPP, not AT text, until the link drops back
+        to command mode.'
+      message:
+        name: Connect_Telemetry_Message
+        title: Connect Telemetry
+        payload:
+          $ref: '#/components/schemas/Connect_Telemetry'
 components:
   messages: {}
   schemas:
@@ -1308,7 +1640,7 @@ components:
         format:
           type: integer
         oper:
-          type: integer
+          type: string
       description: AT+COPS=1,<format>,<oper> -- manually select a specific operator.
         The real command also accepts an optional trailing <AcT> (radio access technology);
         left out of this modeled version for simplicity rather than made a genuinely
@@ -1344,7 +1676,7 @@ components:
         format:
           type: integer
         oper:
-          type: integer
+          type: string
       description: AT+COPS=4,<format>,<oper> -- try the given operator manually; fall
         back to automatic selection if that specific one can't be reached. Same AcT
         simplification as SetOperatorManual.
@@ -1356,7 +1688,7 @@ components:
           const: AT+CPIN=
           description: Opcode ID for EnterPin
         pin:
-          type: integer
+          type: string
       description: 'AT+CPIN=<pin> -- from the Quectel BC660K-GL manual (AT+CPIN, section
         8.6): entering a plain SIM PIN. See EnterPukWithNewPin for the other shape
         this same command takes.'
@@ -1368,9 +1700,9 @@ components:
           const: AT+CPIN=
           description: Opcode ID for EnterPukWithNewPin
         puk:
-          type: integer
+          type: string
         newpin:
-          type: integer
+          type: string
       description: 'AT+CPIN=<puk>,<newpin> -- when the SIM demands PUK (not plain
         PIN), a second argument -- the new PIN to set -- is required. Genuinely COPS-like:
         same command name, argument COUNT (not a leading mode digit this time) selects
@@ -1386,9 +1718,10 @@ components:
           const: AT+CLCK=
           description: Opcode ID for UnlockFacility
         fac:
-          type: integer
+          type: string
         mode:
           type: integer
+          default: 0
       description: AT+CLCK=<fac>,0[,<passwd>] -- from the manual's AT+CLCK (section
         8.5). fac is quoted, e.g. \"SC\" for the SIM facility.
     LockFacility_Request:
@@ -1399,9 +1732,10 @@ components:
           const: AT+CLCK=
           description: Opcode ID for LockFacility
         fac:
-          type: integer
+          type: string
         mode:
           type: integer
+          default: 1
       description: AT+CLCK=<fac>,1[,<passwd>].
     QueryFacilityLock_Request:
       type: object
@@ -1411,9 +1745,10 @@ components:
           const: AT+CLCK=
           description: Opcode ID for QueryFacilityLock
         fac:
-          type: integer
+          type: string
         mode:
           type: integer
+          default: 2
       description: 'AT+CLCK=<fac>,2 -- the third CLCK shape: mode=2 needs no password,
         and gets a genuinely different response format (FacilityLockResult lines,
         not a bare OK) from mode=0/1 -- but that''s not actually ambiguous for this
@@ -1439,13 +1774,17 @@ components:
           const: AT+CPSMS=
           description: Opcode ID for SetPsmParameters
         mode:
-          type: integer
+          type: string
+          enum:
+          - '0'
+          - '1'
         separator:
-          type: integer
+          type: string
+          default: ',,,'
         tau:
-          type: integer
+          type: string
         activeTime:
-          type: integer
+          type: string
       description: AT+CPSMS=<mode>,,,<TAU>,<activeTime> -- mode 0 (disable) or 1 (enable)
         plus the requested timer values. Two literal empty positions (the manual's
         own ',,,' -- unused parameters this module doesn't support) sit between mode
@@ -1624,7 +1963,7 @@ components:
         cpdataLength:
           type: integer
         cpdata:
-          type: integer
+          type: string
       description: 'AT+CSODCP=<cid>,<cpdataLength>,<cpdata> (section 7.4) -- the actual
         point of this NB-IoT module for many real products: small non-IP data sent
         via the control plane (NIDD), avoiding the overhead of a full IP stack. This,
@@ -1678,7 +2017,7 @@ components:
           const: AT+CCLK=
           description: Opcode ID for SetClock
         time:
-          type: integer
+          type: string
       description: AT+CCLK=<time>, format \"YY/MM/DD,hh:mm:ss+zz\" (quarter-hours
         from GMT, not whole hours -- +08 means +2 hours, per the manual's own worked
         example).
@@ -1700,11 +2039,15 @@ components:
           const: AT+CEDRXS=
           description: Opcode ID for SetEdrxParameters
         mode:
-          type: integer
+          type: string
+          enum:
+          - '0'
+          - '1'
+          - '2'
         actType:
           type: integer
         requestedEdrxValue:
-          type: integer
+          type: string
       description: 'AT+CEDRXS=<mode>,<AcT_type>,<requested_eDRX_value> -- mode restricted
         to {0,1,2} via a named enum type for the same reason SetPsmParameters restricts
         its own mode: so this can''t overlap with SetEdrxDisabled''s mode=3.'
@@ -1805,9 +2148,10 @@ components:
         cid:
           type: integer
         pdpType:
-          type: integer
+          type: string
+          default: \"IP\"
         apn:
-          type: integer
+          type: string
       description: AT+CGDCONT=<cid>,<pdpType>,<apn> -- the first genuinely parameterized
         command here, showing delimiter-separated arguments rather than a single constValue
         line.
@@ -1819,7 +2163,7 @@ components:
           const: ATD
           description: Opcode ID for Dial
         phoneNumber:
-          type: integer
+          type: string
       description: ATD<number> -- for a circuit-switched or legacy dial-up data call.
     HangUp_Request:
       type: object
@@ -1855,9 +2199,10 @@ components:
           const: AT+CMGS=\"
           description: Opcode ID for SendSmsHeader
         phoneNumber:
-          type: integer
+          type: string
         suffix:
-          type: integer
+          type: string
+          default: \"
       description: AT+CMGS=\"<number>\" -- the modem replies with a bare '> ' prompt
         (not modeled as its own response here -- it's a 2-character prompt, not a
         CRLF-terminated line, and this schema's message model assumes the latter),
@@ -1870,10 +2215,283 @@ components:
           const: 61
           description: Opcode ID for SendSmsBody
         messageText:
-          type: integer
+          type: string
       description: The actual message text, sent only after SendSmsHeader's '> ' prompt.
         Terminated by Ctrl-Z (0x1A), NOT this interface's usual CRLF -- endDelimiterOverride
         exists specifically for this case. (Esc instead of Ctrl-Z cancels the send
         instead; not separately modeled here.)
+    Ok_Telemetry:
+      type: object
+      properties: {}
+      description: The generic success response to almost any command.
+    Error_Telemetry:
+      type: object
+      properties: {}
+      description: Generic failure with no further detail -- contrast CmeError, which
+        at least gives a code.
+    CmeError_Telemetry:
+      type: object
+      properties:
+        code:
+          type: integer
+      description: '+CME ERROR: <code> -- an extended error report, typically only
+        enabled after AT+CMEE=1 (not separately modeled here).'
+    PinStatusResult_Telemetry:
+      type: object
+      properties:
+        status:
+          type: string
+      description: '+CPIN: READY (no PIN needed) or +CPIN: SIM PIN (one is required),
+        among other states.'
+    NetworkRegistrationResult_Telemetry:
+      type: object
+      properties:
+        n:
+          type: integer
+        stat:
+          type: integer
+      description: '+CREG: <n>,<stat> -- n is the reporting mode previously set; stat
+        is the registration state (1=registered home, 5=registered roaming, etc.).'
+    SignalQueryResult_Telemetry:
+      type: object
+      properties:
+        rssi:
+          type: string
+        ber:
+          type: string
+      description: '+CSQ: 15,99 followed by OK, each its own CRLF-terminated line.'
+    ExtendedSignalQualityResult_Telemetry:
+      type: object
+      properties:
+        rssi:
+          type: integer
+        ber:
+          type: integer
+        rscp:
+          type: integer
+        ecno:
+          type: integer
+        rsrq:
+          type: integer
+        rsrp:
+          type: integer
+      description: '+CESQ: <rssi>,<ber>,<rscp>,<ecno>,<rsrq>,<rsrp> -- 6 comma-separated
+        values, most using 99/255-style sentinels for ''not known/not detectable''
+        on fields that don''t apply to the current radio access technology.'
+    OperatorResult_Telemetry:
+      type: object
+      properties:
+        mode:
+          type: integer
+        format:
+          type: integer
+        oper:
+          type: string
+        accessTechnology:
+          type: integer
+      description: '+COPS: <mode>[,<format>,<oper>][,<AcT>] -- per the manual (section
+        7.2): format/oper/AcT are genuinely OPTIONAL, omitted together when no operator
+        is selected -- modeled below as always-present for simplicity, a real gap
+        against the manual''s own read-command response shape, not fixed here. AcT
+        on THIS module is 9 (E-UTRAN NB-S1 mode) -- an earlier version of this file
+        used 7 (generic LTE from the wider 3GPP TS 27.007 AcT table), which is wrong
+        for this specific module; corrected.'
+    TestOperators_Telemetry:
+      type: object
+      properties: {}
+      description: 'AT+COPS=? -- the test command form, genuinely distinct from GetOperator
+        (AT+COPS?): scans and lists every operator the module currently sees, not
+        just the selected one. Response (OperatorScanResult) is a compound per-operator
+        list, not the simple mode/format/oper/AcT shape.'
+    OperatorScanResult_Telemetry:
+      type: object
+      properties:
+        operatorListRaw:
+          type: string
+      description: '+COPS: (<stat>,<longOper>,<shortOper>,<numericOper>,<AcT>),(...),...,,(list
+        of supported <mode>s),(list of supported <format>s) -- TestOperators''s response,
+        and genuinely too structurally complex for this schema to decompose field-by-field:
+        an arbitrary-count LIST of parenthesized 5-tuples (one per operator the module
+        currently sees), followed by two more parenthesized compound lists for supported
+        modes/formats. Nothing in this schema models ''a variable number of grouped,
+        parenthesized sub-fields'' -- there''s no equivalent to variableLength for
+        a repeating STRUCTURED group, only for a single flat run of bytes/text. Modeled
+        as one opaque remainder string rather than force a wrong decomposition; a
+        real implementation needs its own parser for this one response, not this schema''s
+        ordinary field model. stat: 0=unknown, 1=available, 2=currently selected,
+        3=forbidden.'
+    OperatorNameResult_Telemetry:
+      type: object
+      properties:
+        numeric:
+          type: string
+        alpha:
+          type: string
+      description: '+COPN: <numeric>,<alpha> -- one line per operator in the modem''s
+        built-in table; GetOperatorNames''s own description covers the multi-line
+        pattern this and PreferredOperatorResult both share.'
+    PreferredListSelectionResult_Telemetry:
+      type: object
+      properties:
+        list:
+          type: integer
+      description: '+CPLS: <list>'
+    PreferredOperatorResult_Telemetry:
+      type: object
+      properties:
+        index:
+          type: integer
+        format:
+          type: integer
+        oper:
+          type: string
+      description: '+CPOL: <index>,<format>,<oper> -- one line per stored preferred-operator
+        entry.'
+    ImsiResult_Telemetry:
+      type: object
+      properties:
+        imsi:
+          type: string
+      description: 'Raw IMSI digit string, no +CIMI: prefix -- unlike almost every
+        other query response here, so nothing to use as role=discriminator. Worth
+        flagging: IMSI and IMEI (SerialNumberLegacyResult) are both commonly 15 prefix-less
+        digits, so if their lengths coincide, this schema''s dispatch algorithm genuinely
+        cannot tell them apart by content alone -- real disambiguation relies entirely
+        on which request (GetImsi vs GetSerialNumberLegacy) is outstanding, the same
+        correlation problem noted for G460''s AckResponse.'
+    IccidResult_Telemetry:
+      type: object
+      properties:
+        iccid:
+          type: string
+      description: '+CCID: <iccid> as modeled here (vendor-specific -- see GetIccid).'
+    IccidQuectelResult_Telemetry:
+      type: object
+      properties:
+        iccid:
+          type: string
+      description: '+QCCID: <ICCID> -- the Quectel BC660K-GL manual''s actual response
+        to AT+QCCID (GetIccidQuectel), with its own distinct prefix from the generic
+        IccidResult above.'
+    FacilityLockResult_Telemetry:
+      type: object
+      properties:
+        status:
+          type: integer
+      description: '+CLCK: <status>[,<class>] -- QueryFacilityLock''s response. class
+        is optional and omitted here for simplicity; a real implementation may see
+        it, or several repeated lines for different classes.'
+    DataInactTimerResult_Telemetry:
+      type: object
+      properties:
+        value:
+          type: integer
+      description: '+QCFG: "DataInactTimer",<value> -- QcfgGetDataInactTimer''s response.'
+    GpioStatusResult_Telemetry:
+      type: object
+      properties:
+        levels:
+          type: string
+      description: '+QCFG: "GPIO",<level>[,<level>,<level>,<level>] -- QcfgGpioQuery''s
+        response: one level if a specific pin was queried, four (comma-joined) if
+        all were. Modeled as a single variable-length string covering however many
+        comma-separated levels are actually present, rather than as separate optional
+        fields -- this schema has no clean way to say ''either 1 or 4 of this field,
+        never 2 or 3.'''
+    FirmwareRevisionResult_Telemetry:
+      type: object
+      properties:
+        revision:
+          type: string
+      description: 'Revision: <revision> -- see GetFirmwareRevision for why this doesn''t
+        follow the usual ''+CGMR:'' shape.'
+    BaudRateResult_Telemetry:
+      type: object
+      properties:
+        rate:
+          type: integer
+      description: '+IPR: <rate> -- GetBaudRate''s response.'
+    PdpAddressResult_Telemetry:
+      type: object
+      properties:
+        cid:
+          type: integer
+        address:
+          type: string
+      description: '+CGPADDR: <cid>,<address> -- GetPdpAddress''s response.'
+    ControlPlaneDataReceived_Telemetry:
+      type: object
+      properties:
+        cid:
+          type: integer
+        cpdataLength:
+          type: integer
+        cpdata:
+          type: string
+      description: '+CRTDCP: <cid>,<cpdataLength>,<cpdata> -- an unsolicited result
+        code (URC), not a reply to any specific command: arrives whenever the network
+        sends downlink data via the control plane, once SetControlPlaneDataReporting
+        has enabled it.'
+    NonIpDataReceived_Telemetry:
+      type: object
+      properties:
+        cid:
+          type: integer
+        dataLength:
+          type: integer
+        data:
+          type: string
+      description: '+RECVNONIP: <cid>,<dataLength>,<data> -- a second, distinct URC
+        for incoming non-IP data, via the user plane rather than SendControlPlaneData/ControlPlaneDataReceived''s
+        control-plane path.'
+    BatteryVoltageResult_Telemetry:
+      type: object
+      properties:
+        voltage:
+          type: integer
+      description: '+CBC: <voltage> in mV -- GetBatteryVoltage''s response.'
+    ClockResult_Telemetry:
+      type: object
+      properties:
+        time:
+          type: string
+      description: '+CCLK: <time> -- GetClock''s response.'
+    SerialNumberLegacyResult_Telemetry:
+      type: object
+      properties:
+        imei:
+          type: string
+      description: Raw IMEI digit string, no prefix -- same shape as ImsiResult; see
+        its description for the resulting dispatch ambiguity when lengths coincide.
+    GprsRegistrationResult_Telemetry:
+      type: object
+      properties:
+        n:
+          type: integer
+        stat:
+          type: integer
+      description: '+CGREG: <n>,<stat> -- same stat encoding as NetworkRegistrationResult,
+        for packet-switched registration.'
+    EpsRegistrationResult_Telemetry:
+      type: object
+      properties:
+        n:
+          type: integer
+        stat:
+          type: integer
+      description: '+CEREG: <n>,<stat> -- same shape again, for LTE/EPS registration.'
+    SmsSentResult_Telemetry:
+      type: object
+      properties:
+        messageReference:
+          type: integer
+      description: '+CMGS: <messageReference> -- confirms SendSmsBody''s message was
+        actually sent, with a reference number for delivery-status tracking.'
+    Connect_Telemetry:
+      type: object
+      properties: {}
+      description: 'Sent instead of OK for EnterDataMode: confirms the switch, after
+        which every byte on the wire is PPP, not AT text, until the link drops back
+        to command mode.'
 
 ```

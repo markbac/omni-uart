@@ -31,8 +31,6 @@ info:
   version: '1.0'
   description: Modbus over serial, ASCII transmission mode. Every logical byte is
     sent as 2 ASCII hex characters, framed between ':' and CRLF.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200

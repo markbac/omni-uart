@@ -63,8 +63,6 @@ info:
     match exactly or the instrument just doesn't respond, with no error reported at
     all. Chains multiple independent commands onto one physical line via ';', which
     compoundMessageDelimiter exists specifically for.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/9600
@@ -133,6 +131,15 @@ channels:
         title: SetVoltageOutput Command
         payload:
           $ref: '#/components/schemas/SetVoltageOutput_Request'
+  omniuart/telemetry/IdentifyResult:
+    subscribe:
+      summary: 'Unsolicited telemetry message IdentifyResult (ID: IdentifyResult)'
+      description: e.g. 'ACME,MM7,SN12345,FW2.1'
+      message:
+        name: IdentifyResult_Telemetry_Message
+        title: IdentifyResult Telemetry
+        payload:
+          $ref: '#/components/schemas/IdentifyResult_Telemetry'
 components:
   messages: {}
   schemas:
@@ -186,5 +193,17 @@ components:
         voltage:
           type: number
       description: SOUR:VOLT <val> Set programmable power supply output voltage.
+    IdentifyResult_Telemetry:
+      type: object
+      properties:
+        manufacturer:
+          type: string
+        model:
+          type: string
+        serial:
+          type: string
+        firmware:
+          type: string
+      description: e.g. 'ACME,MM7,SN12345,FW2.1'
 
 ```

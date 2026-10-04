@@ -4,8 +4,6 @@ info:
   version: '2.0'
   description: Automotive master/slave bus. Genuinely UART-based (8N1 async bytes)
     but frame length is looked up by identifier, not sent on the wire.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -41,8 +39,10 @@ components:
           const: 0
           description: Opcode ID for WheelSpeedFrame
         pid:
-          type: integer
+          type: string
+          contentEncoding: base64
         data:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: One specific LIN identifier; its data length (4 bytes here) is
         known from the identifier, not transmitted.

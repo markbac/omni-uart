@@ -6,8 +6,6 @@ info:
     existing crc-16-dnp preset -- unused since it was first added several rounds ago.
     Its real structural novelty: data is chunked into 16-byte blocks, EACH with its
     own trailing CRC, not one check for the whole frame.'
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/9600
@@ -56,7 +54,8 @@ components:
         source:
           type: integer
         userData:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: control/destination/source are the LENGTH-counted header; userData
         is the application payload. userData is actually split into 16-byte blocks,
         each followed by its OWN separate CRC-16/DNP (the final block may be shorter)

@@ -5,8 +5,6 @@ info:
   description: Unidirectional lighting-control broadcast. Frame boundary is a UART
     break condition (an extended low period), not a byte value, not silence, and not
     an identifier lookup -- none of which this schema's framing styles model precisely.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/250000
@@ -44,8 +42,10 @@ components:
           description: Opcode ID for ChannelFrame
         startCode:
           type: integer
+          default: 0
         channelData:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: Start code (0x00 for standard dimmer data) followed by up to 512
         channel values; a receiver simply takes however many bytes arrive before the
         next break.

@@ -5,8 +5,6 @@ info:
   description: Heavy-vehicle diagnostic multi-drop bus. Fixed 9600 8N1 -- no parity
     at all, unlike M-Bus's 8E1 or G460's default -- a third distinct combination across
     the protocols tried so far.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/9600
@@ -46,7 +44,8 @@ components:
         mid:
           type: integer
         data:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: MID implies the message's format/length via an external lookup,
         much like LIN's identifier -- though here the boundary itself comes from bus
         silence, not a table (Message/data here has whatever length the specific MID's

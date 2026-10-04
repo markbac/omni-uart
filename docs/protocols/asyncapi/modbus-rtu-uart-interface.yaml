@@ -4,8 +4,6 @@ info:
   version: '1.0'
   description: Modbus over serial, RTU transmission mode. Frame boundaries are marked
     by line silence rather than sync bytes or a length field.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200

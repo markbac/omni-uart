@@ -97,8 +97,6 @@ info:
   description: 'File transfer nested inside a normal MAVLink message: every FTP packet,
     of whatever kind, is the SAME outer message type, distinguished only by an inner
     opcode/offset/session sub-header.'
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -133,6 +131,27 @@ channels:
         title: FTP_BurstReadFile Command
         payload:
           $ref: '#/components/schemas/FTP_BurstReadFile_Request'
+  omniuart/telemetry/FTP_Ack:
+    subscribe:
+      summary: 'Unsolicited telemetry message FTP_Ack (ID: 0x80)'
+      description: Every burst-read data packet is this same message, distinguished
+        only by offset (where this chunk goes) and burstComplete (whether more are
+        coming) -- there is no separate 'initial'/'follow-on' message name the way
+        G460 or XMODEM have.
+      message:
+        name: FTP_Ack_Telemetry_Message
+        title: FTP_Ack Telemetry
+        payload:
+          $ref: '#/components/schemas/FTP_Ack_Telemetry'
+  omniuart/telemetry/FTP_Nak:
+    subscribe:
+      summary: 'Unsolicited telemetry message FTP_Nak (ID: 0x81)'
+      description: 'Unsolicited telemetry message from device: FTP_Nak'
+      message:
+        name: FTP_Nak_Telemetry_Message
+        title: FTP_Nak Telemetry
+        payload:
+          $ref: '#/components/schemas/FTP_Nak_Telemetry'
 components:
   messages: {}
   schemas:
@@ -151,24 +170,36 @@ components:
           type: integer
         msgId:
           type: integer
+          default: 110
         seqNumber:
           type: integer
         session:
           type: integer
+          default: 0
         opcode:
-          type: integer
+          type: string
+          enum:
+          - '4'
+          - '15'
+          - '128'
+          - '129'
+          default: 4
         size:
           type: integer
         reqOpcode:
           type: integer
+          default: 0
         burstComplete:
           type: integer
+          default: 0
         padding:
           type: integer
+          default: 0
         offset:
           type: integer
+          default: 0
         path:
-          type: integer
+          type: string
       description: Opens a file for reading; the ack (FTP_Ack) returns a session id
         that scopes every subsequent read against this open file.
     FTP_BurstReadFile_Request:
@@ -186,12 +217,58 @@ components:
           type: integer
         msgId:
           type: integer
+          default: 110
         seqNumber:
           type: integer
         session:
           type: integer
         opcode:
+          type: string
+          enum:
+          - '4'
+          - '15'
+          - '128'
+          - '129'
+          default: 15
+        size:
           type: integer
+        reqOpcode:
+          type: integer
+          default: 0
+        burstComplete:
+          type: integer
+          default: 0
+        padding:
+          type: integer
+          default: 0
+        offset:
+          type: integer
+      description: Requests the server stream the file from offset onward, without
+        individual acks per chunk, until burstComplete is set on the final FTP_Ack.
+    FTP_Ack_Telemetry:
+      type: object
+      properties:
+        seq:
+          type: integer
+        sysId:
+          type: integer
+        compId:
+          type: integer
+        msgId:
+          type: integer
+          default: 110
+        seqNumber:
+          type: integer
+        session:
+          type: integer
+        opcode:
+          type: string
+          enum:
+          - '4'
+          - '15'
+          - '128'
+          - '129'
+          default: 128
         size:
           type: integer
         reqOpcode:
@@ -200,9 +277,54 @@ components:
           type: integer
         padding:
           type: integer
+          default: 0
         offset:
           type: integer
-      description: Requests the server stream the file from offset onward, without
-        individual acks per chunk, until burstComplete is set on the final FTP_Ack.
+        data:
+          type: string
+          contentEncoding: base64
+      description: Every burst-read data packet is this same message, distinguished
+        only by offset (where this chunk goes) and burstComplete (whether more are
+        coming) -- there is no separate 'initial'/'follow-on' message name the way
+        G460 or XMODEM have.
+    FTP_Nak_Telemetry:
+      type: object
+      properties:
+        seq:
+          type: integer
+        sysId:
+          type: integer
+        compId:
+          type: integer
+        msgId:
+          type: integer
+          default: 110
+        seqNumber:
+          type: integer
+        session:
+          type: integer
+        opcode:
+          type: string
+          enum:
+          - '4'
+          - '15'
+          - '128'
+          - '129'
+          default: 129
+        size:
+          type: integer
+        reqOpcode:
+          type: integer
+        burstComplete:
+          type: integer
+          default: 0
+        padding:
+          type: integer
+          default: 0
+        offset:
+          type: integer
+        errorCode:
+          type: integer
+      description: Device-initiated telemetry payload for FTP_Nak
 
 ```

@@ -32,8 +32,6 @@ info:
   description: Escapes any occurrence of the flag/escape bytes (and, by default, control
     chars <0x20) by transmitting escapeByte then (originalByte XOR 0x20) -- a general
     transform rule, not SLIP's fixed substitute-byte-pair table.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -69,10 +67,12 @@ components:
           description: Opcode ID for Frame
         control:
           type: integer
+          default: 3
         protocol:
           type: integer
         information:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: Command payload for Frame
 
 ```

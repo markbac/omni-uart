@@ -145,8 +145,6 @@ info:
   version: '34'
   description: GPS/GNSS receiver binary protocol. class+id sit between the sync pattern
     and the length field -- before the length-counted region, unlike MAVLink's after.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/4800
@@ -235,8 +233,10 @@ components:
           description: Opcode ID for CFG-PRT-Poll
         class:
           type: integer
+          default: 6
         id:
           type: integer
+          default: 0
       description: Poll vs SetBaud share identical class/id, so they don't disambiguate
         by value at all -- this schema's dispatch algorithm correctly falls back to
         resolved length instead (0 payload bytes here vs SetBaud's fixed 12), which
@@ -250,12 +250,15 @@ components:
           description: Opcode ID for CFG-PRT-SetBaud
         class:
           type: integer
+          default: 6
         id:
           type: integer
+          default: 0
         portId:
           type: integer
         reserved:
-          type: integer
+          type: string
+          contentEncoding: base64
         mode:
           type: integer
         baudRate:
@@ -273,8 +276,10 @@ components:
           description: Opcode ID for NAV-POSLLH
         class:
           type: integer
+          default: 1
         id:
           type: integer
+          default: 2
         iTOW:
           type: integer
         lon:
@@ -300,8 +305,10 @@ components:
           description: Opcode ID for NAV-PVT
         class:
           type: integer
+          default: 1
         id:
           type: integer
+          default: 7
         iTOW:
           type: integer
         year:
@@ -339,8 +346,10 @@ components:
           description: Opcode ID for MON-VER
         class:
           type: integer
+          default: 10
         id:
           type: integer
+          default: 4
       description: Receiver Software and Hardware Version Poll.
     NAV-STATUS_Request:
       type: object
@@ -351,8 +360,10 @@ components:
           description: Opcode ID for NAV-STATUS
         class:
           type: integer
+          default: 1
         id:
           type: integer
+          default: 3
       description: Receiver Navigation Status Poll.
 
 ```

@@ -32,8 +32,6 @@ info:
   description: 'Same async HDLC framing as plain PPP, but hardware flow control isn''t
     optional here: the underlying radio/modem can stall mid-transmission, and without
     RTS/CTS pacing the host will overrun its buffer.'
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -69,10 +67,12 @@ components:
           description: Opcode ID for Frame
         control:
           type: integer
+          default: 3
         protocol:
           type: integer
         information:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: Command payload for Frame
 
 ```

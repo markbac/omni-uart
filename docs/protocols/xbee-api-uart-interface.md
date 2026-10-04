@@ -76,8 +76,6 @@ info:
   version: S2C Zigbee firmware
   description: Digi XBee radio module binary command protocol, including an AT Command
     frame setting ATCH (the RF channel/frequency).
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -120,6 +118,15 @@ channels:
         title: RemoteATCommand Command
         payload:
           $ref: '#/components/schemas/RemoteATCommand_Request'
+  omniuart/telemetry/ATCommandResponse:
+    subscribe:
+      summary: 'Unsolicited telemetry message ATCommandResponse (ID: 0x88)'
+      description: 'Unsolicited telemetry message from device: ATCommandResponse'
+      message:
+        name: ATCommandResponse_Telemetry_Message
+        title: ATCommandResponse Telemetry
+        payload:
+          $ref: '#/components/schemas/ATCommandResponse_Telemetry'
 components:
   messages: {}
   schemas:
@@ -133,7 +140,8 @@ components:
         frameId:
           type: integer
         atCommand:
-          type: integer
+          type: string
+          default: CH
         parameterValue:
           type: integer
       description: 'Frame type 0x08: local AT Command. The AT command here is ''CH''
@@ -148,7 +156,8 @@ components:
         frameId:
           type: integer
         dest64:
-          type: integer
+          type: string
+          contentEncoding: base64
         dest16:
           type: integer
         broadcastRadius:
@@ -156,7 +165,8 @@ components:
         options:
           type: integer
         payload:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: 'Frame type 0x10: Transmit data packet to 64-bit destination address.'
     RemoteATCommand_Request:
       type: object
@@ -168,13 +178,24 @@ components:
         frameId:
           type: integer
         dest64:
-          type: integer
+          type: string
+          contentEncoding: base64
         dest16:
           type: integer
         applyOptions:
           type: integer
         atCommand:
-          type: integer
+          type: string
       description: 'Frame type 0x17: Issue AT Command to remote node in mesh network.'
+    ATCommandResponse_Telemetry:
+      type: object
+      properties:
+        frameId:
+          type: integer
+        atCommand:
+          type: string
+        commandStatus:
+          type: integer
+      description: Device-initiated telemetry payload for ATCommandResponse
 
 ```

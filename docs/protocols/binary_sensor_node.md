@@ -140,6 +140,15 @@ channels:
         title: set_sampling_rate Response
         payload:
           $ref: '#/components/schemas/set_sampling_rate_Response'
+  omniuart/telemetry/periodic_status:
+    subscribe:
+      summary: 'Unsolicited telemetry message periodic_status (ID: 0x30)'
+      description: Spontaneous periodic heartbeat broadcast
+      message:
+        name: periodic_status_Telemetry_Message
+        title: periodic_status Telemetry
+        payload:
+          $ref: '#/components/schemas/periodic_status_Telemetry'
 components:
   messages: {}
   schemas:
@@ -169,6 +178,7 @@ components:
           type: integer
           minimum: 0.0
           maximum: 3.0
+          default: 0
       description: Query latest sensor measurements
     get_readings_Response:
       type: object
@@ -193,7 +203,13 @@ components:
           const: 3
           description: Opcode ID for set_sampling_rate
         rate_hz:
-          type: integer
+          type: string
+          enum:
+          - 1
+          - 5
+          - 10
+          - 50
+          default: 1
       description: Configure sensor update frequency
     set_sampling_rate_Response:
       type: object
@@ -201,5 +217,14 @@ components:
         status:
           type: integer
       description: Decoded response frame payload for set_sampling_rate
+    periodic_status_Telemetry:
+      type: object
+      properties:
+        battery_millivolts:
+          type: integer
+          unit: mV
+        error_flags:
+          type: integer
+      description: Spontaneous periodic heartbeat broadcast
 
 ```

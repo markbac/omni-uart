@@ -171,8 +171,6 @@ info:
   version: '1.0'
   description: Drone/autopilot telemetry protocol. Header fields (seq/sysid/compid/msgid)
     sit between the length field and the region LEN actually counts.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -253,6 +251,7 @@ components:
           type: integer
         msgId:
           type: integer
+          default: 0
         customMode:
           type: integer
         vehicleType:
@@ -282,6 +281,7 @@ components:
           type: integer
         msgId:
           type: integer
+          default: 1
         onboardSensorsPresent:
           type: integer
         onboardSensorsEnabled:
@@ -313,6 +313,7 @@ components:
           type: integer
         msgId:
           type: integer
+          default: 24
         timeUsec:
           type: integer
         fixType:
@@ -349,6 +350,7 @@ components:
           type: integer
         msgId:
           type: integer
+          default: 30
         timeBootMs:
           type: integer
         roll:
@@ -380,6 +382,7 @@ components:
           type: integer
         msgId:
           type: integer
+          default: 76
         targetSystem:
           type: integer
         targetComponent:

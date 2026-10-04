@@ -83,7 +83,12 @@ components:
       type: object
       properties:
         system_state:
-          type: integer
+          type: string
+          enum:
+          - 0
+          - 1
+          - 2
+          - 3
         cpu_load_pct:
           type: integer
           unit: '%'

@@ -7,8 +7,6 @@ info:
     operator-level concepts (net ID, hopset/keyset selection by index, time-of-day
     sync, channel lockout, single-channel fallback) to exercise the schema against
     this domain without claiming to be real.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -71,6 +69,15 @@ channels:
         title: SetSingleChannelFrequency Command
         payload:
           $ref: '#/components/schemas/SetSingleChannelFrequency_Request'
+  omniuart/telemetry/StatusResponse:
+    subscribe:
+      summary: 'Unsolicited telemetry message StatusResponse (ID: StatusResponse)'
+      description: 'Unsolicited telemetry message from device: StatusResponse'
+      message:
+        name: StatusResponse_Telemetry_Message
+        title: StatusResponse Telemetry
+        payload:
+          $ref: '#/components/schemas/StatusResponse_Telemetry'
 components:
   messages: {}
   schemas:
@@ -114,7 +121,8 @@ components:
           const: 3
           description: Opcode ID for SetChannelLockout
         lockoutBitmap:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: Marks channels as excluded from the hop pattern (e.g. known-interfered
         channels), analogous in spirit to Bluetooth's AFH channel classification.
     SetSingleChannelFrequency_Request:
@@ -127,3 +135,10 @@ components:
         frequencyHz:
           type: integer
       description: Fallback non-hopping ('single channel') operating frequency.
+    StatusResponse_Telemetry:
+      type: object
+      properties:
+        status:
+          type: string
+          contentEncoding: base64
+      description: Device-initiated telemetry payload for StatusResponse

@@ -29,8 +29,6 @@ info:
   version: RFC 1055
   description: Pure framing protocol -- carries an arbitrary encapsulated packet (typically
     IP) with no application-level commands or integrity check of its own.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -66,7 +64,8 @@ components:
           const: 0
           description: Opcode ID for EncapsulatedPacket
         data:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: The opaque packet being carried (e.g. an IP datagram); SLIP does
         not interpret it.
 

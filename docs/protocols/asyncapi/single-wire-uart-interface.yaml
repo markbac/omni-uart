@@ -5,8 +5,6 @@ info:
   description: A genuine single shared data line, not just RTS/CTS omitted -- both
     sides' TX and RX are the same open-drain/tri-state pin, common on microcontroller
     debug or bootload pins wired for minimal pin count.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -30,6 +28,15 @@ channels:
         title: Ping Command
         payload:
           $ref: '#/components/schemas/Ping_Request'
+  omniuart/telemetry/Pong:
+    subscribe:
+      summary: 'Unsolicited telemetry message Pong (ID: 0x81)'
+      description: 'Unsolicited telemetry message from device: Pong'
+      message:
+        name: Pong_Telemetry_Message
+        title: Pong Telemetry
+        payload:
+          $ref: '#/components/schemas/Pong_Telemetry'
 components:
   messages: {}
   schemas:
@@ -42,6 +49,18 @@ components:
           description: Opcode ID for Ping
         opcode:
           type: integer
+          default: 1
         reserved:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: Command payload for Ping
+    Pong_Telemetry:
+      type: object
+      properties:
+        opcode:
+          type: integer
+          default: 129
+        reserved:
+          type: string
+          contentEncoding: base64
+      description: Device-initiated telemetry payload for Pong

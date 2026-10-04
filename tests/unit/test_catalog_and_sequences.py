@@ -83,3 +83,19 @@ def test_catalog_manager_dynamic_pickup() -> None:
         assert proto is not None
         assert proto.metadata.name == "Custom Sensor Protocol"
         assert proto.serial_config.baudrate == 9600
+
+
+def test_catalog_ambiguity_and_caching() -> None:
+    """Verify that ambiguous protocol lookups raise ValueError unless first=True, and caching works."""
+    catalog = CatalogManager()
+    with pytest.raises(ValueError) as exc_info:
+        catalog.get_protocol("modbus")
+    assert "Ambiguous" in str(exc_info.value)
+
+    first_proto = catalog.get_protocol("modbus", first=True)
+    assert first_proto is not None
+
+    # Verify caching returns identical object instance on repeated call
+    spec1 = catalog.get_protocol("binary_sensor_node.yaml")
+    spec2 = catalog.get_protocol("binary_sensor_node.yaml")
+    assert spec1 is spec2

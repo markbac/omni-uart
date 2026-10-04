@@ -68,8 +68,6 @@ info:
   description: File transfer over a serial link. Mixes 128/1024-byte framed data blocks
     (selected by leading byte, not a length field) with completely bare single-byte
     control codes -- no envelope at all around ACK/NAK/EOT/CAN.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -122,6 +120,24 @@ channels:
         title: Cancel Command
         payload:
           $ref: '#/components/schemas/Cancel_Request'
+  omniuart/telemetry/Ack:
+    subscribe:
+      summary: 'Unsolicited telemetry message Ack (ID: 0x06)'
+      description: 'Unsolicited telemetry message from device: Ack'
+      message:
+        name: Ack_Telemetry_Message
+        title: Ack Telemetry
+        payload:
+          $ref: '#/components/schemas/Ack_Telemetry'
+  omniuart/telemetry/Nak:
+    subscribe:
+      summary: 'Unsolicited telemetry message Nak (ID: 0x15)'
+      description: 'Unsolicited telemetry message from device: Nak'
+      message:
+        name: Nak_Telemetry_Message
+        title: Nak Telemetry
+        payload:
+          $ref: '#/components/schemas/Nak_Telemetry'
 components:
   messages: {}
   schemas:
@@ -134,12 +150,14 @@ components:
           description: Opcode ID for DataBlock128
         header:
           type: integer
+          default: 1
         blockNumber:
           type: integer
         blockNumberComplement:
           type: integer
         data:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: Leading byte 0x01 (SOH) implies a 128-byte data field; nothing
         else about the length is transmitted.
     DataBlock1024_Request:
@@ -151,12 +169,14 @@ components:
           description: Opcode ID for DataBlock1024
         header:
           type: integer
+          default: 2
         blockNumber:
           type: integer
         blockNumberComplement:
           type: integer
         data:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: Leading byte 0x02 (STX) implies a 1024-byte data field.
     EndOfTransmission_Request:
       type: object
@@ -167,6 +187,7 @@ components:
           description: Opcode ID for EndOfTransmission
         controlByte:
           type: integer
+          default: 4
       description: A single bare byte, 0x04 -- no length field, no checksum, no envelope
         of any kind.
     Cancel_Request:
@@ -178,6 +199,21 @@ components:
           description: Opcode ID for Cancel
         controlByte:
           type: integer
+          default: 24
       description: Command payload for Cancel
+    Ack_Telemetry:
+      type: object
+      properties:
+        controlByte:
+          type: integer
+          default: 6
+      description: Device-initiated telemetry payload for Ack
+    Nak_Telemetry:
+      type: object
+      properties:
+        controlByte:
+          type: integer
+          default: 21
+      description: Device-initiated telemetry payload for Nak
 
 ```

@@ -5,8 +5,6 @@ info:
   description: ASCII, delimiter-framed sentence protocol used by GPS/marine navigation
     equipment. No commands/responses in the request-reply sense -- the device streams
     sentences unsolicited.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/4800
@@ -20,7 +18,41 @@ servers:
         stopBits: 1.0
         framingType: delimited
         integrity: xor
-channels: {}
+channels:
+  omniuart/telemetry/GGA:
+    subscribe:
+      summary: 'Unsolicited telemetry message GGA (ID: GPGGA)'
+      description: Global Positioning System Fix Data, e.g. $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47
+      message:
+        name: GGA_Telemetry_Message
+        title: GGA Telemetry
+        payload:
+          $ref: '#/components/schemas/GGA_Telemetry'
 components:
   messages: {}
-  schemas: {}
+  schemas:
+    GGA_Telemetry:
+      type: object
+      properties:
+        utcTime:
+          type: string
+        latitude:
+          type: string
+        latitudeHemisphere:
+          type: string
+        longitude:
+          type: string
+        longitudeHemisphere:
+          type: string
+        fixQuality:
+          type: string
+        satellitesUsed:
+          type: string
+        hdop:
+          type: string
+        altitude:
+          type: string
+        altitudeUnits:
+          type: string
+          default: M
+      description: Global Positioning System Fix Data, e.g. $GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47

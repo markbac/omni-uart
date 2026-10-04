@@ -87,14 +87,17 @@ components:
           type: integer
           minimum: 0.0
           maximum: 7.0
+          default: 0
         angle_degrees:
           type: number
           unit: deg
           minimum: 0.0
           maximum: 360.0
+          default: 90.0
         velocity_limit:
           type: integer
           unit: rpm
+          default: 1000
       description: Sets servo angular position and maximum velocity
     set_position_Response:
       type: object

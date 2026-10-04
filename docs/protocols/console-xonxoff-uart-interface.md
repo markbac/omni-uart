@@ -38,8 +38,6 @@ info:
   description: Many console/CLI serial ports are wired with only TX/RX/GND -- no RTS/CTS
     lines exist to carry hardware flow control, so XON/XOFF (software, in-band) is
     the only option when the far end needs to pace output.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/9600
@@ -63,6 +61,15 @@ channels:
         title: CommandLine Command
         payload:
           $ref: '#/components/schemas/CommandLine_Request'
+  omniuart/telemetry/OutputLine:
+    subscribe:
+      summary: 'Unsolicited telemetry message OutputLine (ID: OutputLine)'
+      description: 'Unsolicited telemetry message from device: OutputLine'
+      message:
+        name: OutputLine_Telemetry_Message
+        title: OutputLine Telemetry
+        payload:
+          $ref: '#/components/schemas/OutputLine_Telemetry'
 components:
   messages: {}
   schemas:
@@ -74,7 +81,13 @@ components:
           const: 0
           description: Opcode ID for CommandLine
         text:
-          type: integer
+          type: string
       description: Command payload for CommandLine
+    OutputLine_Telemetry:
+      type: object
+      properties:
+        text:
+          type: string
+      description: Device-initiated telemetry payload for OutputLine
 
 ```

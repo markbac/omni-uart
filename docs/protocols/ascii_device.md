@@ -112,7 +112,7 @@ components:
       type: object
       properties:
         result:
-          type: integer
+          type: string
       description: Decoded response frame payload for TEST
     SET_POWER_Request:
       type: object
@@ -125,12 +125,13 @@ components:
           type: integer
           minimum: -10.0
           maximum: 20.0
+          default: 14
       description: Set output transmission power level
     SET_POWER_Response:
       type: object
       properties:
         result:
-          type: integer
+          type: string
       description: Decoded response frame payload for SET_POWER
 
 ```

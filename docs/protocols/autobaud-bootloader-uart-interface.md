@@ -64,8 +64,6 @@ info:
   version: illustrative
   description: Not modelling any specific vendor's exact protocol -- illustrates the
     auto-baud mechanism common to several real MCU ROM bootloaders.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -119,6 +117,24 @@ channels:
         title: Go Command
         payload:
           $ref: '#/components/schemas/Go_Request'
+  omniuart/telemetry/Ack:
+    subscribe:
+      summary: 'Unsolicited telemetry message Ack (ID: 0x79)'
+      description: 'Unsolicited telemetry message from device: Ack'
+      message:
+        name: Ack_Telemetry_Message
+        title: Ack Telemetry
+        payload:
+          $ref: '#/components/schemas/Ack_Telemetry'
+  omniuart/telemetry/Nack:
+    subscribe:
+      summary: 'Unsolicited telemetry message Nack (ID: 0x1F)'
+      description: 'Unsolicited telemetry message from device: Nack'
+      message:
+        name: Nack_Telemetry_Message
+        title: Nack Telemetry
+        payload:
+          $ref: '#/components/schemas/Nack_Telemetry'
 components:
   messages: {}
   schemas:
@@ -131,6 +147,7 @@ components:
           description: Opcode ID for AutoBaudSync
         syncByte:
           type: integer
+          default: 127
       description: The sync byte itself (physicalLayer.autoBaud.syncByte) -- not a
         normal command, just the timing reference the bootloader measures before anything
         else can happen.
@@ -143,6 +160,7 @@ components:
           description: Opcode ID for GetVersion
         opcode:
           type: integer
+          default: 1
       description: Command payload for GetVersion
     WriteMemory_Request:
       type: object
@@ -153,10 +171,12 @@ components:
           description: Opcode ID for WriteMemory
         opcode:
           type: integer
+          default: 2
         address:
           type: integer
         data:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: Command payload for WriteMemory
     Go_Request:
       type: object
@@ -167,9 +187,24 @@ components:
           description: Opcode ID for Go
         opcode:
           type: integer
+          default: 3
         address:
           type: integer
       description: Jumps to application code at the given address, ending the bootloader
         session.
+    Ack_Telemetry:
+      type: object
+      properties:
+        controlByte:
+          type: integer
+          default: 121
+      description: Device-initiated telemetry payload for Ack
+    Nack_Telemetry:
+      type: object
+      properties:
+        controlByte:
+          type: integer
+          default: 31
+      description: Device-initiated telemetry payload for Nack
 
 ```

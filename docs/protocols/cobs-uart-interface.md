@@ -31,8 +31,6 @@ info:
   description: 'Consistent Overhead Byte Stuffing: the encoding itself guarantees
     the delimiter byte (0x00) never appears in the encoded data, so -- unlike delimiter-framed
     -- no escapeByte is needed at all.'
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -46,9 +44,26 @@ servers:
         stopBits: 1.0
         framingType: binary
         integrity: crc16_modbus
-channels: {}
+channels:
+  omniuart/telemetry/SensorReading:
+    subscribe:
+      summary: 'Unsolicited telemetry message SensorReading (ID: SensorReading)'
+      description: 'Unsolicited telemetry message from device: SensorReading'
+      message:
+        name: SensorReading_Telemetry_Message
+        title: SensorReading Telemetry
+        payload:
+          $ref: '#/components/schemas/SensorReading_Telemetry'
 components:
   messages: {}
-  schemas: {}
+  schemas:
+    SensorReading_Telemetry:
+      type: object
+      properties:
+        sensorId:
+          type: integer
+        value:
+          type: number
+      description: Device-initiated telemetry payload for SensorReading
 
 ```

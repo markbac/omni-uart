@@ -46,8 +46,6 @@ info:
   version: illustrative
   description: Minimal stand-in application-mode protocol, existing only to demonstrate
     a fully-specified relatedInterfaces transition into the auto-baud bootloader above.
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -81,6 +79,16 @@ channels:
         title: EnterBootloader Command
         payload:
           $ref: '#/components/schemas/EnterBootloader_Request'
+  omniuart/telemetry/BootloaderEntryConfirmed:
+    subscribe:
+      summary: 'Unsolicited telemetry message BootloaderEntryConfirmed (ID: 0x01)'
+      description: Distinct from an ordinary ack -- confirms the device is about to
+        reset into the bootloader, not that it merely accepted the command.
+      message:
+        name: BootloaderEntryConfirmed_Telemetry_Message
+        title: BootloaderEntryConfirmed Telemetry
+        payload:
+          $ref: '#/components/schemas/BootloaderEntryConfirmed_Telemetry'
 components:
   messages: {}
   schemas:
@@ -93,8 +101,10 @@ components:
           description: Opcode ID for Ping
         opcode:
           type: integer
+          default: 1
         reserved:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: Command payload for Ping
     EnterBootloader_Request:
       type: object
@@ -105,9 +115,22 @@ components:
           description: Opcode ID for EnterBootloader
         opcode:
           type: integer
+          default: 255
         reserved:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: Requests a jump into the ROM bootloader for firmware update. See
         relatedInterfaces for exactly what happens next.
+    BootloaderEntryConfirmed_Telemetry:
+      type: object
+      properties:
+        status:
+          type: integer
+          default: 1
+        reserved:
+          type: string
+          contentEncoding: base64
+      description: Distinct from an ordinary ack -- confirms the device is about to
+        reset into the bootloader, not that it merely accepted the command.
 
 ```

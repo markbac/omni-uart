@@ -6,8 +6,6 @@ info:
     data bit (not parity) flags whether a byte is an ADDRESS (bit=1) or DATA (bit=0),
     so slaves can filter in hardware without the CPU inspecting every byte. dataBits=9
     was already a valid enum value but never actually exercised until now.'
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/9600
@@ -44,7 +42,8 @@ components:
         address:
           type: integer
         data:
-          type: integer
+          type: string
+          contentEncoding: base64
         checksum:
           type: integer
       description: The 9th bit is now representable directly via each field's ninthBitSet.

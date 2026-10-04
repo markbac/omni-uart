@@ -6,8 +6,6 @@ info:
     which is literally a frequency-hopping control command: it tells the radio which
     of Bluetooth''s 79 hop channels to avoid. No checksum at all -- H4 relies entirely
     on the underlying UART/transport for integrity.'
-  contact:
-    name: Mark Bacon
 servers:
   serial_link:
     url: serial://tty/115200
@@ -50,6 +48,22 @@ channels:
         title: HCI_ACL_Data Command
         payload:
           $ref: '#/components/schemas/HCI_ACL_Data_Request'
+  omniuart/telemetry/HCI_Command_Complete_Event:
+    subscribe:
+      summary: 'Unsolicited telemetry message HCI_Command_Complete_Event (ID: 0x0E)'
+      description: 'typeField=0x04, selecting the variantsByType[''4''] override:
+        only 1 precedingHeaderByte (eventCode), not 2 -- an earlier version of this
+        instance wrongly folded numHciCommandPackets into the header count. eventCode
+        is now a named, typed position=before-length-field value (0x0E for Command
+        Complete specifically) and doubles as this message''s discriminator against
+        any other Event. numHciCommandPackets is genuinely the first byte of THIS
+        event''s own LENGTH-counted parameters, alongside every other Command Complete
+        field, which is where it''s listed below.'
+      message:
+        name: HCI_Command_Complete_Event_Telemetry_Message
+        title: HCI_Command_Complete_Event Telemetry
+        payload:
+          $ref: '#/components/schemas/HCI_Command_Complete_Event_Telemetry'
 components:
   messages: {}
   schemas:
@@ -62,8 +76,10 @@ components:
           description: Opcode ID for HCI_Set_AFH_Host_Channel_Classification
         opcode:
           type: integer
+          default: 3135
         channelClassification:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: 'typeField=0x01 (Command), using framing''s top-level lengthField
         (no variantsByType entry needed for Command itself). opcode is now a named,
         typed position=before-length-field value (OGF=0x03 Host Controller & Baseband,
@@ -81,9 +97,31 @@ components:
         handleAndFlags:
           type: integer
         data:
-          type: integer
+          type: string
+          contentEncoding: base64
       description: 'typeField=0x02, selecting the variantsByType[''2''] override:
         LENGTH is 2 bytes here (Data Total Length), not 1 -- ACL packets can carry
         far more data than a Command''s single-byte length would allow. handleAndFlags
         is now correctly position=before-length-field -- it isn''t part of the LENGTH-counted
         region either.'
+    HCI_Command_Complete_Event_Telemetry:
+      type: object
+      properties:
+        eventCode:
+          type: integer
+          default: 14
+        numHciCommandPackets:
+          type: integer
+        commandOpcode:
+          type: integer
+        returnParameters:
+          type: string
+          contentEncoding: base64
+      description: 'typeField=0x04, selecting the variantsByType[''4''] override:
+        only 1 precedingHeaderByte (eventCode), not 2 -- an earlier version of this
+        instance wrongly folded numHciCommandPackets into the header count. eventCode
+        is now a named, typed position=before-length-field value (0x0E for Command
+        Complete specifically) and doubles as this message''s discriminator against
+        any other Event. numHciCommandPackets is genuinely the first byte of THIS
+        event''s own LENGTH-counted parameters, alongside every other Command Complete
+        field, which is where it''s listed below.'
