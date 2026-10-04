@@ -148,8 +148,9 @@ def _resolve(identifier: str, command: str) -> Tuple[ProtocolSpec, CommandSpec]:
 async def _publish(events: List[Any]) -> None:
     """Add a request's recorded frames to the shared log and stream them to WebSocket clients."""
     for event in events:
-        recorder.events.append(event)
-        await broadcast_packet(event.model_dump())
+        if event is not None:
+            recorder.add_event(event)
+            await broadcast_packet(event.model_dump())
 
 
 def _not_connected(exc: NotConnectedError) -> HTTPException:

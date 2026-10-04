@@ -105,12 +105,27 @@ class VirtualTransport(AsyncTransport):
         jitter_ms: float = 2.0,
         fault_crc_flip: bool = False,
         fault_drop_rate: float = 0.0,
+        seed: Optional[int] = None,
+        bit_flip_rate: float = 0.0,
+        byte_noise_rate: float = 0.0,
+        corrupt_crc_rate: float = 0.0,
+        fragment_rate: float = 0.0,
+        duplicate_rate: float = 0.0,
+        truncate_rate: float = 0.0,
     ) -> None:
         self.protocol = protocol
         self.latency_ms = latency_ms
         self.jitter_ms = jitter_ms
         self.fault_crc_flip = fault_crc_flip
         self.fault_drop_rate = fault_drop_rate
+        self.seed = seed
+        self.rng = random.Random(seed) if seed is not None else random.Random()
+        self.bit_flip_rate = bit_flip_rate
+        self.byte_noise_rate = byte_noise_rate
+        self.corrupt_crc_rate = corrupt_crc_rate
+        self.fragment_rate = fragment_rate
+        self.duplicate_rate = duplicate_rate
+        self.truncate_rate = truncate_rate
 
         self._rx = _ReadBuffer()
         self._is_open = False
@@ -145,22 +160,58 @@ class VirtualTransport(AsyncTransport):
         if not self._is_open:
             raise RuntimeError("VirtualTransport is not open.")
 
-        if random.random() < self.fault_drop_rate:
+        if self.rng.random() < self.fault_drop_rate:
             logger.warning("Fault injection: Dropped outbound frame.")
             return len(data)
 
         # Simulate transmission latency and jitter
-        delay = max(0.001, (self.latency_ms + random.uniform(-self.jitter_ms, self.jitter_ms)) / 1000.0)
+        jitter = self.rng.uniform(-self.jitter_ms, self.jitter_ms) if self.jitter_ms > 0 else 0.0
+        delay = max(0.001, (self.latency_ms + jitter) / 1000.0)
         await asyncio.sleep(delay)
 
         # Generate response byte frame
         resp_bytes = self._generate_response(data)
-        if self.fault_crc_flip and len(resp_bytes) > 2:
-            # Corrupt last byte for CRC bit-flip test
-            resp_bytes = resp_bytes[:-1] + bytes([resp_bytes[-1] ^ 0xFF])
+        if not resp_bytes:
+            return len(data)
 
-        if resp_bytes:
-            self._rx.feed(resp_bytes)
+        buf = bytearray(resp_bytes)
+
+        # 1. Corrupt CRC
+        if (self.fault_crc_flip or self.rng.random() < self.corrupt_crc_rate) and len(buf) >= 2:
+            buf[-1] ^= 0xFF
+
+        # 2. Bit flips
+        if self.bit_flip_rate > 0:
+            for i in range(len(buf)):
+                if self.rng.random() < self.bit_flip_rate:
+                    buf[i] ^= (1 << self.rng.randint(0, 7))
+
+        # 3. Byte noise
+        if self.byte_noise_rate > 0:
+            for i in range(len(buf)):
+                if self.rng.random() < self.byte_noise_rate:
+                    buf[i] = self.rng.randint(0, 255)
+
+        # 4. Truncation
+        if self.truncate_rate > 0 and len(buf) > 1 and self.rng.random() < self.truncate_rate:
+            cutoff = self.rng.randint(1, len(buf) - 1)
+            buf = buf[:cutoff]
+
+        final_bytes = bytes(buf)
+
+        # 5. Duplication
+        if self.duplicate_rate > 0 and self.rng.random() < self.duplicate_rate:
+            final_bytes = final_bytes + final_bytes
+
+        # 6. Fragmentation
+        if self.fragment_rate > 0 and len(final_bytes) > 2 and self.rng.random() < self.fragment_rate:
+            mid = len(final_bytes) // 2
+            self._rx.feed(final_bytes[:mid])
+            await asyncio.sleep(0.005)
+            self._rx.feed(final_bytes[mid:])
+        else:
+            self._rx.feed(final_bytes)
+
         return len(data)
 
     async def read(self, size: int = 1, timeout_ms: Optional[int] = 1000) -> bytes:

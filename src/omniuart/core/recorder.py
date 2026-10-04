@@ -96,6 +96,12 @@ class SessionRecorder:
             self._events.append(event)
             return event
 
+    def add_event(self, event: PacketEvent) -> None:
+        """Add an existing PacketEvent to the ring buffer."""
+        with self._lock:
+            if self._is_recording and event is not None:
+                self._events.append(event)
+
     def clear(self) -> None:
         """Clear recorded events."""
         with self._lock:
