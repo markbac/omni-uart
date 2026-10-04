@@ -31,13 +31,22 @@ class ReplayTimingMode(str, Enum):
     DETERMINISTIC = "deterministic"  # Immediate zero-delay replay for tests
 
 
+class ReplayDirectionMode(str, Enum):
+    """Direction filtering / emulation mode for replay."""
+
+    TX_ONLY = "tx_only"  # Replay outbound TX frames only (default)
+    BIDIRECTIONAL = "bidirectional"  # Replay both TX and RX frames in timestamp order
+    RX_EMULATE = "rx_emulate"  # Replay inbound RX frames (emulating target device)
+
+
 class SessionReplayer:
-    """Replays transaction logs onto a target UART transport with configurable timing control."""
+    """Replays transaction logs onto a target UART transport with configurable timing and direction control."""
 
     def __init__(
         self,
         transport: AsyncTransport,
         timing_mode: Union[ReplayTimingMode, str] = ReplayTimingMode.CAPPED,
+        direction_mode: Union[ReplayDirectionMode, str] = ReplayDirectionMode.TX_ONLY,
         speed_multiplier: float = 1.0,
         max_gap_s: Optional[float] = 5.0,
         fixed_interval_s: float = 0.01,
@@ -45,6 +54,7 @@ class SessionReplayer:
     ) -> None:
         self.transport = transport
         self.timing_mode = ReplayTimingMode(timing_mode) if isinstance(timing_mode, str) else timing_mode
+        self.direction_mode = ReplayDirectionMode(direction_mode) if isinstance(direction_mode, str) else direction_mode
         self.speed_multiplier = max(0.0, float(speed_multiplier))
         self.max_gap_s = max_gap_s
         self.fixed_interval_s = fixed_interval_s
@@ -81,6 +91,19 @@ class SessionReplayer:
         waited = 0.0
 
         for event in events:
+            hex_clean = event.raw_hex.replace(" ", "")
+            if not hex_clean:
+                continue
+
+            dir_low = event.direction.lower()
+            should_replay = (
+                (self.direction_mode == ReplayDirectionMode.TX_ONLY and dir_low == "tx")
+                or (self.direction_mode == ReplayDirectionMode.RX_EMULATE and dir_low == "rx")
+                or (self.direction_mode == ReplayDirectionMode.BIDIRECTIONAL)
+            )
+            if not should_replay:
+                continue
+
             delay = 0.0
             if prev_ts is not None:
                 if self.timing_mode == ReplayTimingMode.DETERMINISTIC or self.speed_multiplier == 0:
@@ -106,12 +129,11 @@ class SessionReplayer:
                 waited += delay
 
             prev_ts = event.timestamp
-            hex_clean = event.raw_hex.replace(" ", "")
-            if hex_clean and event.direction.lower() == "tx":
-                raw_bytes = bytes.fromhex(hex_clean)
-                await self.transport.write(raw_bytes)
-                count += 1
-                logger.info(f"Replayed TX frame ({len(raw_bytes)} bytes): {event.command_name or 'custom'}")
+            raw_bytes = bytes.fromhex(hex_clean)
+            await self.transport.write(raw_bytes)
+            count += 1
+            logger.info(f"Replayed {dir_low.upper()} frame ({len(raw_bytes)} bytes): {event.command_name or 'custom'}")
 
         return count
+
 
