@@ -257,6 +257,10 @@ def decode_value(spec: FieldSpec, data: bytes) -> Any:
 
 def encode_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> bytes:
     """Encode ``values`` in declaration order, applying declared defaults for omitted fields."""
+    known = {s.name for s in specs}
+    unknown = sorted(set(values) - known)
+    if unknown:
+        raise CodecError(f"Unknown parameter(s): {', '.join(unknown)}")
     out = bytearray()
     for spec in specs:
         if spec.condition and not _eval_condition(spec.condition, values):
@@ -272,6 +276,7 @@ def encode_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> byte
             continue
         out.extend(encode_value(spec, value))
     return bytes(out)
+
 
 
 def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
