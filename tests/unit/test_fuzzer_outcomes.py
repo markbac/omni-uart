@@ -136,7 +136,7 @@ async def test_only_applicable_strategies_are_generated():
     spec = load_protocol(SPEC_YAML.replace("integrity: {algorithm: crc16_modbus}", "integrity: {algorithm: none}").replace(
         "parameters: [{name: ch, type: uint8, min: 0, max: 3, default: 0}]", "parameters: []"))
     strategies = {v.strategy for v in ProtocolFuzzer(spec).generate_vectors_for_command(spec.commands[0])}
-    assert strategies == {"valid", "truncated_frame", "random_mutation"}
+    assert strategies == {"valid", "truncated_frame", "random_mutation", "insertion_bytes"}
 
 
 def test_vectors_are_valid_frames_built_by_the_codec(spec):

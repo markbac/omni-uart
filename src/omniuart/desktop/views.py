@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+import sys
 import time
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+try:
+    import tkinter as tk
+    from tkinter import filedialog, messagebox, ttk
+    HAS_TKINTER = True
+except (ImportError, ValueError, AttributeError, Exception):
+    HAS_TKINTER = False
+    tk = type("tk", (), {"Misc": object, "StringVar": object, "BooleanVar": object, "IntVar": object, "DoubleVar": object})
+    filedialog = None
+    messagebox = None
+    ttk = type("ttk", (), {"Frame": object, "LabelFrame": object, "Notebook": object, "Treeview": object})
 from concurrent.futures import Future
 from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
 

@@ -15,10 +15,14 @@ TKINTER_MISSING_MESSAGE = (
 
 
 def tkinter_available() -> bool:
-    """Whether the Tk bindings can be imported (checked without importing them)."""
+    """Whether the Tk bindings can be imported."""
+    import sys
+    if sys.modules.get("tkinter") is None:
+        return False
     try:
-        return importlib.util.find_spec("tkinter") is not None
-    except (ImportError, ValueError):  # a None entry in sys.modules raises ValueError
+        import tkinter
+        return True
+    except (ImportError, ValueError, AttributeError, Exception):
         return False
 
 

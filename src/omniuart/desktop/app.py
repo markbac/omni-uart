@@ -4,10 +4,18 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
+try:
+    import tkinter as tk
+    from tkinter import messagebox, ttk
+    HAS_TKINTER = True
+except (ImportError, ValueError, AttributeError, Exception):
+    HAS_TKINTER = False
+    tk = type("tk", (), {"Tk": object})
+    messagebox = None
+    ttk = type("ttk", (), {})
 import queue
-import tkinter as tk
 from concurrent.futures import Future
-from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from omniuart.core.background import VIRTUAL_PORT, BackgroundDevice
@@ -331,19 +339,26 @@ class OmniUARTDesktopApp(tk.Tk):
 def launch_native_desktop_app(
     protocol_dirs: Optional[List[Union[str, Any]]] = None,
     script_dirs: Optional[List[Union[str, Any]]] = None,
-) -> None:
+) -> int:
     """Launch native Tkinter desktop application."""
+    if not HAS_TKINTER:
+        sys.stderr.write(
+            "Native desktop GUI requires 'tkinter' (Tcl/Tk Python support), which is not installed on this system.\n"
+            "Use '--mode web' or '--mode cli' instead.\n"
+        )
+        return 2
     catalog = CatalogManager(protocol_dirs=protocol_dirs, script_dirs=script_dirs)
     try:
         app = OmniUARTDesktopApp(catalog=catalog)
         if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("HEADLESS") == "1":
             app.update()
             app.destroy()
-            return
+            return 0
         app.mainloop()
+        return 0
     except Exception as e:
         if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("HEADLESS") == "1":
-            return
+            return 0
         raise e
 
 
