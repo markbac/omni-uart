@@ -199,6 +199,29 @@ class ProtocolFuzzer:
         vectors.append(
             FuzzVector(strategy="random_mutation", command_name=cmd.name, params=values, raw_payload=bytes(mutated), expected_failure=not still_valid)
         )
+
+        # Enum invalid value strategy
+        for spec in cmd.parameters:
+            if spec.type is FieldType.ENUM and spec.options:
+                invalid_enum = {**values, spec.name: 9999}
+                try:
+                    raw_enum = self._frame(cmd, invalid_enum, relaxed=(spec.name,))
+                    vectors.append(FuzzVector(strategy="enum_invalid_value", command_name=cmd.name, params=invalid_enum, raw_payload=raw_enum))
+                except CodecError:
+                    pass
+
+        # Insertion bytes strategy (insert 4 garbage bytes into payload)
+        if len(valid) > 2:
+            ins_pos = len(valid) // 2
+            inserted = valid[:ins_pos] + b"\xDE\xAD\xBE\xEF" + valid[ins_pos:]
+            vectors.append(FuzzVector(strategy="insertion_bytes", command_name=cmd.name, params=values, raw_payload=inserted))
+
+        # Deletion bytes strategy (delete 2 bytes from payload)
+        if len(valid) > 4:
+            del_pos = len(valid) // 2
+            deleted = valid[:del_pos] + valid[del_pos + 2 :]
+            vectors.append(FuzzVector(strategy="deletion_bytes", command_name=cmd.name, params=values, raw_payload=deleted))
+
         return vectors
 
     def select_vectors(self, max_vectors: int) -> List[FuzzVector]:
@@ -258,8 +281,12 @@ class ProtocolFuzzer:
                 return FuzzResult(vector=vec, status=FuzzOutcome.HANG, response_bytes=alive, latency_ms=latency, detail=f"device did not answer '{probe_cmd.name}' afterwards")
         return FuzzResult(vector=vec, status=status, response_bytes=resp, latency_ms=latency)
 
-    async def run_campaign(self, transport: AsyncTransport, max_vectors: int = 50, timeout_ms: int = 200) -> FuzzReport:
+    async def run_campaign(self, transport: Optional[AsyncTransport] = None, max_vectors: int = 50, timeout_ms: int = 200) -> FuzzReport:
         """Run the campaign and return a report whose outcome counts add up to ``total_vectors``."""
+        if transport is None:
+            from omniuart.core.transport import VirtualTransport
+            transport = VirtualTransport(self.spec)
+
         if not transport.is_open:
             await transport.open()
 
@@ -271,3 +298,4 @@ class ProtocolFuzzer:
         for result in results:
             outcomes[result.status.value] = outcomes.get(result.status.value, 0) + 1
         return FuzzReport(protocol_name=self.spec.metadata.name, seed=self.seed, total_vectors=len(results), outcomes=outcomes, results=results)
+
