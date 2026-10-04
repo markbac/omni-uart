@@ -48,14 +48,52 @@ class PacketEvent(BaseModel):
         }
 
 
-class SessionRecorder:
-    """Thread-safe ring buffer and transaction recorder."""
+class Transaction(BaseModel):
+    """Pairing of outbound command frame and inbound response frame(s)."""
 
-    def __init__(self, max_capacity: int = 10000) -> None:
+    model_config = ConfigDict(extra="ignore")
+
+    transaction_id: str
+    command_name: Optional[str] = None
+    command_id: Optional[Union[int, str]] = None
+    tx_event: Optional[PacketEvent] = None
+    rx_events: List[PacketEvent] = Field(default_factory=list)
+    latency_ms: Optional[float] = None
+    status: str = "ok"
+
+    @property
+    def ok(self) -> bool:
+        return self.status == "ok"
+
+
+class SessionRecord(BaseModel):
+    """Structured session log containing metadata, transactions, and event stream."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    session_id: str = Field(default_factory=lambda: f"session_{int(time.time()*1000)}")
+    protocol_name: Optional[str] = None
+    start_time: float = Field(default_factory=time.time)
+    end_time: Optional[float] = None
+    transport_metadata: Dict[str, Any] = Field(default_factory=dict)
+    events: List[PacketEvent] = Field(default_factory=list)
+    transactions: List[Transaction] = Field(default_factory=list)
+
+
+class SessionRecorder:
+    """Thread-safe ring buffer, transaction recorder, and session exporter."""
+
+    def __init__(self, max_capacity: int = 10000, protocol_name: Optional[str] = None, transport_metadata: Optional[Dict[str, Any]] = None) -> None:
         self.max_capacity = max_capacity
         self._events: deque[PacketEvent] = deque(maxlen=max_capacity)
+        self._transactions: List[Transaction] = []
+        self.session_record = SessionRecord(
+            protocol_name=protocol_name,
+            transport_metadata=transport_metadata or {},
+        )
         self._lock = threading.Lock()
         self._is_recording = True
+
 
     @property
     def events(self) -> List[PacketEvent]:
@@ -117,6 +155,29 @@ class SessionRecorder:
         with self._lock:
             self._is_recording = True
 
+    @property
+    def transactions(self) -> List[Transaction]:
+        """Return a thread-safe snapshot copy of recorded transactions."""
+        with self._lock:
+            return list(self._transactions)
+
+    def add_transaction(self, transaction: Transaction) -> None:
+        """Add a Transaction record to the session log."""
+        with self._lock:
+            if self._is_recording and transaction is not None:
+                self._transactions.append(transaction)
+
+    def export_session_json(self, target_path: Union[str, Path]) -> Path:
+        """Export full structured SessionRecord (metadata, transactions, events) to JSON."""
+        path = Path(target_path)
+        with self._lock:
+            self.session_record.end_time = time.time()
+            self.session_record.events = list(self._events)
+            self.session_record.transactions = list(self._transactions)
+            dump = self.session_record.model_dump_json(indent=2)
+        path.write_text(dump, encoding="utf-8")
+        return path
+
     def export_jsonl(self, target_path: Union[str, Path]) -> Path:
         """Export session events to JSON Lines (.jsonl) format."""
         path = Path(target_path)
@@ -125,6 +186,7 @@ class SessionRecorder:
             for event in events_snapshot:
                 f.write(event.model_dump_json() + "\n")
         return path
+
 
     def export_csv(self, target_path: Union[str, Path]) -> Path:
         """Export session events to tabular CSV format."""
