@@ -230,12 +230,14 @@ def calculate_crc(
     transform: str = "none",
     carry_wrap: bool = False,
 ) -> int:
-    """Calculate a checksum or CRC over ``data`` using a named preset or a custom model.
+    """Calculate a checksum or CRC over ``data`` using a named preset, plugin or custom model."""
+    from omniuart.core.plugin import plugin_registry
+    custom_fn = plugin_registry.get_checksum(str(algorithm))
+    if custom_fn is not None:
+        return custom_fn(data)
 
-    ``transform`` (checksums only) applies a final one's or two's complement and ``carry_wrap`` selects
-    end-around-carry summation for ``sum8``. Empty input is calculated like any other input.
-    """
     algo = resolve_algorithm(algorithm)
+
     if transform not in TRANSFORMS:
         raise ValueError(f"Unknown checksum transform '{transform}' (expected one of {', '.join(TRANSFORMS)})")
 

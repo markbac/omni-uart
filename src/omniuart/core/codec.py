@@ -132,8 +132,15 @@ def encode_value(spec: FieldSpec, value: Any) -> bytes:
     if value is None:
         raise CodecError(f"Parameter '{name}' has no value")
 
+    if spec.encoding:
+        from omniuart.core.plugin import plugin_registry
+        custom_enc = plugin_registry.get_encoding(spec.encoding)
+        if custom_enc is not None:
+            return custom_enc[0](value)
+
     if spec.nested_fields:
         return encode_fields(spec.nested_fields, value)
+
 
     if spec.is_array:
         item_type = spec.item_type or FieldType.UINT8
@@ -224,8 +231,15 @@ def encode_value(spec: FieldSpec, value: Any) -> bytes:
 def decode_value(spec: FieldSpec, data: bytes) -> Any:
     """Decode one value whose bytes have already been sliced to the field size."""
     ftype = spec.type
+    if spec.encoding:
+        from omniuart.core.plugin import plugin_registry
+        custom_enc = plugin_registry.get_encoding(spec.encoding)
+        if custom_enc is not None:
+            return custom_enc[1](data)
+
     if spec.nested_fields:
         return decode_fields(spec.nested_fields, data)
+
 
     if spec.is_array:
         item_type = spec.item_type or FieldType.UINT8
