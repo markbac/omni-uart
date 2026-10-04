@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from omniuart import __version__
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.models import CommandSafety, CommandSpec, ProtocolSpec, load_script
 
@@ -28,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="omniuart",
         description="OmniUART: Universal Schema-Driven UART Protocol Tool",
     )
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--log-file", help="Custom log file path (default: ~/.omniuart/logs/omniuart.log)")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"], help="Log verbosity level")
     subparsers = parser.add_subparsers(dest="subcommand", help="Available commands")
