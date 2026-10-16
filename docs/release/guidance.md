@@ -127,6 +127,8 @@ omni-uart docs --all --output-dir _site
 omni-uart --log-file ~/.omniuart/logs/session.log --log-level DEBUG list
 ```
 
+Log records go to standard error and to a rotating log file (`~/.omniuart/logs/omniuart.log` unless `--log-file` names another), so they never mix with command output on standard output. Logging is provided by [ctxlogkit](https://github.com/markbac/py-logkit), and each line carries the logger name, source location, host name and process ID.
+
 ---
 
 ## 3a. Native Desktop App Behaviour

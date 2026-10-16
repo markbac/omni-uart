@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import sys
 from omniuart.cli import launch_ui_server
+from omniuart.core.logger import setup_logging
 
 
 def run() -> int:
+    setup_logging()
     return launch_ui_server(host="127.0.0.1", port=8000, open_browser=True, mode="web")
 
 
