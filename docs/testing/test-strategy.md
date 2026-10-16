@@ -22,7 +22,7 @@ tests/
 └── e2e/
     └── test_standalone_smoke.py # Standalone PyInstaller executable smoke tests
 ```
-[[CAPTION:Figure]] Test suite organization.
+[[CAPTION:Figure]] Test suite organisation.
 
 ---
 

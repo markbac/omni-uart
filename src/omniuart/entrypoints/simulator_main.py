@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import sys
 from typing import List
 
 from omniuart.core.catalog import CatalogManager
+from omniuart.core.logger import setup_logging
 from omniuart.core.simulator import BaseDeviceSimulator, ATModemSimulator, IoTSensorSimulator, ModbusRtuSimulator
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
 async def main_async() -> int:
@@ -53,6 +51,7 @@ async def main_async() -> int:
 
 
 def run() -> int:
+    setup_logging(log_level="INFO", to_file=False)
     try:
         return asyncio.run(main_async())
     except KeyboardInterrupt:

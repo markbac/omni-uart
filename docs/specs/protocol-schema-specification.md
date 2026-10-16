@@ -3,7 +3,7 @@
 > 📄 **AsyncAPI Artifacts**: Download [AsyncAPI 2.6.0 YAML Spec](asyncapi/omniuart-protocol-schema.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/omniuart-protocol-schema.html)
 
 ## 1. Specification Scope
-This document formally defines the **OmniUART Protocol Specification Schema** (Version 1.0.0). Protocol definitions can be authored in either YAML or JSON and must conform to the structure documented herein.
+This document formally defines version 1.0.0 of the **OmniUART Protocol Specification Schema**. Protocol definitions can be authored in either YAML or JSON and must conform to the structure documented herein.
 
 The schema governs:
 - Protocol metadata and communication parameters.
@@ -29,7 +29,7 @@ Untrusted definitions, scripts, captures and streams are bounded. Defaults, each
 
 ## Authoritative definition
 
-The Pydantic models in `omniuart.core.models` are the canonical definition of the native protocol and script formats. `schemas/protocol.schema.json` and `schemas/script.schema.json` are generated from them (`python -m omniuart.schema_export`) and a test fails if the committed files drift. A JSON Schema cannot express every rule the models enforce (for example the CRC width and polynomial checks or the discriminator rules), so the models, and `omni-uart lint`, decide validity; the schema is for editor completion and early structural checks. The kit format (`uart-interface.schema.json`) is a separate, externally defined schema read through the kit adapter.
+The Pydantic models in `omniuart.core.models` are the canonical definition of the native protocol and script formats. `schemas/protocol.schema.json` and `schemas/script.schema.json` are generated from them (`python -m omniuart.schema_export`) and a test fails if the committed files drift. A JSON Schema cannot express every rule the models enforce, for example the CRC width and polynomial checks or the discriminator rules. So the models, and `omni-uart lint`, decide validity; the schema is for editor completion and early structural checks. The kit format (`uart-interface.schema.json`) is a separate, externally defined schema read through the kit adapter.
 
 ## 2. Top-Level Schema Structure
 
@@ -39,8 +39,8 @@ A valid protocol specification contains four root sections:
 1. `metadata`: Identification and documentation properties.
 2. `serial_config`: Default hardware serial communication parameters.
 3. `framing`: Framing, envelope, and integrity calculation parameters.
-4. `commands`: Catalog of outbound commands and their corresponding response structures.
-5. `telemetry` *(optional)*: Catalog of inbound unsolicited frames or periodic sensor telemetry.
+4. `commands`: Catalogue of outbound commands and their corresponding response structures.
+5. `telemetry` *(optional)*: Catalogue of inbound unsolicited frames or periodic sensor telemetry.
 
 ```yaml
 schema_version: "1.0.0"
@@ -162,7 +162,7 @@ Delimited frames are `prefix`, the command ID, each parameter preceded by `delim
 
 > **Important:** Encoding is strict. A missing parameter without a `default`, an unknown parameter name, a value outside `min`/`max`, a value that does not fit the field type, or an `enum` value not listed in `options` is an error. Values are never clamped or replaced with `0x00`. The `scale` attribute is informational and is not applied by the codec.
 
-When decoding a byte stream the codec discards bytes before a header (resynchronisation), keeps partial frames until more bytes arrive, and reports a frame with a bad integrity value, unknown ID or malformed payload as an invalid frame rather than dropping it silently.
+When decoding a byte stream the codec discards bytes before a header (resynchronisation) and keeps partial frames until more bytes arrive. It reports a frame with a bad integrity value, unknown ID or malformed payload as an invalid frame rather than dropping it silently.
 
 ### 3.4 Supported Data Types
 Individual command parameters and response fields support the following primitive types:
@@ -236,18 +236,24 @@ framing:
 #### 4.2.1 Parameter Breakdown
 - **`width`**: The bit width of the CRC register: a multiple of 8 from 8 to 64.
 - **`poly`**: The unreflected polynomial coefficients without the implicit leading high bit (e.g. `0x1021` for \(x^{16} + x^{12} + x^5 + 1\)).
-- **`init`**: Initial internal register value prior to processing the first byte.
-- **`refin`**: Boolean flag. When `true`, each byte is reflected bit-order (LSB first) prior to feeding into the calculation.
+- **`init`**: Initial internal register value before processing the first byte.
+- **`refin`**: Boolean flag. When `true`, each byte is reflected bit-order (LSB first) before feeding into the calculation.
 - **`refout`**: Boolean flag. When `true`, the final register state is reflected before the `xorout` stage.
 - **`xorout`**: Hexadecimal or integer mask XORed with the final value before transmission.
 - **`endian`**: Byte order when serializing the CRC into the frame (`little` or `big`).
 - **`check`**: Optional test vector value computed over ASCII `"123456789"` verified when the protocol is loaded: a mismatch is an error.
 
 #### 4.2.2 Validation
-A custom model is rejected when `width` is not a multiple of 8 between 8 and 64, when `poly`, `init`, `xorout` or `check` is not an integer that fits in `width` bits, when `poly` is `0`, when `refin` or `refout` is not a boolean, or when `endian` is not `little` or `big`.
+A custom model is rejected when any of these holds:
+
+- `width` is not a multiple of 8 between 8 and 64.
+- `poly`, `init`, `xorout` or `check` is not an integer that fits in `width` bits.
+- `poly` is `0`.
+- `refin` or `refout` is not a boolean.
+- `endian` is not `little` or `big`.
 
 #### 4.2.3 Kit protocol mapping
-The uart-interface-schema-kit `customParameters` keys `widthBits`, `polynomial`, `initialValue`, `reflectInput`, `reflectOutput` and `finalXor` map to `width`, `poly`, `init`, `refin`, `refout` and `xorout`. Kit `coverage` maps to `covers` (`payload-only` to `payload_only`, `whole-frame-excluding-check` to `full_frame`, `length-to-payload-inclusive` to `after_header`), `finalTransform` (`twosComplement`, `onesComplement`) to `transform`, and `summationMode: carry-wrapped` to `carry_wrap`. `valueEncoding` other than `binary` and `coverageEndMarker` are not supported by the codec and are reported with a warning.
+The `uart-interface-schema-kit` `customParameters` keys `widthBits`, `polynomial`, `initialValue`, `reflectInput`, `reflectOutput` and `finalXor` map to `width`, `poly`, `init`, `refin`, `refout` and `xorout`. Kit `coverage` maps to `covers` (`payload-only` to `payload_only`, `whole-frame-excluding-check` to `full_frame`, `length-to-payload-inclusive` to `after_header`), `finalTransform` (`twosComplement`, `onesComplement`) to `transform`, and `summationMode: carry-wrapped` to `carry_wrap`. `valueEncoding` other than `binary` and `coverageEndMarker` are not supported by the codec and are reported with a warning.
 
 ---
 
@@ -280,7 +286,7 @@ Commands specify outbound requests dispatched to the device. Each command can de
 - `correlate`: Names of request parameters that must equal the same-named response fields for a response to be this command's answer (see 5.2). A protocol-level `correlate` list is the default for every command that has all of those names as both a parameter and a response field.
 
 #### 5.2 Response correlation
-A response is accepted for a request only if it is a response frame for that command and every `correlate` field in the response equals the value that was sent (use it for a transaction id, sequence number or device address). Any other frame received while waiting (unsolicited telemetry, a late response to an earlier request, a response from another device) does not end the wait and does not fail the exchange: it is collected in `Exchange.unsolicited` and passed to the session's `on_unsolicited` callback. If only such frames arrive the exchange times out with "no matching response". A response frame for a different command with no `correlate` rule is still reported as an invalid response. In code, `DeviceSession(matcher=...)` or `send(..., matcher=...)` replaces the rule with a predicate `(command, request_values, frame) -> bool`. Correlation applies to binary protocols; a delimited text reply is matched by timing only.
+A response is accepted for a request only if it is a response frame for that command and every `correlate` field in the response equals the value that was sent. Use `correlate` for a transaction id, sequence number or device address. Any other frame received while waiting does not end the wait and does not fail the exchange. Such a frame (unsolicited telemetry, a late response to an earlier request, a response from another device) is collected in `Exchange.unsolicited` and passed to the session's `on_unsolicited` callback. If only such frames arrive the exchange times out with "no matching response". A response frame for a different command with no `correlate` rule is still reported as an invalid response. In code, `DeviceSession(matcher=...)` or `send(..., matcher=...)` replaces the rule with a predicate `(command, request_values, frame) -> bool`. Correlation applies to binary protocols; a delimited text reply is matched by timing only.
 
 #### 5.1 Command safety
 - Only `read_only` commands run without a person asking: the dashboard auto-run runs commands that are both tagged `dashboard` and `read_only` (a dashboard command that is not `read_only` is skipped), and auto-poll offers only `read_only` commands that expect a response and whose parameters all have defaults.
@@ -352,7 +358,7 @@ telemetry:
 ---
 
 ### 6.1 Kit protocol import
-When a uart-interface-schema-kit protocol is loaded, its `commands` become commands and its `responses` become telemetry (device-initiated) messages. The kit does not say which request a response answers, so no response is attached to a command. A protocol with no `commands` (NMEA 0183, a COBS sensor stream, the M-Bus long frame) simply has an empty command list; the adapter never invents one. The message id is the constant of the field marked `role: discriminator` (else the first constant field), converted to an integer when it is an integer or a hex or decimal string, otherwise kept as text (an AT command line, an NMEA sentence id). A message without a discriminator constant uses its position as id (commands, with a warning) or its name (responses). Other constant fields remain ordinary fields whose default is the constant. On delimited framing the discriminator is not a parameter, because it is the message text.
+When a `uart-interface-schema-kit` protocol is loaded, its `commands` become commands and its `responses` become telemetry (device-initiated) messages. The kit does not say which request a response answers, so no response is attached to a command. A protocol with no `commands` (NMEA 0183, a COBS sensor stream, the M-Bus long frame) simply has an empty command list; the adapter never invents one. The message id is the constant of the field marked `role: discriminator`, or else the first constant field. It is converted to an integer when it is an integer or a hex or decimal string, and otherwise kept as text (an AT command line, an NMEA sentence id). A message without a discriminator constant uses its position as id (commands, with a warning) or its name (responses). Other constant fields remain ordinary fields whose default is the constant. On delimited framing the discriminator is not a parameter, because it is the message text.
 
 ## 7. AsyncAPI 2.6.0 Specification Generation & Tooling
 
@@ -375,9 +381,9 @@ npx @asyncapi/cli generate fromTemplate protocol.asyncapi.yaml @asyncapi/html-te
 
 ---
 
-## 8. Schema Catalog & Reference Links
+## 8. Schema Catalogue & Reference Links
 
-- 📚 **Live Protocol AsyncAPI Catalog**: Explore auto-generated AsyncAPI specifications and interactive HTML documentation for all hardware protocols in the [Hardware Protocol Hub](../protocols/index.md).
+- 📚 **Live Protocol AsyncAPI Catalogue**: Explore auto-generated AsyncAPI specifications and interactive HTML documentation for all hardware protocols in the [Hardware Protocol Hub](../protocols/index.md).
 - 📄 **Schema AsyncAPI Specification Artifacts**: Download [AsyncAPI 2.6.0 YAML Spec](asyncapi/omniuart-protocol-schema.yaml) | View [Interactive AsyncAPI HTML Docs](asyncapi/omniuart-protocol-schema.html).
 - ⚙️ **Declarative JSON Schema**: Inspect the raw schema definitions in [Protocol JSON Schema](../schemas/protocol.schema.json).
 

@@ -15,7 +15,7 @@ Key characteristics:
 
 When a protocol is loaded, the client inspects each command's parameter list and maps types to UI controls:
 
-| Parameter Type | Schema Attributes | Rendered UI Control | Interaction Behavior |
+| Parameter Type | Schema Attributes | Rendered UI Control | Interaction Behaviour |
 | :--- | :--- | :--- | :--- |
 | `uint8`, `int16`, `float32` | `min`, `max`, `step`, `unit` | HTML5 `<input type="number">` or Slider | Bounds validation; units appended in label. |
 | `enum` | `options: {0: "OFF", 1: "ON"}` | HTML5 `<select>` dropdown | Displays human-readable label; sends numeric code. |
@@ -84,13 +84,13 @@ flowchart TD
 #### 1. Raw Data Mode (`[Raw]`)
 - Displays packets as formatted hexadecimal byte sequences accompanied by an ASCII sidebar.
 - Byte offset gutter (`0000:`, `0010:`).
-- Semantic color coding across packet slices:
+- Semantic colour coding across packet slices:
   - **Header Preamble**: Light Blue (`#38bdf8`)
   - **Length Field**: Amber (`#fbbf24`)
   - **Command ID**: Emerald Green (`#34d399`)
   - **Parameter Payload**: Purple (`#c084fc`)
   - **Integrity Checksum/CRC**: Forest Green (`#22c55e` if verified) or Crimson Red (`#ef4444` if invalid)
-  - **Footer Postamble**: Slate Gray (`#94a3b8`)
+  - **Footer Postamble**: Slate Grey (`#94a3b8`)
 
 #### 2. Decoded Data Mode (`[Decoded]`)
 - Formats incoming and outgoing frames as hierarchical, collapsible object trees.
@@ -110,7 +110,7 @@ flowchart TD
     - Bit-level diff on validation error.
 
 ### 3.2 Comms Panel Toolbar Controls
-| Control Element | Behavior |
+| Control Element | Behaviour |
 | :--- | :--- |
 | **View Selector** | Toggles between `Raw`, `Decoded`, and `Split` presentations. |
 | **Direction Filter** | Filters display to `All`, `TX Only` (outbound), or `RX Only` (inbound). |
