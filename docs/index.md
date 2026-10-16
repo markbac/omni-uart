@@ -2,7 +2,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Release-v2.0.0-blue.svg" alt="Release">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License">
+  <img src="https://img.shields.io/badge/Licence-MIT-green.svg" alt="Licence">
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-orange.svg" alt="Platforms">
   <img src="https://img.shields.io/badge/AsyncAPI-2.6.0-emerald.svg" alt="AsyncAPI 2.6.0">
 </p>
@@ -13,7 +13,7 @@
 
 ## 💡 About OmniUART
 
-Embedded software developers, test engineers, and hardware integrators frequently waste valuable time writing custom, ad-hoc Python or C scripts to send commands, parse packet responses, verify CRCs, and log serial communications for every new microcontroller or IoT peripheral.
+Embedded software developers, test engineers, and hardware integrators often write custom, ad-hoc Python or C scripts for every new microcontroller or IoT peripheral. Those scripts send commands, parse packet responses, verify CRCs, and log serial communications.
 
 **OmniUART solves this problem by completely decoupling hardware protocol logic from tooling.** By capturing framing parameters, packet envelopes, byte-slicing rules, parametric CRCs, and command signatures in **declarative JSON or YAML specifications**, OmniUART automatically provides:
 
@@ -48,7 +48,7 @@ Explore the complete collection of user guides, architectural specifications, JS
 
 OmniUART features built-in integration with `@asyncapi/cli` and `@asyncapi/html-template` (via `npx asyncapi`) to convert declarative UART protocol definitions into standard **AsyncAPI 2.6.0** hardware interface specifications.
 
-- 📚 **[Browse Full Hardware Protocol Catalog](protocols/index.md)**: Explore 32+ pre-configured hardware protocols, including AT Commands, Modbus RTU/ASCII, COBS, SLIP, BACnet MS/TP, MAVLink, DMX512, UBX, XBee, and custom CRC node protocols.
+- 📚 **[Browse Full Hardware Protocol Catalogue](protocols/index.md)**: Explore 32+ pre-configured hardware protocols, including AT Commands, Modbus RTU/ASCII, COBS, SLIP, BACnet MS/TP, MAVLink, DMX512, UBX, XBee, and custom CRC node protocols.
 - 📄 **AsyncAPI Artifacts**: Download standalone AsyncAPI 2.6.0 `.yaml` files or view interactive single-file AsyncAPI HTML specifications for any protocol.
 
 ---

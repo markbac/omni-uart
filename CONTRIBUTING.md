@@ -104,6 +104,7 @@ BREAKING CHANGE: The 'header' field in protocol framing now requires a hex strin
      - `chore/semver-and-conventional-commits`
 2. **Docs-as-Code & Automated Test Requirement**:
    - Zero-defect policy: every feature branch must include corresponding unit tests and documentation updates.
+   - Documentation is linted with [py-doc](https://github.com/markbac/py-doc) (`py-doc lint . --strict`, configured in `py-doc.yml` and `vale-rules.yml`). Install it in its own environment with `pip install "py-doc @ git+https://github.com/markbac/py-doc"`, and install Vale 3 for the Vale rules.
 3. **Pull Request Title**:
    - The PR title must strictly follow Conventional Commits (e.g. `feat(core): implement zero-dependency CRC engine`).
 4. **Squash & Merge**:

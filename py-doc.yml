@@ -1,0 +1,91 @@
+# Documentation lint for omni-uart, run with `py-doc lint` (https://github.com/markbac/py-doc).
+# Prose and structure checks only: protocol files are checked by omniuart.linter, not here.
+# py-doc is a tool, not a project dependency. Install it on its own with
+#   pip install "py-doc @ git+https://github.com/markbac/py-doc"
+# Vale (3.0 or newer) on the PATH adds the PyDoc Vale style and vale-rules.yml.
+
+project:
+  name: OmniUART
+
+lint:
+  # docs/protocols/*.md are generated from the protocol schemas by `omni-uart docs`,
+  # so their prose comes from the schema descriptions. Fix those at the source.
+  exclude: [protocols, _site, site]    # directory names, wherever they are
+  rules:
+    DOC003: info                       # undefined acronyms are a nudge, not a failure
+  glossary:                            # the canonical spelling, then the wrong ones
+    OmniUART: [Omniuart, OmniUart, omniUART]
+    UART: [Uart]
+    AsyncAPI: [Asyncapi, AsyncApi]
+    PyInstaller: [Pyinstaller, pyInstaller]
+    PySerial: [Pyserial]
+    LwM2M: [LWM2M, Lwm2m, lwm2m]
+    NB-IoT: [NBIoT, NB IoT, nb-iot, Nb-IoT]
+    Wi-Fi: [Wifi, WiFi, wifi]
+    CBOR: [Cbor, cbor]
+    FOTA: [Fota, fota]
+    IMEI: [Imei, imei]
+    ICCID: [Iccid, iccid]
+    IMSI: [Imsi, imsi]
+  phrases:                             # a wordy phrase and what to write instead
+    utilise: use
+    utilize: use
+    prior to: before
+    subsequent to: after
+    in the event that: if
+    in the event of: if
+    for the purpose of: to
+    with regard to: about
+    due to the fact that: because
+    in close proximity to: near
+    at this point in time: now
+    at the present time: now
+    notwithstanding: despite
+    on a regular basis: regularly
+    has the capability to: can
+  acronyms:
+    min_length: 3
+    allowed: [ASCII, UART, CRC, MCU, USB, CLI, API, JSON, JSONL, YAML, HTML, HTTP, REST, CORS, DNS, URI, URL,
+              CSV, SDK, GUI, IDE, PDF, UTF, XML, TCP, UDP, RFC, SHA, EXE, MIT, IEEE, ITU, POSIX, PTY, COM,
+              RTS, DTR, XOR, LSB, MSB, PCB, COBS, SLIP, NMEA, UBX, RTU, LIN, PCAPNG, FPS,
+              MUST, SHALL, SHOULD, MAY, NOT]   # RFC 2119 keywords are not acronyms
+  structure:                           # project conventions as data
+    - id: structure/broken-link
+      type: path-exists
+      severity: error
+      # docs/schemas/ is written by `omni-uart docs` when the site is built, so it is not checked.
+      pattern: '!?\[[^\]]*\]\((?!schemas/)([^)\s]+)(?:\s+"[^"]*")?\)'
+      message: "Link target '{target}' does not exist."
+    - id: structure/admonition-unsupported-type
+      type: regex-line
+      severity: error
+      scope_prefix: ">"
+      pattern: '^>\s*\[!(?!(?:NOTE|TIP|IMPORTANT|WARNING|CAUTION)\])[A-Za-z]+\]\s*$'
+      message: "Use one of the GitHub alert types: NOTE, TIP, IMPORTANT, WARNING, CAUTION (exact case)."
+    - id: structure/loose-list
+      type: blank-line-between
+      severity: warning
+      pattern: '^\s*(?:[-*+]|\d+[.)])\s+\S'
+      message: "Blank line between list items; use a tight list (no blank line between items)."
+  # markdownlint runs only in py-doc's tool container (Docker), which CI does not build.
+  # These are the house settings to switch on once it does:
+  # markdownlint:
+  #   severity: warning
+  #   config:
+  #     default: true
+  #     MD003: {style: atx}            # ATX headings only
+  #     MD004: {style: dash}           # '-' for unordered lists
+  #     MD007: {indent: 2}
+  #     MD009: {br_spaces: 0}          # no trailing-space hard breaks
+  #     MD024: {siblings_only: true}   # repeated subsection titles under different parents
+  #     MD013: false                   # no line-length limit
+  #     MD025: false                   # several H1s are allowed
+  #     MD029: {style: one}
+  #     MD041: false
+  #     MD046: {style: fenced}
+  #     MD060: false                   # table pipe alignment is cosmetic
+  vale:
+    enabled: auto                      # runs when Vale is installed
+    spelling: en-GB
+    rules_file: vale-rules.yml
+    ignore: ["docs/protocols/**", "_site/**", "site/**"]

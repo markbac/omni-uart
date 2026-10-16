@@ -1,7 +1,7 @@
 # OmniUART Automation Script Specification
 
 ## 1. Scope & Purpose
-The **OmniUART Script Specification** provides a declarative language in YAML or JSON for orchestrating automated sequences of UART commands, verifying device responses, and executing automated regression tests without writing custom test harnesses.
+The **OmniUART Script Specification** provides a declarative language in YAML or JSON for automated sequences of UART commands. A script verifies device responses and runs regression tests without a custom test harness.
 
 ---
 
@@ -128,7 +128,14 @@ The kit-format names `equals`, `notEquals`, `lessThan`, `lessThanOrEqual`, `grea
 ---
 
 ## 5. Execution Reporting & Exit Codes
-The engine (`omniuart.core.runner.ScriptRunner`, driven by `omni-uart run`) executes steps in order against a real or simulated device and reports each step as `passed`, `failed` (the device did not behave as required: timeout, invalid response or failed assertion), `error` (the script or link is broken) or `skipped` (an earlier step failed and `abort_on_error` is `true`). With `abort_on_error: false` execution continues after a failure.
+The engine (`omniuart.core.runner.ScriptRunner`, driven by `omni-uart run`) executes steps in order against a real or simulated device. It reports each step as one of:
+
+- `passed`.
+- `failed`: the device did not behave as required (timeout, invalid response or failed assertion).
+- `error`: the script or link is broken.
+- `skipped`: an earlier step failed and `abort_on_error` is `true`.
+
+With `abort_on_error: false` execution continues after a failure.
 
 - **Console Summary**: One line per step with duration and failure reason, then a result line.
 - **Machine-Readable JSON** (`--report file.json`): Every step with its request and response bytes, decoded fields and assertion outcomes.

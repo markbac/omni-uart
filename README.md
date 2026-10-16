@@ -4,7 +4,7 @@
 [![Release](https://github.com/markbac/omni-uart/actions/workflows/release.yml/badge.svg)](https://github.com/markbac/omni-uart/actions/workflows/release.yml)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
 [![SemVer](https://img.shields.io/badge/SemVer-2.0.0-green.svg)](https://semver.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Licence: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 > **Universal, schema-driven UART protocol tool for embedded systems, IoT devices, and hardware test engineering.**
 
@@ -24,9 +24,9 @@ Distributed as **standalone executables** for Windows and Linux—no Python inst
 - **Dual-View Raw & Decoded Stream Inspector**: Real-time side-by-side visualization of raw hexadecimal bytes and structured decoded payload fields.
 - **Session Recording & Export**: Record full serial transactions with microsecond timestamps and export to JSON Lines (`.jsonl`), CSV, raw binary (`.bin`), or Wireshark PCAPNG (`.pcapng`) for post-session analysis or automated playback.
 - **Standalone Executables**:
-  1. **omni-uart-cli**: Send commands, format parameters, and decode responses on the command line.
-  2. **omni-uart-web**: Local web interface (FastAPI + WebSockets) that dynamically builds forms for any loaded protocol, streams decoded frames, and provides session controls.
-  3. **omni-uart-desktop**: Native Tkinter/TTK desktop application with physical serial connection controls, command catalog tree, canvas line chart plotter, script runner, and comms streamer.
+  1. **`omni-uart-cli`**: Send commands, format parameters, and decode responses on the command line.
+  2. **`omni-uart-web`**: Local web interface (FastAPI + WebSockets) that dynamically builds forms for any loaded protocol, streams decoded frames, and provides session controls.
+  3. **`omni-uart-desktop`**: Native Tkinter/TTK desktop application with physical serial connection controls, command catalogue tree, canvas line chart plotter, script runner, and comms streamer.
 - **Virtual MCU Simulation**: Test protocols and execute regression suites completely offline without physical hardware attached.
 - **Security Safeguards**: Local loopback (`127.0.0.1`) binding, strict Host/Origin checking, Pydantic input validation, and zero external web runtime dependencies.
 - **Docs-as-Code & Comprehensive Testing**: Formal specifications, schemas, and comprehensive unit and integration test suites.
@@ -123,14 +123,14 @@ omni-uart/
 
 ## Contributing & Standards
 
-OmniUART strictly enforces **Semantic Versioning 2.0.0**, **Keep a Changelog 1.1.0**, and **Conventional Commits 1.0.0**. All changes are delivered via scoped feature branches and Pull Requests merged into `main`.
+OmniUART follows Semantic Versioning (**SemVer 2.0.0**), the **Keep a Changelog 1.1.0** format and the **Conventional Commits 1.0.0** convention. All changes are delivered via scoped feature branches and Pull Requests merged into `main`.
 
 For commit conventions, scopes, branch naming, and release procedures, please refer to [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
-## License & Authorship
+## Licence & Authorship
 
-OmniUART is copyright © 2026 **Mark Bacon** and licensed under the [MIT License](LICENSE).
+OmniUART is copyright © 2026 **Mark Bacon** and licensed under the [MIT licence](LICENSE).
 
-> **AI Collaboration Statement**: OmniUART was architected, developed, and verified in pair-programming collaboration between Mark Bacon and AI autonomous coding agents (Google Antigravity). All legal copyright and rights are held by Mark Bacon under the MIT License.
+> **AI Collaboration Statement**: OmniUART was architected, developed, and verified in pair-programming collaboration between Mark Bacon and AI autonomous coding agents (Google Antigravity). All legal copyright and rights are held by Mark Bacon under the MIT licence.

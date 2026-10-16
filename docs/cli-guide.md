@@ -1,13 +1,13 @@
 # OmniUART CLI Reference & Usage Guide (#227)
 
-OmniUART provides a command-line interface (`omniuart`) for protocol introspection, command dispatching, automated test script execution, fuzzing, traffic replay, artifact generation, and interactive UI workbench launching.
+OmniUART provides a command-line interface (`omniuart`) for protocol introspection, command dispatching, automated test script execution, fuzzing, traffic replay, artefact generation, and interactive UI workbench launching.
 
 ---
 
-## 1. Catalog Discovery & Introspection
+## 1. Catalogue Discovery & Introspection
 
 ### `omniuart list`
-Discovers all available protocol definition schemas and test scripts in default catalog directories (`schemas/`, `examples/protocols/`, `examples/scripts/`).
+Discovers all available protocol definition schemas and test scripts in default catalogue directories (`schemas/`, `examples/protocols/`, `examples/scripts/`).
 
 ```bash
 omniuart list
@@ -87,7 +87,7 @@ omniuart replay capture.jsonl --speed 2.0 --virtual
 
 ---
 
-## 7. Artifact Generation (`generate`)
+## 7. Artefact Generation (`generate`)
 
 Generates Wireshark Lua dissectors, C header files, Python dataclasses, JSON schemas, or AsyncAPI specs from protocol definitions.
 

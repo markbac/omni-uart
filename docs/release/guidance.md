@@ -40,13 +40,13 @@ omni-uart ui --host 127.0.0.1 --port 8080
 
 ### 2.2 CLI Commands
 
-#### 1. `list`: Auto-Discover Catalog Protocols & Scripts
+#### 1. `list`: Auto-Discover Catalogue Protocols & Scripts
 ```bash
 omni-uart list
 ```
 Displays all 32+ discovered protocol definition files and test scripts. Use `--json` for structured JSON output.
 
-#### 2. `info`: Protocol Help & Tagged Command Catalog
+#### 2. `info`: Protocol Help & Tagged Command Catalogue
 ```bash
 omni-uart info binary_sensor_node.yaml
 omni-uart info ubx-uart-interface.json
@@ -81,7 +81,7 @@ omni-uart run sensor_test_suite.yaml --port /dev/ttyUSB0
 omni-uart run sensor_test_suite.yaml --virtual --record session.jsonl --report result.json
 omni-uart run ubx-baud-switch-sequence.json --protocol ubx-uart-interface.json --port COM3
 ```
-Executes the script's steps in order against a real serial port (`--port`) or the built-in simulated device (`--virtual`): sends commands, waits for responses with timeouts, evaluates field assertions, applies delays and variables, and stops at the first failure unless the script sets `abort_on_error: false`. The protocol is taken from the script's `meta.protocol` (a catalog name or file path) unless `--protocol` is given. `--record` writes every frame to a `.jsonl` session file and `--report` writes a JSON result.
+Executes the script's steps in order against a real serial port (`--port`) or the built-in simulated device (`--virtual`). It sends commands, waits for responses with timeouts, evaluates field assertions, and applies delays and variables. It stops at the first failure unless the script sets `abort_on_error: false`. The protocol is taken from the script's `meta.protocol` (a catalogue name or file path) unless `--protocol` is given. `--record` writes every frame to a `.jsonl` session file and `--report` writes a JSON result.
 
 Exit status: `0` all steps passed, `1` a step failed, `2` invalid script or input, `3` transport error. See the [Script Specification](../specs/script-schema-specification.md).
 
@@ -91,7 +91,7 @@ omni-uart fuzz binary_sensor_node.yaml --vectors 50 --seed 42
 ```
 `--seed` makes the random mutations reproducible. When `--vectors` is smaller than the full set, vectors are taken round-robin so every command is covered.
 
-Runs a 50-vector mutation campaign built from the protocol (a valid baseline, an out-of-bounds parameter, a corrupted integrity field, a truncated frame and a random byte mutation per command; strategies that do not apply to a command are skipped). Every vector is classified from what the device did:
+Runs a 50-vector mutation campaign built from the protocol. Each command gets a valid baseline, an out-of-bounds parameter, a corrupted integrity field, a truncated frame and a random byte mutation. Strategies that do not apply to a command are skipped. Every vector is classified from what the device did:
 
 | Outcome | Meaning |
 | :--- | :--- |
@@ -136,7 +136,7 @@ Log records go to standard error and to a rotating log file (`~/.omniuart/logs/o
 The desktop app drives the same session, codec and script runner as the CLI and web API.
 
 1. **Connect / Disconnect**: Choose a detected serial port, or `virtual` for the labelled simulated device, and press Connect. The button and status change only once the port has really opened; a missing or busy port shows the error and stays disconnected. Disconnect closes the port.
-2. **Sending**: Commands from the Command Catalog are encoded by the protocol codec, written to the open link and answered with a decoded response. The Comms Streamer logs the bytes actually sent (TX), the bytes received (RX) with decoded fields, and any timeout or invalid response (ERR). Sending while disconnected transmits nothing.
+2. **Sending**: Commands from the `Command Catalog` are encoded by the protocol codec, written to the open link and answered with a decoded response. The Comms Streamer logs the bytes actually sent (TX), the bytes received (RX) with decoded fields, and any timeout or invalid response (ERR). Sending while disconnected transmits nothing.
 3. **Script Runner**: Runs the selected script with the shared runner and shows the real PASSED, FAILED, ERROR or SKIPPED result per step, with each assertion's expected and actual value, and an overall result.
 4. **Telemetry Plotter**: Plots only numeric fields decoded from valid RX frames (the first two numeric fields become Ch1 and Ch2). Transmitted bytes are never plotted and the axis shows real values. Text responses such as AT replies are shown in the Comms Streamer but not plotted.
 5. **Auto-Poll**: Only commands marked `safety: read_only` that expect a response and whose parameters all have defaults can be polled. Polling stops if the link is lost, and a new poll is not sent while the previous one is still waiting.

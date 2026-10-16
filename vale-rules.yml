@@ -1,0 +1,35 @@
+# omni-uart's own Vale rules for `py-doc lint`, named by lint.vale.rules_file in py-doc.yml.
+# They carry over the checks of the former styles/Embedded and styles/Requirements Vale styles
+# that apply to an embedded-systems tool. py-doc's Vale style is PyDoc; `avoid` patterns become
+# PyDoc.Avoid1, PyDoc.Avoid2 and so on, in the order below.
+rules:
+  PyDoc.SentenceLength: {level: warning, max: 30}
+  # Passive voice is often right in a specification ("the value is encoded in the payload"),
+  # and the former .vale.ini switched every passive-voice rule off for that reason.
+  PyDoc.PassiveVoice: off
+  # Headings here are title case structural labels; the former style switched heading case off too.
+  PyDoc.HeadingCase: off
+  # DOC003 already reports an acronym that is never defined, so the Vale copy would repeat it.
+  PyDoc.Acronyms: off
+avoid:
+  - pattern: '\b0X[0-9A-Fa-f]+\b'
+    message: "Use a lowercase '0x' prefix for hex literals (found '%s'), for example 0xAAAA."
+    level: warning
+  - pattern: '\b\d+(?:mV|mA|kHz|MHz|dBm|dB|mW|mAh|Ah|Hz|V|A|W|F|bps)\b'
+    message: "Put a space between the number and the unit in '%s' (SI convention)."
+    level: warning
+  - pattern: '\b\d+°C\b'
+    message: "Put a space between the number and the unit in '%s' (SI convention)."
+    level: warning
+  - pattern: '\s--\s'
+    message: "Use an em dash or a comma instead of a double hyphen."
+    level: warning
+  - pattern: '\b[A-Z]{2,}(?: [A-Z]{2,}){2,}\b'
+    message: "Do not use all uppercase for emphasis ('%s')."
+    level: info
+  - pattern: "\\b(?:can't|won't|don't|doesn't|isn't|aren't|wasn't|weren't|shouldn't|wouldn't|couldn't|hasn't|haven't|didn't)\\b"
+    message: "Avoid the contraction '%s' in specification text; use the expanded form."
+    level: info
+  - pattern: '\b(?:MUST|SHALL|SHOULD|MAY)\b[^.]*\b(?:as appropriate|if possible|and/or|etc\.|adequate|sufficient|user-friendly|robust|reasonable|approximately)\b'
+    message: "A requirement with a vague word ('%s'); state a concrete, testable value instead."
+    level: warning

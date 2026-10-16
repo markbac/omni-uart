@@ -95,7 +95,7 @@ flowchart TD
 
 ## 3. Subsystem Breakdown
 
-### 3.1 Catalog Manager & Adapters (`omniuart.core.catalog`)
+### 3.1 Catalogue Manager & Adapters (`omniuart.core.catalog`)
 - **Auto-Discovery**: Scans registered protocol and script directories dynamically. Automatically picks up newly added protocol definition files (`.json`, `.yaml`) or test sequences without code changes.
 - **Search order** (highest precedence first): directories passed to `CatalogManager(protocol_dirs=..., script_dirs=...)`, which are the only ones searched when given; then the `OMNIUART_PROTOCOL_PATH` and `OMNIUART_SCRIPT_PATH` environment variables (directories separated by the platform path separator); then the existing default directories `examples/protocols`, `protocols` and `schemas` (scripts: `examples/scripts`, `scripts`) under the current directory, and under the executable's directory in a frozen binary. No machine-specific path is searched.
 - **Collisions**: results are sorted by file name. If two directories hold a file of the same name the earlier directory wins and the other is recorded in `CatalogManager.collisions` (with whether the content is identical), logged as a warning and listed under `collisions` in `catalog_summary()`, together with different files that declare the same protocol `name`.
@@ -130,7 +130,7 @@ flowchart TD
 - **Interactive Web UI**: Zero-dependency FastAPI + WebSockets local web interface. Auto-generates command parameter forms, auto-runs dashboard diagnostics, streams 60 FPS real-time serial traffic, and provides dark/light themes and compact mode.
 - **GUI Launch Mode**: Double-clicking `omni-uart-windows-amd64.exe` (or running zero CLI arguments) automatically starts the Web UI server and opens the browser to `http://localhost:8000`.
 
-The native desktop GUI (`omniuart.desktop`) never touches a transport itself. `omniuart.core.background.BackgroundDevice` runs one asyncio loop in a worker thread and exposes connect, disconnect, send, raw send and script execution as futures built on `DeviceSession` and `ScriptRunner`, serialising operations so a poll cannot interleave with a script. Results return to the Tk thread through a queue drained by `after`. `is_safe_poll_command` defines which commands the plotter may poll.
+The native desktop GUI (`omniuart.desktop`) never touches a transport itself. `omniuart.core.background.BackgroundDevice` runs one asyncio loop in a worker thread and exposes connect, disconnect, send, raw send and script execution as futures built on `DeviceSession` and `ScriptRunner`. It serialises operations, so a poll cannot interleave with a script. Results return to the Tk thread through a queue drained by `after`. `is_safe_poll_command` defines which commands the plotter may poll.
 
 ---
 
@@ -178,6 +178,6 @@ To prevent blocking the `asyncio` event loop during hardware serial reads or wri
 | :--- | :--- | :--- |
 | **Portability** | PyInstaller single-file executable packaging; pure-Python core without native compilation dependencies. | Runs on clean Windows and Linux environments without Python installed. |
 | **Robustness** | Streaming sync hunt with sliding FIFO; garbage byte discarding; strict CRC validation. | Recovers framing sync within 1 frame when preceded by random noise bytes. |
-| **Extensibility** | Declarative JSON/YAML specifications; dynamic catalog auto-discovery; AsyncAPI 2.6.0 exporter. | Adding a new protocol definition requires zero code changes to the underlying Python codebase. |
+| **Extensibility** | Declarative JSON/YAML specifications; dynamic catalogue auto-discovery; AsyncAPI 2.6.0 exporter. | Adding a new protocol definition requires zero code changes to the underlying Python codebase. |
 | **Testability** | Built-in Virtual MCU Transport with mock responses, VirtualSerialPair, and fault injection. | Full test suite (64 tests) executable in headless CI environments without physical hardware. |
 | **Low Latency** | Async I/O with `asyncio.to_thread`, lookup-table CRC calculation, and 60 FPS WebSockets. | Sub-millisecond packet processing overhead in user space. |
