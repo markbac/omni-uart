@@ -8,9 +8,10 @@ project:
   name: OmniUART
 
 lint:
-  # docs/protocols/*.md are generated from the protocol schemas by `omni-uart docs`,
+  # docs/protocols/*.md are generated from the protocol schemas by `omni-uart docs`
+  # (docs/schemas/ is generated too),
   # so their prose comes from the schema descriptions. Fix those at the source.
-  exclude: [protocols, _site, site]    # directory names, wherever they are
+  exclude: [protocols, schemas, _site, site]   # directory names, wherever they are
   rules:
     DOC003: info                       # undefined acronyms are a nudge, not a failure
   glossary:                            # the canonical spelling, then the wrong ones
@@ -54,7 +55,7 @@ lint:
       type: path-exists
       severity: error
       # docs/schemas/ is written by `omni-uart docs` when the site is built, so it is not checked.
-      pattern: '!?\[[^\]]*\]\((?!schemas/)([^)\s]+)(?:\s+"[^"]*")?\)'
+      pattern: '!?\[[^\]]*\]\((?!(?:\.\./)*schemas/)([^)\s]+)(?:\s+"[^"]*")?\)'
       message: "Link target '{target}' does not exist."
     - id: structure/admonition-unsupported-type
       type: regex-line
