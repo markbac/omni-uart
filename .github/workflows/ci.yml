@@ -6,10 +6,15 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
+
 jobs:
   lint-pr-title:
     name: Validate PR Title (Conventional Commits)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: github.event_name == 'pull_request'
     steps:
       - name: Verify Conventional Commits PR Title
@@ -52,6 +57,7 @@ jobs:
   lint-and-validate:
     name: Lint & Schema Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -59,7 +65,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install dependencies
@@ -104,6 +110,7 @@ jobs:
   docs-lint:
     name: Docs Lint (py-doc)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       VALE_VERSION: "3.15.2"
     steps:
@@ -113,7 +120,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       # py-doc is a tool, not a project dependency: it pins its own ctxlogkit commit, which pip
       # cannot install beside omni-uart's unpinned one, so it gets an environment of its own.
@@ -134,13 +141,11 @@ jobs:
   test:
     name: Test Suite Matrix
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: ["3.12"]
-        include:
-          - os: ubuntu-latest
-            python-version: "3.13"
+        python-version: ["3.14"]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -175,6 +180,7 @@ jobs:
   verify-standalone-binaries:
     name: Build & Verify PyInstaller Standalone Binaries (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -185,7 +191,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install build dependencies
