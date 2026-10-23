@@ -1,0 +1,41 @@
+{
+  "environment": {
+    "python_version": "3.14.0",
+    "platform": "linux",
+    "timestamp": "2026-10-23T06:00:00Z"
+  },
+  "benchmarks": {
+    "codec_encode": {
+      "name": "codec_encode",
+      "operations_count": 5000,
+      "duration_sec": 0.08,
+      "ops_per_sec": 60000.0,
+      "throughput_mb_per_sec": 1.0,
+      "avg_latency_us": 16.0
+    },
+    "codec_decode": {
+      "name": "codec_decode",
+      "operations_count": 5000,
+      "duration_sec": 0.08,
+      "ops_per_sec": 60000.0,
+      "throughput_mb_per_sec": 1.0,
+      "avg_latency_us": 16.0
+    },
+    "stream_extract": {
+      "name": "stream_extract",
+      "operations_count": 10000,
+      "duration_sec": 0.15,
+      "ops_per_sec": 65000.0,
+      "throughput_mb_per_sec": 1.1,
+      "avg_latency_us": 15.0
+    },
+    "transport_roundtrip": {
+      "name": "transport_roundtrip",
+      "operations_count": 50,
+      "duration_sec": 6.0,
+      "ops_per_sec": 8.0,
+      "throughput_mb_per_sec": 0.0,
+      "avg_latency_us": 120000.0
+    }
+  }
+}

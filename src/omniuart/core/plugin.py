@@ -7,8 +7,8 @@ message identification rules, dynamic field converters, and protocol importers/e
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
-from omniuart.core.models import FieldSpec, ProtocolSpec
+from typing import Any, Callable, Dict, Optional, Tuple
+from omniuart.core.models import ProtocolSpec
 
 logger = logging.getLogger(__name__)
 
@@ -45,12 +45,12 @@ class PluginRegistry:
         self._plugins[plugin.name] = plugin
         for name, (enc, dec) in plugin.encodings.items():
             self.register_encoding(name, enc, dec)
-        for name, fn in plugin.checksums.items():
-            self.register_checksum(name, fn)
-        for fmt, fn in plugin.importers.items():
-            self.register_importer(fmt, fn)
-        for fmt, fn in plugin.exporters.items():
-            self.register_exporter(fmt, fn)
+        for name, c_fn in plugin.checksums.items():
+            self.register_checksum(name, c_fn)
+        for fmt, imp_fn in plugin.importers.items():
+            self.register_importer(fmt, imp_fn)
+        for fmt, exp_fn in plugin.exporters.items():
+            self.register_exporter(fmt, exp_fn)
         logger.info("Registered ProtocolPlugin '%s'", plugin.name)
 
     def register_encoding(self, name: str, encoder: EncoderFn, decoder: DecoderFn) -> None:

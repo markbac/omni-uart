@@ -7,21 +7,19 @@ that generate spec-compliant responses, error frames, and telemetry over virtual
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
 import logging
 import random
+import re
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec, validate_fields
 from omniuart.core.crc import calculate_crc
-from omniuart.core.models import CommandSpec, FramingConfig, FramingType, ProtocolMeta, ProtocolSpec, SerialConfig
+from omniuart.core.models import CommandSpec, FieldType, FramingConfig, FramingType, ProtocolMeta, ProtocolSpec, SerialConfig
 from omniuart.core.transport import AsyncTransport, VirtualTransport
 
 logger = logging.getLogger(__name__)
-
-
-import re
-from dataclasses import dataclass, field
 
 
 @dataclass
@@ -217,13 +215,22 @@ class BaseDeviceSimulator:
             elif pat.endswith("=") or pat.endswith("?"):
                 matched = cmd_upper.startswith(pat)
             else:
-                matched = (cmd_upper == pat or cmd_upper.startswith(pat))
+                matched = (cmd_upper == pat) or (
+                    cmd_upper.startswith(pat)
+                    and len(cmd_upper) > len(pat)
+                    and cmd_upper[len(pat)] in ("=", "?", ";", " ")
+                )
 
             if matched:
                 if rule.state_updates:
                     self._state.update(rule.state_updates)
                 if rule.response_template:
-                    return rule.response_template.format(**self._state).encode("utf-8")
+                    safe_response = re.sub(
+                        r"\{([a-zA-Z0-9_]+)\}",
+                        lambda m: str(self._state.get(m.group(1), m.group(0))),
+                        rule.response_template,
+                    )
+                    return safe_response.encode("utf-8")
 
         return b""
 
@@ -265,7 +272,7 @@ class ATModemSimulator(BaseDeviceSimulator):
 
     @property
     def signal_quality(self) -> int:
-        return self._state.get("signal_quality", 24)
+        return int(self._state.get("signal_quality", 24))
 
     @signal_quality.setter
     def signal_quality(self, val: int) -> None:
@@ -273,7 +280,7 @@ class ATModemSimulator(BaseDeviceSimulator):
 
     @property
     def battery_mv(self) -> int:
-        return self._state.get("battery_mv", 3850)
+        return int(self._state.get("battery_mv", 3850))
 
     @battery_mv.setter
     def battery_mv(self, val: int) -> None:
@@ -281,7 +288,7 @@ class ATModemSimulator(BaseDeviceSimulator):
 
     @property
     def creg_status(self) -> int:
-        return self._state.get("creg_status", 1)
+        return int(self._state.get("creg_status", 1))
 
     @creg_status.setter
     def creg_status(self, val: int) -> None:
@@ -349,16 +356,34 @@ class IoTSensorSimulator(BaseDeviceSimulator):
             self.temperature_c += random.uniform(-0.2, 0.2)
             self.humidity_pct += random.uniform(-0.5, 0.5)
 
-            # Build binary sensor telemetry frame: [0x55, 0xAA, temp_int, temp_frac, hum_int, CRC16]
-            t_int = int(self.temperature_c)
-            t_frac = int((self.temperature_c - t_int) * 100)
-            h_int = int(self.humidity_pct)
-            frame = bytearray([0x55, 0xAA, 0x81, t_int & 0xFF, t_frac & 0xFF, h_int & 0xFF])
-            crc = calculate_crc(bytes(frame[2:]), "crc16_modbus")
-            frame.extend(crc.to_bytes(2, "little"))
+            frame_bytes: Optional[bytes] = None
+            if self.spec.telemetry:
+                tel = self.spec.telemetry[0]
+                values = {}
+                for f in tel.fields:
+                    fname = f.name.lower()
+                    if "temp" in fname:
+                        values[f.name] = self.temperature_c if f.type in (FieldType.FLOAT32, FieldType.FLOAT64) else int(self.temperature_c)
+                    elif "hum" in fname:
+                        values[f.name] = self.humidity_pct if f.type in (FieldType.FLOAT32, FieldType.FLOAT64) else int(self.humidity_pct)
+                    else:
+                        values[f.name] = f.default if f.default is not None else 0
+                try:
+                    frame_bytes = self.codec.encode_telemetry(tel.name, values)
+                except Exception:
+                    frame_bytes = None
+
+            if frame_bytes is None:
+                t_int = int(self.temperature_c)
+                t_frac = int((self.temperature_c - t_int) * 100)
+                h_int = int(self.humidity_pct)
+                frame = bytearray([0x55, 0xAA, 0x81, t_int & 0xFF, t_frac & 0xFF, h_int & 0xFF])
+                crc = calculate_crc(bytes(frame[2:]), "crc16_modbus")
+                frame.extend(crc.to_bytes(2, "little"))
+                frame_bytes = bytes(frame)
 
             if self.transport and self.transport.is_open:
-                await self.transport.write(bytes(frame))
+                await self.transport.write(frame_bytes)
 
 
 class ModbusRtuSimulator(BaseDeviceSimulator):
@@ -390,30 +415,48 @@ class ModbusRtuSimulator(BaseDeviceSimulator):
         return self._with_crc(bytes([self.slave_address, func | 0x80, code]))
 
     def process_incoming_bytes(self, buf: bytearray) -> Optional[bytes]:
-        if len(buf) < 8:
+        if len(buf) < 4:
             return None
 
-        frame = bytes(buf[:8])
-        buf.clear()  # a request is exactly 8 bytes for the one function we implement
-        if calculate_crc(frame[:6], "crc16_modbus") != int.from_bytes(frame[6:8], "little"):
+        addr = buf[0]
+        func = buf[1]
+
+        if func in (0x0F, 0x10):
+            if len(buf) < 7:
+                return None
+            byte_count = buf[6]
+            expected_len = 7 + byte_count + 2
+        else:
+            expected_len = 8
+
+        if len(buf) < expected_len:
+            return None
+
+        frame = bytes(buf[:expected_len])
+        calc = calculate_crc(frame[:-2], "crc16_modbus")
+        recv = int.from_bytes(frame[-2:], "little")
+
+        if calc != recv:
             self._state["rx_errors"] += 1
-            return None  # a bad checksum is silently dropped, as on a real bus
+            del buf[0]
+            return None
 
-        addr, func = frame[0], frame[1]
+        del buf[:expected_len]
+
         if addr != self.slave_address:
-            return None  # not for us (broadcast address 0 gets no reply either)
+            return None
 
-        if func != 0x03:
-            return self._exception(func, 0x01)  # Illegal Function
+        if func == 0x03:
+            reg_addr = int.from_bytes(frame[2:4], "big")
+            count = int.from_bytes(frame[4:6], "big")
+            if not 1 <= count <= self.MAX_READ_REGISTERS:
+                return self._exception(func, 0x03)
+            if reg_addr + count > 0x10000:
+                return self._exception(func, 0x02)
 
-        reg_addr = int.from_bytes(frame[2:4], "big")
-        count = int.from_bytes(frame[4:6], "big")
-        if not 1 <= count <= self.MAX_READ_REGISTERS:
-            return self._exception(func, 0x03)  # Illegal Data Value
-        if reg_addr + count > 0x10000:
-            return self._exception(func, 0x02)  # Illegal Data Address
+            body = bytearray([self.slave_address, 0x03, count * 2])
+            for i in range(count):
+                body.extend(self.holding_registers.get(reg_addr + i, 0).to_bytes(2, "big"))
+            return self._with_crc(bytes(body))
 
-        body = bytearray([self.slave_address, 0x03, count * 2])
-        for i in range(count):
-            body.extend(self.holding_registers.get(reg_addr + i, 0).to_bytes(2, "big"))
-        return self._with_crc(bytes(body))
+        return self._exception(func, 0x01)

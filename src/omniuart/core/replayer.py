@@ -6,19 +6,18 @@ Replays recorded JSON Lines (.jsonl) session packets onto physical or virtual se
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
+from enum import Enum
 import json
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from omniuart.core.limits import get_limits
 from omniuart.core.recorder import PacketEvent
 from omniuart.core.transport import AsyncTransport
 
 logger = logging.getLogger(__name__)
-
-
-from enum import Enum
 
 
 class ReplayTimingMode(str, Enum):
@@ -39,6 +38,49 @@ class ReplayDirectionMode(str, Enum):
     RX_EMULATE = "rx_emulate"  # Replay inbound RX frames (emulating target device)
 
 
+@dataclass
+class ReplayResult:
+    """Result summary of a session replay operation."""
+
+    frames_sent: int = 0
+    frames_skipped: int = 0
+    truncated: bool = False
+    duration_s: float = 0.0
+
+    def __int__(self) -> int:
+        return self.frames_sent
+
+    def __index__(self) -> int:
+        return self.frames_sent
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, int):
+            return self.frames_sent == other
+        if isinstance(other, ReplayResult):
+            return (
+                self.frames_sent == other.frames_sent
+                and self.frames_skipped == other.frames_skipped
+                and self.truncated == other.truncated
+            )
+        return False
+
+    def __lt__(self, other: Any) -> bool:
+        val = int(other) if isinstance(other, (int, ReplayResult)) else other
+        return self.frames_sent < val
+
+    def __le__(self, other: Any) -> bool:
+        val = int(other) if isinstance(other, (int, ReplayResult)) else other
+        return self.frames_sent <= val
+
+    def __gt__(self, other: Any) -> bool:
+        val = int(other) if isinstance(other, (int, ReplayResult)) else other
+        return self.frames_sent > val
+
+    def __ge__(self, other: Any) -> bool:
+        val = int(other) if isinstance(other, (int, ReplayResult)) else other
+        return self.frames_sent >= val
+
+
 class SessionReplayer:
     """Replays transaction logs onto a target UART transport with configurable timing and direction control."""
 
@@ -48,7 +90,7 @@ class SessionReplayer:
         timing_mode: Union[ReplayTimingMode, str] = ReplayTimingMode.CAPPED,
         direction_mode: Union[ReplayDirectionMode, str] = ReplayDirectionMode.TX_ONLY,
         speed_multiplier: float = 1.0,
-        max_gap_s: Optional[float] = 5.0,
+        max_gap_s: Optional[float] = None,
         fixed_interval_s: float = 0.01,
         max_duration_s: Optional[float] = None,
     ) -> None:
@@ -56,12 +98,18 @@ class SessionReplayer:
         self.timing_mode = ReplayTimingMode(timing_mode) if isinstance(timing_mode, str) else timing_mode
         self.direction_mode = ReplayDirectionMode(direction_mode) if isinstance(direction_mode, str) else direction_mode
         self.speed_multiplier = max(0.0, float(speed_multiplier))
-        self.max_gap_s = max_gap_s
+        self.max_gap_s: Optional[float] = None
+        if max_gap_s is not None:
+            self.max_gap_s = max_gap_s
+        elif self.timing_mode == ReplayTimingMode.CAPPED:
+            self.max_gap_s = 5.0
+        else:
+            self.max_gap_s = None
         self.fixed_interval_s = fixed_interval_s
         self.max_duration_s = max_duration_s if max_duration_s is not None else get_limits().replay_duration_s
 
-    async def replay_file(self, jsonl_path: Union[str, Path]) -> int:
-        """Replay a recorded .jsonl session log file. Returns count of replayed frames."""
+    async def replay_file(self, jsonl_path: Union[str, Path]) -> ReplayResult:
+        """Replay a recorded .jsonl session log file. Returns ReplayResult summary."""
         path = Path(jsonl_path)
         if not path.exists():
             raise FileNotFoundError(f"Session log file not found: {path}")
@@ -81,18 +129,21 @@ class SessionReplayer:
 
         if not events:
             logger.warning("No events found in session file.")
-            return 0
+            return ReplayResult(frames_sent=0, frames_skipped=0, truncated=False)
 
         if not self.transport.is_open:
             await self.transport.open()
 
         count = 0
+        skipped = 0
+        truncated = False
         prev_ts: Optional[float] = None
         waited = 0.0
 
         for event in events:
             hex_clean = event.raw_hex.replace(" ", "")
             if not hex_clean:
+                skipped += 1
                 continue
 
             dir_low = event.direction.lower()
@@ -102,6 +153,7 @@ class SessionReplayer:
                 or (self.direction_mode == ReplayDirectionMode.BIDIRECTIONAL)
             )
             if not should_replay:
+                skipped += 1
                 continue
 
             delay = 0.0
@@ -116,14 +168,13 @@ class SessionReplayer:
                         delay = min(raw_delay, self.max_gap_s)
                         if raw_delay > self.max_gap_s:
                             logger.info("Inter-packet gap of %.2f s capped to %.2f s maximum", raw_delay, self.max_gap_s)
-                    elif self.max_gap_s is not None:
-                        delay = min(raw_delay, self.max_gap_s)
                     else:
                         delay = raw_delay
 
             if delay > 0:
                 if waited + delay > self.max_duration_s:
                     logger.warning("Replay stopped after %d frame(s): it would exceed the %g s duration limit", count, self.max_duration_s)
+                    truncated = True
                     break
                 await asyncio.sleep(delay)
                 waited += delay
@@ -134,6 +185,6 @@ class SessionReplayer:
             count += 1
             logger.info(f"Replayed {dir_low.upper()} frame ({len(raw_bytes)} bytes): {event.command_name or 'custom'}")
 
-        return count
+        return ReplayResult(frames_sent=count, frames_skipped=skipped, truncated=truncated, duration_s=waited)
 
 

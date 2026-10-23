@@ -4,7 +4,6 @@ from pathlib import Path
 from omniuart.core.models import load_protocol
 from omniuart.core.device_explorer import (
     DeviceExplorer,
-    DeviceNode,
     DeviceSection,
     build_navigation_tree_from_spec,
 )

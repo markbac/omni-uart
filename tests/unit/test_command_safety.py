@@ -54,7 +54,14 @@ def test_kit_adapter_does_not_guess_from_names() -> None:
         "commands": [{"name": n, "fields": [{"name": "op", "type": "uint", "sizeBytes": 1, "constValue": i + 1, "role": "discriminator"}]} for i, n in enumerate(NAMES)],
     }
     spec = parse_kit_protocol(kit)
-    assert all("dashboard" not in c.tags and not c.is_read_only for c in spec.commands)
+    assert all("dashboard" not in c.tags for c in spec.commands)
+    # Under #335, read-only commands derive READ_ONLY from standard name patterns
+    ro_names = {"get_status", "read_config", "ping"}
+    for c in spec.commands:
+        if c.name in ro_names:
+            assert c.is_read_only
+        else:
+            assert not c.is_read_only
 
 
 def test_explicit_tags_and_safety_are_kept() -> None:

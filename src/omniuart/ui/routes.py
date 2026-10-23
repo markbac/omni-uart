@@ -5,30 +5,40 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.codec import CodecError
 from omniuart.core.models import CommandSpec, ProtocolSpec
 from omniuart.core.recorder import SessionRecorder
-from omniuart.core.runner import ScriptRunner, StepStatus
-from omniuart.core.session import CommandBlockedError, ExchangeStatus
+from omniuart.core.runner import StepStatus
+from omniuart.core.session import ExchangeStatus
 from omniuart.ui.connection import VIRTUAL_PORT, ConnectionManager, NotConnectedError
-from omniuart.ui.models import CommandRequest, SerialConnectRequest
+from omniuart.ui.device_console import ConsoleRegistry
+from omniuart.ui.models import CommandRequest, SerialConnectRequest, TransferRequest
 from omniuart.ui.views import get_index_html
+from omniuart.services import AutomationService, CatalogService, CommandExecutionService, ErrorKind, ServiceError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 catalog = CatalogManager()
+
+
+def _services() -> CatalogService:
+    """Services over the module's catalog (looked up per call, so a replaced catalog takes effect)."""
+    return CatalogService(catalog)
 recorder = SessionRecorder()
 active_connections: Set[WebSocket] = set()
 
 # The single serial link shared by every request
 connection = ConnectionManager()
+
+# Live state, recent exchanges and transfers per protocol, behind the device dashboard
+consoles = ConsoleRegistry()
 
 
 async def broadcast_packet(packet_data: Dict[str, Any]) -> None:
@@ -72,15 +82,13 @@ async def websocket_serial_stream(websocket: WebSocket) -> None:
 @router.get("/api/protocols")
 def get_protocols() -> Dict[str, Any]:
     """Return summary of all protocols discovered in definition directories."""
-    return catalog.catalog_summary()
+    return _services().summary()
 
 
 @router.get("/api/protocol/{identifier}")
 def get_protocol_spec(identifier: str) -> Dict[str, Any]:
     """Return parsed protocol specification and tag breakdown."""
-    spec = catalog.get_protocol(identifier)
-    if not spec:
-        raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
+    spec = _load_protocol(identifier)
 
     tag_groups: Dict[str, List[str]] = {}
     for cmd in spec.commands:
@@ -114,8 +122,14 @@ def list_serial_ports() -> Dict[str, Any]:
 @router.post("/api/serial/connect")
 async def connect_serial(req: SerialConnectRequest) -> Dict[str, Any]:
     """Open the requested serial port (or the labelled simulated device), replacing any open link."""
-    if req.port == VIRTUAL_PORT and (not req.protocol or not catalog.get_protocol(req.protocol)):
-        raise HTTPException(status_code=422, detail="The virtual device needs a valid 'protocol' to simulate.")
+    if req.port == VIRTUAL_PORT:
+        try:
+            known = bool(req.protocol) and catalog.get_protocol(req.protocol or "") is not None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if not known:
+            raise HTTPException(status_code=422, detail="The virtual device needs a valid 'protocol' to simulate.")
+    consoles.connection_lost()  # values read over the previous link are no longer current
     try:
         await connection.connect(req.port, req.baudrate, req.rts, req.dtr, req.read_only)
     except Exception as exc:  # noqa: BLE001 - port missing, busy or not permitted
@@ -127,6 +141,7 @@ async def connect_serial(req: SerialConnectRequest) -> Dict[str, Any]:
 async def disconnect_serial() -> Dict[str, Any]:
     """Close the open link. Disconnecting when nothing is open is not an error."""
     await connection.disconnect()
+    consoles.connection_lost()
     return {"status": "success", "connection": connection.state()}
 
 
@@ -135,14 +150,34 @@ def serial_status() -> Dict[str, Any]:
     return {"connection": connection.state()}
 
 
+# HTTP status for a ServiceError, by kind
+_HTTP_CODES = {
+    ErrorKind.NOT_FOUND: 404,
+    ErrorKind.INVALID: 422,
+    ErrorKind.BLOCKED: 403,
+    ErrorKind.CONFIRMATION_REQUIRED: 428,
+    ErrorKind.TRANSPORT: 502,
+}
+
+
+def _http_error(exc: ServiceError) -> HTTPException:
+    return HTTPException(status_code=_HTTP_CODES[exc.kind], detail=str(exc))
+
+
+def _load_protocol(identifier: str) -> ProtocolSpec:
+    """Return the named protocol: 404 when there is none, 422 when its file fails to load (#339)."""
+    try:
+        return _services().get_protocol(identifier)
+    except ServiceError as exc:
+        raise _http_error(exc) from exc
+
+
 def _resolve(identifier: str, command: str) -> Tuple[ProtocolSpec, CommandSpec]:
-    spec = catalog.get_protocol(identifier)
-    if not spec:
-        raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
-    cmd = spec.get_command(command) or spec.get_command_by_id(command)
-    if not cmd:
-        raise HTTPException(status_code=404, detail=f"Command '{command}' not found")
-    return spec, cmd
+    spec = _load_protocol(identifier)
+    try:
+        return spec, _services().get_command(spec, command)
+    except ServiceError as exc:
+        raise _http_error(exc) from exc
 
 
 async def _publish(events: List[Any]) -> None:
@@ -161,6 +196,7 @@ _FAILURE_CODES = {
     ExchangeStatus.TIMEOUT: 504,
     ExchangeStatus.INVALID_RESPONSE: 502,
     ExchangeStatus.TRANSPORT_ERROR: 502,
+    ExchangeStatus.DEVICE_ERROR: 502,
 }
 
 
@@ -173,24 +209,21 @@ async def send_command(identifier: str, req: CommandRequest) -> Any:
     read-only connection, 428 a mutating or destructive command sent without ``confirm: true``.
     """
     spec, cmd = _resolve(identifier, req.command)
-    if cmd.needs_confirmation and not req.confirm and not (connection.read_only):
-        raise HTTPException(
-            status_code=428,
-            detail=f"'{cmd.name}' is {cmd.safety.value}: resend with \"confirm\": true to send it.",
-        )
     temp = SessionRecorder()
     try:
         async with connection.use(spec, temp) as session:
-            exchange = await session.send(cmd, req.params)
+            exchange = await CommandExecutionService(_services()).send_on(session, cmd, req.params, confirmed=req.confirm)
     except NotConnectedError as exc:
         raise _not_connected(exc) from exc
-    except CommandBlockedError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except CodecError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ServiceError as exc:
+        if exc.kind is ErrorKind.CONFIRMATION_REQUIRED:
+            raise HTTPException(status_code=428, detail=f"{exc}: resend with \"confirm\": true to send it.") from exc
+        raise _http_error(exc) from exc
     await _publish(temp.events)
+    detail = consoles.get(spec).record(exchange)
 
     body: Dict[str, Any] = {
+        "exchange_id": detail.exchange_id,
         "status": "success" if exchange.ok else "failed",
         "protocol": spec.metadata.name,
         "command": cmd.name,
@@ -230,21 +263,15 @@ async def run_script(script_name: str) -> Any:
     404 unknown script, 409 not connected, 422 invalid script, 502 link failure. A script whose
     assertions fail returns 200 with ``"status": "FAILED"``.
     """
-    script = catalog.get_script(script_name)
-    if not script:
-        raise HTTPException(status_code=404, detail=f"Script '{script_name}' not found")
-    spec = None
-    for ref in (script.meta.protocol, Path(script.meta.protocol).name, Path(script.meta.protocol).stem):
-        spec = catalog.get_protocol(ref) if ref else None
-        if spec:
-            break
-    if spec is None:
-        raise HTTPException(status_code=422, detail=f"Protocol '{script.meta.protocol}' for this script was not found")
+    try:
+        script, spec = AutomationService(_services()).prepare(script_name, allow_path=False)  # catalog names only, never file paths
+    except ServiceError as exc:
+        raise _http_error(exc) from exc
 
     temp = SessionRecorder()
     try:
         async with connection.use(spec, temp) as session:
-            result = await ScriptRunner(script, session).run()
+            result = await AutomationService(_services()).run_on(session, script)
     except NotConnectedError as exc:
         raise _not_connected(exc) from exc
     await _publish(temp.events)
@@ -273,9 +300,7 @@ async def dashboard_auto_run(identifier: str) -> Dict[str, Any]:
 
     A dashboard command that is not marked ``safety: read_only`` is reported as skipped, never sent.
     """
-    spec = catalog.get_protocol(identifier)
-    if not spec:
-        raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
+    spec = _load_protocol(identifier)
 
     dashboard_cmds = [cmd for cmd in spec.commands if "dashboard" in cmd.tags]
     temp = SessionRecorder()
@@ -295,6 +320,7 @@ async def dashboard_auto_run(identifier: str) -> Dict[str, Any]:
                 except CodecError as exc:
                     results[cmd.name] = {"command_id": cmd.id, "status": "FAILED", "error": str(exc)}
                     continue
+                consoles.get(spec).record(exchange)
                 results[cmd.name] = {
                     "command_id": cmd.id,
                     "status": "SUCCESS" if exchange.ok else "FAILED",
@@ -324,3 +350,246 @@ def get_available_serial_ports() -> Dict[str, Any]:
 def index() -> str:
     """Serve the single-page Tag-Based Dynamic Web UI application with Workspace Navigation."""
     return get_index_html()
+
+
+@router.get("/designer", response_class=HTMLResponse)
+@router.get("/designer/{identifier}", response_class=HTMLResponse)
+def get_designer_view(identifier: Optional[str] = None) -> str:
+    """Serve the visual Device UI Designer editor interface (#241)."""
+    from omniuart.core.device_ui import DeviceUIStore, find_device_ui
+    from omniuart.designer import generate_designer_html
+
+    store = DeviceUIStore()
+    if identifier:
+        spec = _load_protocol(identifier)
+    else:
+        proto_files = catalog.list_protocol_files()
+        if not proto_files:
+            raise HTTPException(status_code=404, detail="No protocols available in catalog for designer")
+        spec = _load_protocol(proto_files[0].name)
+
+    return generate_designer_html(spec, find_device_ui(spec, file_stem=Path(identifier or "").stem, store=store))
+
+
+@router.get("/api/designer/spec/{identifier}")
+def get_designer_protocol_spec(identifier: str) -> Dict[str, Any]:
+    """Return protocol spec and inferred or stored DeviceUISpec for designer (#241, #242)."""
+    from omniuart.core.device_ui import DeviceUIStore, infer_device_ui_from_spec
+
+    spec = _load_protocol(identifier)
+    store = DeviceUIStore()
+    ui_spec = store.find_for_protocol(spec.metadata.name) or infer_device_ui_from_spec(spec)
+    return {
+        "protocol": spec.model_dump(),
+        "ui_spec": ui_spec.model_dump(),
+    }
+
+
+@router.post("/api/designer/validate")
+def validate_designer_spec(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a draft DeviceUISpec against a protocol for compatibility (#241, #242)."""
+    from omniuart.core.device_ui import check_protocol_compatibility
+
+    proto_name = payload.get("protocol")
+    if not proto_name:
+        raise HTTPException(status_code=400, detail="Missing protocol identifier in payload")
+    spec = _load_protocol(proto_name)
+    report = check_protocol_compatibility(_designer_ui_spec(payload), spec)
+    return report.model_dump()
+
+
+@router.post("/api/designer/save")
+def save_designer_spec(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist a draft DeviceUISpec to the UI store repository (#241, #242)."""
+    from omniuart.core.device_ui import DeviceUIStore, import_device_ui
+
+    ui_spec = _designer_ui_spec(payload)
+    fmt = payload.get("format", "yaml")
+    try:
+        path = DeviceUIStore().save(ui_spec, format=fmt)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    saved = import_device_ui(path.read_text(encoding="utf-8"))
+    return {"ok": True, "path": str(path), "filename": path.name, "revision": saved.revision}
+
+
+@router.post("/api/designer/export", response_class=PlainTextResponse)
+def export_designer_spec(payload: Dict[str, Any]) -> str:
+    """Return a draft DeviceUISpec as YAML or JSON text (#241, #242)."""
+    from omniuart.core.device_ui import export_device_ui
+
+    ui_spec = _designer_ui_spec(payload)
+    try:
+        return export_device_ui(ui_spec, format=payload.get("format", "yaml"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/designer/preview", response_class=HTMLResponse)
+def preview_designer_spec(payload: Dict[str, Any]) -> str:
+    """Render the device dashboard for a draft DeviceUISpec, so the designer can preview it (#241)."""
+    from omniuart.dashboard_generator import generate_device_dashboard_html
+
+    proto_name = payload.get("protocol")
+    if not proto_name:
+        raise HTTPException(status_code=400, detail="Missing protocol identifier in payload")
+    spec = _load_protocol(proto_name)
+    return generate_device_dashboard_html(spec, _designer_ui_spec(payload), is_connected=False, api_identifier=proto_name)
+
+
+def _designer_ui_spec(payload: Dict[str, Any]) -> Any:
+    from omniuart.core.device_ui import migrate_ui_spec
+
+    ui_dict = payload.get("ui_spec")
+    if not isinstance(ui_dict, dict) or not ui_dict:
+        raise HTTPException(status_code=400, detail="Missing ui_spec in payload")
+    try:
+        return migrate_ui_spec(ui_dict)
+    except ValueError as exc:  # pydantic.ValidationError is a ValueError
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/api/designer/definitions")
+def list_designer_definitions() -> Dict[str, Any]:
+    """List all stored Device UI definitions (#242)."""
+    from omniuart.core.device_ui import DeviceUIStore
+
+    store = DeviceUIStore()
+    return {"definitions": store.list_definitions()}
+
+
+# ------------------------------------------------------------------ device dashboard (#230, #246, #318)
+def _ui_spec(spec: ProtocolSpec, identifier: str) -> Any:
+    from omniuart.core.device_ui import find_device_ui, infer_device_ui_from_spec
+
+    return find_device_ui(spec, file_stem=Path(identifier).stem) or infer_device_ui_from_spec(spec)
+
+
+@router.get("/dashboard/{identifier}", response_class=HTMLResponse)
+def get_device_dashboard(identifier: str) -> str:
+    """Serve the device dashboard: the saved or inferred Device UI, driven live by the API below."""
+    from omniuart.dashboard_generator import generate_device_dashboard_html
+
+    spec = _load_protocol(identifier)
+    return generate_device_dashboard_html(spec, _ui_spec(spec, identifier), api_identifier=identifier)
+
+
+@router.get("/api/device/{identifier}/state")
+def get_device_state(identifier: str, limit: int = 50) -> Dict[str, Any]:
+    """Connection, live values (with quality), recent exchanges and transfers for the dashboard."""
+    spec = _load_protocol(identifier)
+    return {"connection": connection.state(), **consoles.get(spec).snapshot(limit=max(1, min(limit, 200)))}
+
+
+@router.post("/api/device/{identifier}/refresh")
+async def refresh_device(identifier: str) -> Dict[str, Any]:
+    """Read the device: send every command that is safe to poll (read-only, expects a response, needs no input)."""
+    from omniuart.core.background import is_safe_poll_command
+
+    spec = _load_protocol(identifier)
+    console = consoles.get(spec)
+    temp = SessionRecorder()
+    polled: Dict[str, str] = {}
+    try:
+        async with connection.use(spec, temp) as session:
+            for cmd in spec.commands:
+                if is_safe_poll_command(cmd):
+                    exchange = await session.send(cmd, {})
+                    console.record(exchange)
+                    polled[cmd.name] = exchange.status.value
+    except NotConnectedError as exc:
+        raise _not_connected(exc) from exc
+    await _publish(temp.events)
+    return {"polled": polled, "connection": connection.state(), **console.snapshot()}
+
+
+@router.post("/api/device/{identifier}/transfer")
+async def start_transfer(identifier: str, req: TransferRequest) -> Dict[str, Any]:
+    """Start uploading a file through a transfer widget; poll ``GET .../transfer/{job_id}`` for progress.
+
+    404 unknown widget, 409 not connected or a transfer already running, 422 the protocol defines no
+    transfer or the file is not acceptable, 403 read-only link, 428 not confirmed.
+    """
+    import asyncio
+    import base64
+    import binascii
+
+    from omniuart.core.transfer_session import SessionTransfer, TransferDefinitionError
+
+    spec = _load_protocol(identifier)
+    ui = _ui_spec(spec, identifier)
+    widget = next(
+        (w for p in ui.panels for g in p.groups for w in g.widgets
+         if w.field_ref == req.widget_ref and w.widget_type in ("file_transfer", "firmware_update")),
+        None,
+    )
+    if widget is None:
+        raise HTTPException(status_code=404, detail=f"No transfer widget '{req.widget_ref}' in this device's UI")
+    if ui.transfer_protocol is None:
+        raise HTTPException(status_code=422, detail="This device's UI defines no transfer_protocol, so files cannot be sent")
+    try:
+        transfer = SessionTransfer(spec, ui.transfer_protocol)
+    except TransferDefinitionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        data = base64.b64decode(req.data_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="data_base64 is not valid base64") from exc
+
+    suffix = Path(req.file_name).suffix.lower()
+    if widget.supported_file_types and suffix not in [t.lower() for t in widget.supported_file_types]:
+        raise HTTPException(status_code=422, detail=f"'{req.file_name}' is not one of {widget.supported_file_types}")
+    limit = widget.max_size_bytes or transfer.manager.capabilities.max_file_size
+    if not 0 < len(data) <= limit:
+        raise HTTPException(status_code=422, detail=f"file is {len(data)} bytes; it must be 1 to {limit} bytes")
+    if connection.read_only:
+        raise HTTPException(status_code=403, detail="read-only connection: file transfers change the device")
+    needs_confirm = widget.destructive or any(cmd.needs_confirmation for cmd in transfer.commands.values())
+    if needs_confirm and not req.confirm:
+        raise HTTPException(status_code=428, detail="this transfer changes the device: resend with \"confirm\": true")
+    if not connection.connected:
+        raise HTTPException(status_code=409, detail="No serial connection. Connect a port first (POST /api/serial/connect).")
+    console = consoles.get(spec)
+    if console.active_transfer() is not None:
+        raise HTTPException(status_code=409, detail="a transfer is already running for this device")
+
+    job = console.add_transfer(req.widget_ref, req.file_name, transfer)
+
+    async def run() -> Any:
+        temp = SessionRecorder()
+        try:
+            async with connection.use(spec, temp) as session:
+                job.outcome = await transfer.upload(
+                    session, req.file_name, data, file_type=widget.transfer_type or "binary"
+                )
+        except Exception as exc:  # noqa: BLE001 - the link failed; report it on the job
+            transfer.manager.abort(f"transfer failed: {exc}")
+            from omniuart.core.transfer_session import TransferOutcome
+
+            job.outcome = TransferOutcome(transfer.manager.state, False, transfer.manager.progress, str(exc))
+        await _publish(temp.events)
+        return job.outcome
+
+    job.task = asyncio.create_task(run())
+    return job.to_dict()
+
+
+def _job(identifier: str, job_id: str) -> Any:
+    job = consoles.get(_load_protocol(identifier)).transfers.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Transfer '{job_id}' not found")
+    return job
+
+
+@router.get("/api/device/{identifier}/transfer/{job_id}")
+def get_transfer(identifier: str, job_id: str) -> Dict[str, Any]:
+    """Progress of a transfer: state, bytes, chunk, rate, ETA, and whether the device committed it."""
+    return dict(_job(identifier, job_id).to_dict())
+
+
+@router.post("/api/device/{identifier}/transfer/{job_id}/cancel")
+def cancel_transfer(identifier: str, job_id: str) -> Dict[str, Any]:
+    """Stop a running transfer before its next chunk; the device is sent the abort command if one is defined."""
+    job = _job(identifier, job_id)
+    job.transfer.cancel()
+    return dict(job.to_dict())

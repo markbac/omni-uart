@@ -7,23 +7,53 @@ from omniuart.core.kit_adapter import parse_kit_protocol
 from omniuart.core.models import ProtocolSpec, ScriptSpec, load_protocol, load_script
 from omniuart.core.sequence_adapter import parse_kit_sequence
 from omniuart.core.session import DeviceSession, SerialSession, SessionState, SessionStatistics
+from omniuart.core.transfer import (
+    ChunkingEngine,
+    CommitPolicy,
+    CommitResult,
+    ConfigurationWorkflow,
+    FirmwareUpdateWorkflow,
+    TransferCapabilities,
+    TransferCheckpoint,
+    TransferChunk,
+    TransferDirection,
+    TransferHistory,
+    TransferManager,
+    TransferMetadata,
+    TransferProgress,
+    TransferReassembler,
+    TransferState,
+)
 
 __all__ = [
     "CatalogManager",
+    "ChunkingEngine",
+    "CommitPolicy",
+    "CommitResult",
+    "ConfigurationWorkflow",
     "CrcModel",
     "DeviceSession",
     "DissectedFrame",
     "FieldSlice",
+    "FirmwareUpdateWorkflow",
     "ProtocolSpec",
     "ScriptSpec",
     "SerialSession",
     "SessionState",
     "SessionStatistics",
+    "TransferCapabilities",
+    "TransferCheckpoint",
+    "TransferChunk",
+    "TransferDirection",
+    "TransferHistory",
+    "TransferManager",
+    "TransferMetadata",
+    "TransferProgress",
+    "TransferReassembler",
+    "TransferState",
     "dissect_frame",
     "load_protocol",
     "load_script",
     "parse_kit_protocol",
     "parse_kit_sequence",
 ]
-
-

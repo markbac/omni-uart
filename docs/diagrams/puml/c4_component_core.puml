@@ -6,23 +6,31 @@ LAYOUT_WITH_LEGEND()
 title Component Diagram: Core Engine & Codec (C4 Level 3)
 
 Container_Boundary(core, "Core Protocol Engine & Codec") {
-    Component(models, "Protocol Models & Validator", "Pydantic v2", "Validates protocol syntax, types, constraints, and defaults")
+    Component(models, "Protocol Models & Validator", "Pydantic v2", "Validates protocol syntax, types, constraints, defaults, and YAML anchors")
     Component(builder, "Frame Builder", "struct / bitpack", "Packs command parameters into binary or delimited frame envelopes")
     Component(decoder, "Stream Decoder", "Sliding FIFO Buffer", "Hunts sync preambles, extracts length, handles fragmentation, recovers from noise")
-    Component(crc_engine, "CRC & Integrity Engine", "Lookup Table / Rocksoft", "Computes preset (CRC8/16/32, Sum, XOR) and custom parametric CRCs")
+    Component(crc_engine, "CRC & Integrity Engine", "Lookup Table / Rocksoft", "Computes preset (CRC8/16/32, Modbus, CCITT, Sum, XOR) and custom parametric CRCs")
     Component(dissector, "Packet Dissector", "Byte Slicer", "Categorizes bytes into semantic roles (Header, Len, Cmd, Payload, CRC, Footer) with diagnostic diffs")
-    Component(recorder, "Session Recorder", "Ring Buffer", "Thread-safe event logger exporting to JSONL, CSV, and raw binary")
+    Component(recorder, "Session Recorder", "Ring Buffer", "Thread-safe event logger exporting to PCAPNG, JSONL, CSV, and raw binary")
+    Component(dashboard_gen, "Device UI & Dashboard Generator", "HTML / Win32 CSS", "Generates paired Get/Set forms, fieldsets, and live 16x2 segmented LCD matrices")
+    Component(asyncapi_exp, "AsyncAPI 2.6.0 Exporter", "JSON Schema / AsyncAPI", "Translates ProtocolSpec into channels, operations, and strict JSON schemas")
+    Component(linter, "Protocol Linter", "Validator & Loss Checker", "Lints protocol definitions and verifies loss-free schema conversions")
 }
 
 Container_Ext(transport, "Transport Layer", "Serial & Virtual MCU")
-Container_Ext(ui_api, "Web API & CLI", "FastAPI / Typer")
+Container_Ext(ui_api, "UI Workspaces & CLI", "Desktop GUI / Web API / CLI")
 
 Rel(ui_api, models, "Loads protocol specifications")
+Rel(ui_api, linter, "Invokes protocol validation & conversion loss checks")
+Rel(ui_api, dashboard_gen, "Generates standalone Win32 dashboards")
+Rel(ui_api, asyncapi_exp, "Requests AsyncAPI 2.6.0 export")
 Rel(ui_api, builder, "Requests command serialization")
 Rel(transport, decoder, "Feeds raw incoming byte chunks")
 
 Rel(models, builder, "Provides field layout & endianness rules")
 Rel(models, decoder, "Provides framing sync patterns & length offsets")
+Rel(models, dashboard_gen, "Provides tags, fieldsets, and widget metadata")
+Rel(models, asyncapi_exp, "Provides commands, types, and options enums")
 
 Rel(builder, crc_engine, "Calculates checksums for outbound frames")
 Rel(decoder, crc_engine, "Validates integrity of received frames")
@@ -32,6 +40,6 @@ Rel(dissector, recorder, "Sends enriched packet events with byte slices & diffs"
 Rel(builder, recorder, "Sends outbound TX event records")
 
 Rel(builder, transport, "Transmits completed raw byte frames")
-Rel(recorder, ui_api, "Streams live events & exports session files")
+Rel(recorder, ui_api, "Streams live events & exports session files (PCAPNG/JSONL)")
 
 @enduml

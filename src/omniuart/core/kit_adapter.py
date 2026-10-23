@@ -167,6 +167,59 @@ def _parse_baud(value: Any, source_name: Optional[str]) -> int:
 _UNMAPPED_FRAMING_KEYS = ("preLengthHeaderBytes", "escapeByte", "escapeScheme", "syncRepeatsAfterLength", "trailingDelimiter")
 
 
+def _derive_command_safety(cmd_data: Dict[str, Any]) -> Tuple[CommandSafety, Optional[str]]:
+    """Derive command safety classification and rationale from kit data (#335).
+
+    Precedence:
+    1. Explicit x-omniuart.safety extension
+    2. Kit schema keywords (readOnly, idempotent, sideEffects)
+    3. Tag annotations (destructive, read-only, etc.)
+    4. Command name semantic patterns (get_*, is_*, read_*, reset_*, etc.)
+    5. Fallback: MUTATING with documented reason
+    """
+    ext_safety = (cmd_data.get("x-omniuart") or {}).get("safety")
+    if ext_safety:
+        if isinstance(ext_safety, CommandSafety):
+            return ext_safety, None
+        try:
+            return CommandSafety(str(ext_safety).lower()), None
+        except ValueError:
+            pass
+
+    if cmd_data.get("readOnly") is True or cmd_data.get("readonly") is True:
+        return CommandSafety.READ_ONLY, "kit declared readOnly: true"
+    if cmd_data.get("idempotent") is True:
+        return CommandSafety.IDEMPOTENT, "kit declared idempotent: true"
+    if cmd_data.get("sideEffects") is False:
+        return CommandSafety.READ_ONLY, "kit declared sideEffects: false"
+
+    tags = [str(t).lower() for t in cmd_data.get("tags", [])]
+    destructive_tags = {"destructive", "danger", "flash", "format", "reboot", "erase"}
+    matched_dest_tag = next((t for t in tags if t in destructive_tags), None)
+    if matched_dest_tag:
+        return CommandSafety.DESTRUCTIVE, f"matched destructive tag '{matched_dest_tag}'"
+
+    ro_tags = {"read", "read-only", "readonly", "query", "status", "telemetry", "info", "monitoring", "sensor", "get"}
+    matched_ro_tag = next((t for t in tags if t in ro_tags), None)
+    if matched_ro_tag:
+        return CommandSafety.READ_ONLY, f"matched read-only tag '{matched_ro_tag}'"
+
+    name = str(cmd_data.get("name", "")).lower()
+    ro_prefixes = ("get_", "get-", "read_", "read-", "query_", "query-", "poll_", "poll-", "fetch_", "fetch-", "is_", "has_", "check_", "list_", "dump_", "show_")
+    if any(name.startswith(p) for p in ro_prefixes) or name in ("get", "read", "query", "poll", "status", "info", "ping", "version", "help"):
+        return CommandSafety.READ_ONLY, f"derived from read-only command name '{name}'"
+
+    destructive_prefixes = ("reset_", "reset-", "erase_", "erase-", "format_", "format-", "reboot_", "reboot-", "factory_", "factory-", "delete_", "delete-", "flash_", "flash-", "destroy_", "kill_")
+    if any(name.startswith(p) for p in destructive_prefixes) or name in ("reset", "erase", "format", "reboot", "factory_reset"):
+        return CommandSafety.DESTRUCTIVE, f"derived from destructive command name '{name}'"
+
+    idempotent_prefixes = ("set_", "set-", "write_", "write-", "configure_", "config_")
+    if any(name.startswith(p) for p in idempotent_prefixes):
+        return CommandSafety.IDEMPOTENT, f"derived from configuration command name '{name}'"
+
+    return CommandSafety.MUTATING, "defaulted to mutating (no read-only pattern or annotation matched)"
+
+
 def _wire_id_field(msg: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """The message's first field when it is an integer-constant discriminator (so it is the id on the wire)."""
     fields = msg.get("fields") or []
@@ -267,7 +320,7 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
     parity = parity_val if parity_val in ("none", "even", "odd", "mark", "space") else "none"
     stopbits = float(phys.get("stopBits", 1))
 
-    flow_ctrl = phys.get("hardwareFlowControl", "none")
+    flow_ctrl = phys.get("flowControl", phys.get("hardwareFlowControl", "none"))
     flow_str = "hardware" if flow_ctrl in (True, "rts-cts") else "none"
 
     serial_config = SerialConfig(
@@ -413,6 +466,7 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
             )
 
         tags = list(cmd_data.get("tags", []))
+        cmd_safety, cmd_safety_reason = _derive_command_safety(cmd_data)
 
         commands.append(
             CommandSpec(
@@ -420,7 +474,8 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
                 id=cmd_id,
                 description=cmd_data.get("description"),
                 tags=tags,
-                safety=(cmd_data.get("x-omniuart") or {}).get("safety", CommandSafety.MUTATING),
+                safety=cmd_safety,
+                safety_reason=cmd_safety_reason,
                 parameters=params,
                 response=response_spec,
             )

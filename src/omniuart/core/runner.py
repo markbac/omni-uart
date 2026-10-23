@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 from omniuart.core.limits import get_limits
 from omniuart.core.codec import CodecError
 from omniuart.core.models import ScriptSpec, ScriptStep, StepAssertion
-from omniuart.core.session import CommandBlockedError, DeviceSession, Exchange, ExchangeStatus
+from omniuart.core.session import CommandBlockedError, SerialSession, Exchange, ExchangeStatus
 
 _VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_.]*)\}")
 
@@ -118,6 +118,10 @@ _OPERATORS = {
     ">=": "ge", "ge": "ge", "gte": "ge", "greaterthanorequal": "ge",
     "in": "in",
     "tolerance": "approx", "approx": "approx", "within": "approx",
+    "contains": "contains", "contain": "contains",
+    "startswith": "startswith", "starts_with": "startswith",
+    "endswith": "endswith", "ends_with": "endswith",
+    "regex": "matches", "matches": "matches", "match": "matches",
 }
 
 
@@ -165,6 +169,14 @@ def evaluate_assertion(assertion: StepAssertion, fields: Dict[str, Any], variabl
             if not isinstance(expected, (list, tuple, set)):
                 raise ScriptError("the 'in' operator needs a list value")
             ok = actual in expected
+        elif op == "contains":
+            ok = str(expected) in str(actual)
+        elif op == "startswith":
+            ok = str(actual).startswith(str(expected))
+        elif op == "endswith":
+            ok = str(actual).endswith(str(expected))
+        elif op == "matches":
+            ok = bool(re.search(str(expected), str(actual)))
         else:
             a, e = float(actual), float(expected)
             ok = {"lt": a < e, "le": a <= e, "gt": a > e, "ge": a >= e}[op]
@@ -180,7 +192,7 @@ class ScriptRunner:
     def __init__(
         self,
         script: ScriptSpec,
-        session: DeviceSession,
+        session: SerialSession,
         variables: Optional[Dict[str, Any]] = None,
         on_step: Optional[Callable[[StepResult], None]] = None,
         on_log: Optional[Callable[[str], None]] = None,

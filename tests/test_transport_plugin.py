@@ -3,7 +3,6 @@ from omniuart.core.transport import (
     AsyncTransport,
     TransportRegistry,
     transport_registry,
-    register_transport,
     VirtualTransport,
 )
 

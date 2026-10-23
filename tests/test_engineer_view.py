@@ -30,3 +30,50 @@ def test_engineer_view_inspection():
     html = view.render_engineer_html_summary(detail.exchange_id)
     assert "Engineer Raw Protocol Detail" in html
     assert "ping" in html
+
+
+def test_engineer_view_escaping_hostile_inputs():
+    proto_file = Path("examples/protocols/binary_sensor_node.yaml")
+    spec = load_protocol(proto_file)
+    view = EngineerProtocolView(spec)
+
+    # 1. Unknown exchange with HTML in ID
+    missing_html = view.render_engineer_html_summary("<script>alert(1)</script>")
+    assert "<script>alert(1)</script>" not in missing_html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in missing_html
+
+    # 2. Hostile command name and decoded field value
+    req_bytes = b"\xAA\x55\x01\x00\x01\x00\xB0\x55\xAA"
+    resp_bytes = b"\xAA\x55\x04\x00\x81\x00\x00\x00\x00\x62\xDE\x55\xAA"
+    frame = DecodedFrame(raw=resp_bytes, name="<b onmouseover=alert(1)>", fields={"status": "<script>alert(2)</script>"})
+    ex = Exchange(command="<img src=x onerror=alert(3)>", request=req_bytes, status=ExchangeStatus.OK, response_bytes=resp_bytes, response=frame, latency_ms=10.0)
+
+    _ = view.inspect_exchange(ex, exchange_id="ex_<test>")
+    html = view.render_engineer_html_summary("ex_<test>")
+
+    assert "<img src=x onerror=alert(3)>" not in html
+    assert "&lt;img src=x onerror=alert(3)&gt;" in html
+    assert "ex_&lt;test&gt;" in html
+
+
+def test_engineer_view_crc_valid_comes_from_the_integrity_check() -> None:
+    """#318: crc_valid reflects the real CRC, not whether the response decoded."""
+    from omniuart.core.codec import FrameCodec
+
+    spec = load_protocol(Path("examples/protocols/binary_sensor_node.yaml"))
+    view = EngineerProtocolView(spec)
+    codec = FrameCodec(spec)
+    request = codec.encode_command("ping")
+    good = codec.encode_response("ping", {"uptime_seconds": 10})
+
+    def inspect(resp: bytes) -> ProtocolExchangeDetail:
+        frame = codec.extract_frames(resp, direction="response")[0][0]
+        return view.inspect_exchange(Exchange(command="ping", request=request, response_bytes=resp, response=frame))
+
+    assert inspect(good).crc_valid is True
+    corrupted = bytearray(good)
+    corrupted[-3] ^= 0xFF  # integrity field, just before the 2-byte footer
+    assert inspect(bytes(corrupted)).crc_valid is False
+    # A well-formed frame with an unknown id is a decode error, not a CRC failure
+    unknown = codec.encode_message(0x7E, b"")
+    assert inspect(unknown).crc_valid is True

@@ -5,24 +5,31 @@ LAYOUT_WITH_LEGEND()
 
 title Container Diagram for OmniUART (C4 Level 2)
 
-Person(user, "Engineer / Developer", "Embedded systems or test automation engineer")
+Person(user, "Engineer / Developer", "Embedded systems, test automation, or bench technician")
 
 System_Boundary(c1, "OmniUART Standalone System") {
-    Container(cli, "CLI Application", "Python / Typer / Rich", "Provides interactive commands: send, monitor, run, ports, validate, session")
+    Container(cli, "CLI Application", "Python / Typer / Rich", "Interactive and headless commands: send, monitor, run, ports, validate, fuzz, replay, docs")
+    Container(desktop_ui, "Native Desktop GUI", "Python / Tkinter", "Zero-dependency desktop application with classic Win32 & modern themes, paired Get/Set registers, and 16x2 LCD matrix")
     Container(web_ui, "Web UI Dashboard", "HTML5 / ES Modules / CSS", "Dynamic forms, real-time dual-view raw/decoded stream inspector, session controls")
     Container(web_server, "Embedded Web Server", "FastAPI / Starlette / Uvicorn", "Serves REST API, handles WebSocket duplex streaming bridge")
+    Container(dashboard_gen, "Device UI & Dashboard Generator", "Python 3.12+", "Transforms protocol tags and schemas into standalone Win32 desktop HTML dashboards and device controls")
+    Container(asyncapi_exp, "AsyncAPI Exporter", "Python 3.12+", "Generates AsyncAPI 2.6.0 schema definitions, server bindings, and channel mappings")
     Container(core_engine, "Core Codec & Framing Engine", "Python 3.12+", "Stream sync hunt, dynamic struct field packing/unpacking, Rocksoft CRC engine, dissector")
     Container(script_runner, "Script Execution Engine", "Python 3.12+", "Step sequencer, assertion evaluator, retry handling, JUnit XML / JSON reporting")
-    Container(session_recorder, "Session Recorder", "Python 3.12+", "Thread-safe event ring buffer, microsecond timestamps, JSONL/CSV/BIN exporters")
+    Container(session_recorder, "Session Recorder", "Python 3.12+", "Thread-safe event ring buffer, microsecond timestamps, PCAPNG/JSONL/CSV/BIN exporters")
     Container(transport_layer, "Transport Subsystem", "Python / pyserial", "Asynchronous UART hardware driver and offline Virtual MCU simulator with fault injection")
 }
 
-System_Ext(hardware, "Physical Target Device", "Hardware MCU / Sensor Node / Actuator")
+System_Ext(hardware, "Physical Target Device", "Hardware MCU / Smart Meter / Sensor Node / Actuator")
 System_Ext(filesystem, "Local Filesystem", "Protocol specs (*.yaml, *.json), test scripts, session recordings")
+System_Ext(wireshark, "Wireshark", "Deep packet analysis via exported PCAPNG streams")
 
 Rel(user, cli, "Runs CLI commands", "Terminal")
+Rel(user, desktop_ui, "Configures registers, monitors live LCD, and triggers commands", "Native Window")
 Rel(user, web_ui, "Interacts with dynamic forms and packet inspector", "Browser (HTTP/WebSocket)")
 
+Rel(desktop_ui, core_engine, "Encodes commands & decodes live frames")
+Rel(desktop_ui, transport_layer, "Manages serial lifecycle & feeds streams")
 Rel(web_ui, web_server, "Fetches schemas, streams serial packets", "JSON / WebSocket")
 Rel(cli, core_engine, "Encodes commands & decodes frames")
 Rel(cli, script_runner, "Dispatches batch test sequences")
@@ -32,6 +39,9 @@ Rel(web_server, core_engine, "Encodes user inputs & decodes streams")
 Rel(web_server, transport_layer, "Manages serial lifecycle")
 Rel(web_server, session_recorder, "Controls recording & triggers exports")
 
+Rel(dashboard_gen, core_engine, "Inspects protocol specs, fieldsets, and UI tags")
+Rel(asyncapi_exp, core_engine, "Exports channels and message schemas")
+
 Rel(script_runner, core_engine, "Builds frames & asserts fields")
 Rel(script_runner, transport_layer, "Sends packets & awaits responses")
 Rel(script_runner, session_recorder, "Records test traffic")
@@ -40,5 +50,6 @@ Rel(core_engine, session_recorder, "Emits timestamped packet events with byte sl
 Rel(transport_layer, hardware, "Sends/receives raw bytes", "RS-232 / RS-485 / USB-UART")
 Rel(core_engine, filesystem, "Loads protocol schemas & scripts", "YAML/JSON")
 Rel(session_recorder, filesystem, "Exports session logs", "JSONL / CSV / BIN")
+Rel(session_recorder, wireshark, "Streams / writes PCAPNG packet captures", "PCAPNG")
 
 @enduml

@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from omniuart.core.recorder import SessionRecorder, PacketEvent, Transaction, SessionRecord
+from omniuart.core.recorder import SessionRecorder, Transaction
 
 def test_session_record_model(tmp_path: Path):
     recorder = SessionRecorder(

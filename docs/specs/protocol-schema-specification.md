@@ -174,10 +174,26 @@ Individual command parameters and response fields support the following primitiv
 | `float32`, `float64` | 4, 8 | `endian`, `precision`, `min`, `max`, `default`, `unit` |
 | `bool` | 1 | `default` |
 | `enum` | 1, 2, 4 | `endian`, `options` (dictionary of numeric values to string labels) |
-| `string` | dynamic / fixed | `encoding` (utf-8, ascii), `max_length`, `null_terminated` |
+| `string` | dynamic / fixed | `encoding` (utf-8, ascii), `length` |
 | `bytes` | dynamic / fixed | `length` |
 
 [[CAPTION:Table]] Supported primitive field data types.
+
+### 3.5 Field Layout Attributes
+
+These attributes change how a field is placed on the wire or computed. The codec, the dissector and the generated documentation all apply them the same way.
+
+| Attribute | Effect |
+| :--- | :--- |
+| `bit_width` | Consecutive fields with `bit_width` are packed into shared bytes, least significant bit first (the first field takes the lowest bits). The group takes the fewest whole bytes and is written in the first field's `endian`. Only integer, `enum` and `bool` fields can be bit fields, and a bit field cannot also use `condition`, `discriminator`, `offset` or `expression`. |
+| `offset` | Places the field at a fixed byte offset in the payload, padding with zeros when encoding. Trailing-byte checks are relaxed for a payload that uses `offset`. |
+| `expression` | A derived field: its value is calculated from earlier fields (arithmetic and bitwise operators only) when encoding and decoding, and it takes no bytes on the wire. |
+| `encoding` | For `string` fields, the text encoding. Otherwise the name of a plugin encoding registered with the plugin registry, which then encodes and decodes the field. |
+| `length_ref`, `count_ref` | Take a variable field's byte length, or an array's item count, from an earlier field. |
+| `condition`, `discriminator` + `discriminator_value` | Include the field only when the condition holds, or when the discriminator field has the given value. |
+| `scale`, `offset_val` | Physical value = raw value × `scale` + `offset_val`. |
+
+[[CAPTION:Table]] Field layout attributes.
 
 ---
 
@@ -285,14 +301,41 @@ Commands specify outbound requests dispatched to the device. Each command can de
 - `response`: Specification of expected response frame (opcode, timeout, and unpacked fields).
 - `correlate`: Names of request parameters that must equal the same-named response fields for a response to be this command's answer (see 5.2). A protocol-level `correlate` list is the default for every command that has all of those names as both a parameter and a response field.
 
-#### 5.2 Response correlation
-A response is accepted for a request only if it is a response frame for that command and every `correlate` field in the response equals the value that was sent. Use `correlate` for a transaction id, sequence number or device address. Any other frame received while waiting does not end the wait and does not fail the exchange. Such a frame (unsolicited telemetry, a late response to an earlier request, a response from another device) is collected in `Exchange.unsolicited` and passed to the session's `on_unsolicited` callback. If only such frames arrive the exchange times out with "no matching response". A response frame for a different command with no `correlate` rule is still reported as an invalid response. In code, `DeviceSession(matcher=...)` or `send(..., matcher=...)` replaces the rule with a predicate `(command, request_values, frame) -> bool`. Correlation applies to binary protocols; a delimited text reply is matched by timing only.
-
-#### 5.1 Command safety
+### 5.1 Command safety
 - Only `read_only` commands run without a person asking: the dashboard auto-run runs commands that are both tagged `dashboard` and `read_only` (a dashboard command that is not `read_only` is skipped), and auto-poll offers only `read_only` commands that expect a response and whose parameters all have defaults.
 - Web and desktop front ends ask for confirmation before sending a `mutating` or `destructive` command (the web API answers `428` until the request carries `"confirm": true`). The CLI refuses a `destructive` command unless `--yes` is given.
 - A **read-only session** refuses every command that is not `read_only`, and raw bytes, before anything is written: `send --read-only`, `run --read-only`, the `read_only` field of `POST /api/serial/connect` (`403` on a refused send) and the *Read-only* option in the web and desktop toolbars.
 - Earlier versions tagged any command whose name contained `get`, `read`, `info`, `status`, `version`, `poll` or `ping` as `dashboard`, so `set_target_temperature`, `forget_pairing` and `start_sweeping` ran automatically. That heuristic was removed. Add `safety` (and `tags: [dashboard]`) explicitly. Kit protocols carry no safety information, so their commands are `mutating` unless the protocol is edited.
+
+### 5.2 Response correlation
+A response is accepted for a request only if it is a response frame for that command and every `correlate` field in the response equals the value that was sent. Use `correlate` for a transaction id, sequence number or device address. Any other frame received while waiting does not end the wait and does not fail the exchange. Such a frame (unsolicited telemetry, a late response to an earlier request, a response from another device) is collected in `Exchange.unsolicited` and passed to the session's `on_unsolicited` callback. If only such frames arrive the exchange times out with "no matching response". A response frame for a different command with no `correlate` rule is still reported as an invalid response. In code, `DeviceSession(matcher=...)` or `send(..., matcher=...)` replaces the rule with a predicate `(command, request_values, frame) -> bool`. Correlation applies to binary protocols; a delimited text reply is matched by timing only.
+
+For a delimited text protocol, a `response` can declare how to tell success from failure. Both are regular expressions searched in the reply text, with `^` and `$` matching at line boundaries:
+
+- `error_patterns`: a list of patterns; a reply matching any of them fails the exchange (for example `["^ERROR$", "^\\+CME ERROR:"]` for AT commands).
+- `success_pattern`: a reply that does not match it fails the exchange (for example `"^OK$"`).
+
+Nothing is assumed when neither is declared: a reply containing the word "error" can be ordinary data, such as SCPI's `0,"No error"`. Scripts can check text replies with the `contains`, `startswith`, `endswith` and `matches` assertion operators.
+
+### 5.3 Register-Style Protocols
+
+Some devices have one read command and one write command, and address every value with a data item id that follows the command id. Three settings describe them:
+
+- A parameter with `fixed: <value>` is always sent with that value and cannot be set by the caller. Commands that share a command id are told apart by their leading `fixed` parameters, so `read_contrast` and `read_serial` can both use id `0x03` with different data item ids.
+- A reply that carries only the command id (for example an ACK `0x03` followed by data) is decoded as the answer to the request that was sent, using that command's response fields.
+- `error_replies` lists reply ids the device sends instead of an answer (NAKs). An exchange that gets one ends with status `device_error` and the reply's name and description, not with a timeout.
+
+`length.includes: length_to_end` covers length fields that count from the length field itself to the end of the frame.
+
+### 5.4 UI Tags & Dashboard Generation
+Commands can include semantic tags to drive auto-generated Win32 and web dashboards:
+- `tab:<name>`: Organizes commands into dedicated tabbed panels (e.g. `tab:display`, `tab:voss`).
+- `fieldset:<name>`: Groups related registers within a panel into titled group boxes.
+- `action:get` / `action:set`: Marks paired register access, rendering compact adjacent `[Get]` and `[Set]` buttons.
+- `widget:lcd_matrix`: Signals a segmented 16x2 green matrix character display widget for visual previewing.
+
+### 5.5 Centralized Enumerations via YAML Anchors
+Protocols with shared data item registers can define the register mapping once using a standard YAML anchor (`&DataItemId`) on `options:`. Subsequent commands then alias it with `options: *DataItemId`. This eliminates dictionary duplication, enforces consistent integer typing for AsyncAPI 2.6.0 export, and complies with Pydantic's strict root schema validation.
 
 ```yaml
 commands:

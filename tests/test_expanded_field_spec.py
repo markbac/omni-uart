@@ -1,6 +1,6 @@
 import pytest
 from omniuart.core.models import FieldSpec, FieldType
-from omniuart.core.codec import encode_fields, decode_fields, encode_value, decode_value
+from omniuart.core.codec import decode_fields, encode_value, decode_value
 
 def test_scaling_and_offset():
     spec = FieldSpec(name="temp", type=FieldType.INT16, scale=0.1, offset_val=-40.0)
@@ -21,7 +21,7 @@ def test_bit_width_validation():
     # max value for 4 bits is 15
     encoded = encode_value(spec, 15)
     assert encoded == b"\x0f"
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         encode_value(spec, 16)
 
 def test_length_ref_and_count_ref():
@@ -72,3 +72,47 @@ def test_nested_fields():
     assert data == bytes([0xFB, 0x0A])
     decoded = decode_value(spec, data)
     assert decoded == {"x": -5, "y": 10}
+
+
+def test_bit_fields_pack_into_shared_bytes():
+    """#327: consecutive bit_width fields share bytes, LSB first, and round-trip."""
+    from omniuart.core.codec import CodecError, encode_fields
+
+    specs = [
+        FieldSpec(name="mode", type=FieldType.UINT8, bit_width=3),
+        FieldSpec(name="enabled", type=FieldType.BOOL, bit_width=1),
+        FieldSpec(name="level", type=FieldType.UINT8, bit_width=4),
+        FieldSpec(name="count", type=FieldType.UINT16),
+    ]
+    values = {"mode": 5, "enabled": True, "level": 9, "count": 513}
+    data = encode_fields(specs, values)
+    assert data == bytes([0b1001_1_101, 0x01, 0x02])
+    assert decode_fields(specs, data) == values
+
+    with pytest.raises(CodecError):
+        encode_fields(specs, {**values, "mode": 8})  # does not fit 3 bits
+
+
+def test_bit_group_rounds_up_to_whole_bytes_and_honours_endian():
+    from omniuart.core.codec import encode_fields
+
+    specs = [
+        FieldSpec(name="a", type=FieldType.UINT16, bit_width=4, endian="big"),
+        FieldSpec(name="b", type=FieldType.UINT16, bit_width=8),
+    ]
+    data = encode_fields(specs, {"a": 0xF, "b": 0xAB})
+    assert data == (0xABF).to_bytes(2, "big")
+    assert decode_fields(specs, data) == {"a": 0xF, "b": 0xAB}
+
+
+def test_derived_field_is_never_on_the_wire():
+    """#327: an expression field is computed on both encode and decode and takes no bytes."""
+    from omniuart.core.codec import encode_fields
+
+    specs = [
+        FieldSpec(name="raw", type=FieldType.UINT8),
+        FieldSpec(name="doubled", type=FieldType.UINT16, expression="raw * 2"),
+    ]
+    assert encode_fields(specs, {"raw": 7}) == b"\x07"
+    assert encode_fields(specs, {"raw": 7, "doubled": 99}) == b"\x07"
+    assert decode_fields(specs, b"\x07") == {"raw": 7, "doubled": 14}

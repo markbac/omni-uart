@@ -1,8 +1,8 @@
 """Unit test for intelligent device control generation from field metadata (#231)."""
 
 from pathlib import Path
-from omniuart.core.models import FieldSpec, FieldType, CommandSafety, load_protocol
-from omniuart.core.device_ui import infer_widget_for_field, infer_device_ui_from_spec, WidgetSpec
+from omniuart.core.models import FieldSpec, FieldType, load_protocol
+from omniuart.core.device_ui import infer_widget_for_field, infer_device_ui_from_spec
 
 
 def test_infer_widget_for_enum_field():
