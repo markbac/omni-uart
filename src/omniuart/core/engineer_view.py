@@ -31,7 +31,7 @@ class ProtocolExchangeDetail:
     request_field_slices: List[Dict[str, Any]] = field(default_factory=list)
     response_field_slices: List[Dict[str, Any]] = field(default_factory=list)
     crc_algorithm: str = "none"
-    crc_valid: bool = True
+    crc_valid: Optional[bool] = None
     error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -97,7 +97,10 @@ class EngineerProtocolView:
             ]
 
         crc_alg = self.spec.framing.integrity.algorithm if self.spec.framing.integrity else "none"
-        crc_ok = exchange.response.ok if exchange.response else True
+        if crc_alg == "none" or not exchange.response_bytes or not exchange.response:
+            crc_ok: Optional[bool] = None
+        else:
+            crc_ok = getattr(exchange.response, "crc_valid", exchange.response.ok)
 
         detail = ProtocolExchangeDetail(
             exchange_id=ex_id,
@@ -135,6 +138,12 @@ class EngineerProtocolView:
         crc_alg = html.escape(ex.crc_algorithm)
         req_hex = html.escape(ex.request_raw_hex)
         resp_hex = html.escape(ex.response_raw_hex or "(None)")
+        if ex.crc_valid is None:
+            crc_status = "<span style='color: #94a3b8;'>N/A (No Response / None)</span>"
+        elif ex.crc_valid:
+            crc_status = "<span style='color: #4ade80; font-weight: bold;'>VALID</span>"
+        else:
+            crc_status = "<span style='color: #f43f5e; font-weight: bold;'>INVALID</span>"
 
         rows: List[str] = []
         for fs in ex.response_field_slices:
@@ -153,7 +162,7 @@ class EngineerProtocolView:
         return f"""
 <div class="engineer-detail" style="font-family: monospace; background: #0f172a; color: #f8fafc; padding: 16px; border-radius: 8px;">
   <h3 style="color: #38bdf8; margin-top:0;">🔧 Engineer Raw Protocol Detail - {cmd_name} ({ex_id})</h3>
-  <div><strong>Status:</strong> {status} | <strong>Latency:</strong> {ex.latency_ms:.2f} ms | <strong>CRC Alg:</strong> {crc_alg}</div>
+  <div><strong>Status:</strong> {status} | <strong>Latency:</strong> {ex.latency_ms:.2f} ms | <strong>CRC Alg:</strong> {crc_alg} | <strong>CRC Check:</strong> {crc_status}</div>
   <hr style="border-color: #334155;">
   <div><strong>Outbound TX Raw Bytes:</strong> <span style="color: #4ade80;">{req_hex}</span></div>
   <div><strong>Inbound RX Raw Bytes:</strong> <span style="color: #f43f5e;">{resp_hex}</span></div>

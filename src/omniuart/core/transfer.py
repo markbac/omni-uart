@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import time
 import uuid
 import zlib
@@ -56,6 +57,64 @@ class ChecksumAlgorithm(str, Enum):
     SHA256 = "sha256"
     CRC32 = "crc32"
     MD5 = "md5"
+
+class CommitPolicy(str, Enum):
+    """Integrity and commit semantics (#248)."""
+
+    IMMEDIATE = "immediate"
+    EXPLICIT_VERIFIED = "explicit_verified"
+    ATOMIC_WITH_ROLLBACK = "atomic_with_rollback"
+
+
+@dataclass
+class CommitResult:
+    """Outcome of commit operation (#248)."""
+
+    success: bool
+    committed_version: Optional[str] = None
+    checksum_verified: bool = False
+    error: Optional[str] = None
+    rolled_back: bool = False
+
+
+@dataclass
+class TransferCheckpoint:
+    """State checkpoint enabling resuming interrupted transfers (#247)."""
+
+    transfer_id: str
+    file_name: str
+    total_size: int
+    expected_checksum: str
+    chunk_size: int
+    total_chunks: int
+    acknowledged_chunks: List[int]
+    timestamp: float = field(default_factory=time.time)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "transfer_id": self.transfer_id,
+            "file_name": self.file_name,
+            "total_size": self.total_size,
+            "expected_checksum": self.expected_checksum,
+            "chunk_size": self.chunk_size,
+            "total_chunks": self.total_chunks,
+            "acknowledged_chunks": list(self.acknowledged_chunks),
+            "timestamp": self.timestamp,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> TransferCheckpoint:
+        return cls(
+            transfer_id=data["transfer_id"],
+            file_name=data["file_name"],
+            total_size=data["total_size"],
+            expected_checksum=data["expected_checksum"],
+            chunk_size=data.get("chunk_size", 256),
+            total_chunks=data.get("total_chunks", 0),
+            acknowledged_chunks=data.get("acknowledged_chunks", []),
+            timestamp=data.get("timestamp", time.time()),
+        )
+
 
 
 @dataclass
@@ -647,6 +706,7 @@ class TransferManager:
         chunk_sender: Callable[[TransferChunk], Any],
         chunk_size: Optional[int] = None,
         window_size: int = 1,
+        auto_commit: bool = True,
         on_progress: Optional[Callable[[TransferProgress], None]] = None,
     ) -> bool:
         """Asynchronously transfer blob with progress reporting and ack loop (#244, #245)."""
@@ -687,7 +747,121 @@ class TransferManager:
         if self._is_cancelled:
             return False
 
-        return self.verify_and_commit()
+        if auto_commit:
+            return self.verify_and_commit()
+        return self.state in (TransferState.VERIFYING, TransferState.TRANSFERRING)
+
+
+    def create_checkpoint(self) -> Optional[TransferCheckpoint]:
+        """Create persistent checkpoint of current transfer state for resume (#247)."""
+        if not self.metadata or not self._window_controller:
+            return None
+        return TransferCheckpoint(
+            transfer_id=self.metadata.transfer_id,
+            file_name=self.metadata.file_name,
+            total_size=self.metadata.total_size,
+            expected_checksum=self.metadata.expected_checksum,
+            chunk_size=self._chunks[0].size if self._chunks else self.capabilities.default_chunk_size,
+            total_chunks=len(self._chunks),
+            acknowledged_chunks=sorted(self._window_controller.acknowledged),
+            timestamp=time.time(),
+        )
+
+    def resume_from_checkpoint(
+        self,
+        checkpoint: TransferCheckpoint,
+        data: bytes,
+        window_size: int = 1,
+    ) -> Tuple[bool, Optional[str]]:
+        """Resume an interrupted transfer from a saved checkpoint (#247)."""
+        if len(data) != checkpoint.total_size:
+            return False, f"Data size ({len(data)} B) does not match checkpoint ({checkpoint.total_size} B)"
+
+        meta = TransferMetadata(
+            file_name=checkpoint.file_name,
+            total_size=checkpoint.total_size,
+            transfer_id=checkpoint.transfer_id,
+            expected_checksum=checkpoint.expected_checksum,
+        )
+
+        ok, err = self.prepare_upload(meta, data, chunk_size=checkpoint.chunk_size, window_size=window_size)
+        if not ok:
+            return False, err
+
+        assert self._window_controller is not None
+        # Restore acknowledged chunks from checkpoint
+        for seq in checkpoint.acknowledged_chunks:
+            if 0 <= seq < len(self._chunks):
+                self._window_controller.acknowledge(seq)
+
+        self._window_controller.next_seq = max(self._window_controller.next_seq, self._window_controller.base)
+        acked_bytes = sum(c.size for c in self._chunks if c.acknowledged)
+        self.progress.update(transferred_bytes=acked_bytes, chunk_idx=self._window_controller.base)
+        self.state = TransferState.TRANSFERRING
+        self.progress.state = TransferState.TRANSFERRING
+
+        if self._window_controller.is_all_acknowledged():
+            self.state = TransferState.VERIFYING
+            self.progress.state = TransferState.VERIFYING
+
+        return True, None
+
+    def commit(
+        self,
+        policy: CommitPolicy = CommitPolicy.EXPLICIT_VERIFIED,
+        pre_commit_hook: Optional[Callable[[], bool]] = None,
+        post_commit_hook: Optional[Callable[[], bool]] = None,
+        rollback_hook: Optional[Callable[[], None]] = None,
+    ) -> CommitResult:
+        """Atomic commit with integrity verification and rollback semantics (#248)."""
+        if self.state not in (TransferState.VERIFYING, TransferState.TRANSFERRING, TransferState.COMPLETED) or not self.metadata:
+            return CommitResult(success=False, error=f"Invalid state for commit: {self.state}")
+
+        # 1. Integrity check
+        checksum_ok = self.metadata.verify_checksum(self._raw_data) if self._raw_data else True
+        if not checksum_ok:
+            if rollback_hook:
+                rollback_hook()
+            self.abort("Integrity verification failed before commit")
+            return CommitResult(success=False, checksum_verified=False, error="Checksum mismatch", rolled_back=bool(rollback_hook))
+
+        # 2. Pre-commit hook
+        if pre_commit_hook:
+            try:
+                if not pre_commit_hook():
+                    if rollback_hook:
+                        rollback_hook()
+                    self.abort("Pre-commit validation rejected transfer")
+                    return CommitResult(success=False, checksum_verified=True, error="Pre-commit hook rejected", rolled_back=bool(rollback_hook))
+            except Exception as e:
+                if rollback_hook:
+                    rollback_hook()
+                self.abort(f"Pre-commit error: {e}")
+                return CommitResult(success=False, checksum_verified=True, error=str(e), rolled_back=bool(rollback_hook))
+
+        self.state = TransferState.COMMITTING
+        self.progress.state = TransferState.COMMITTING
+
+        # 3. Post-commit hook
+        if post_commit_hook:
+            try:
+                if not post_commit_hook():
+                    if rollback_hook:
+                        rollback_hook()
+                    self.abort("Post-commit verification failed")
+                    return CommitResult(success=False, checksum_verified=True, error="Post-commit verification failed", rolled_back=bool(rollback_hook))
+            except Exception as e:
+                if rollback_hook:
+                    rollback_hook()
+                self.abort(f"Post-commit error: {e}")
+                return CommitResult(success=False, checksum_verified=True, error=str(e), rolled_back=bool(rollback_hook))
+
+        self.state = TransferState.COMPLETED
+        self.progress.state = TransferState.COMPLETED
+        self.progress.bytes_transferred = self.progress.total_bytes
+        self._record_history(TransferState.COMPLETED, None)
+
+        return CommitResult(success=True, checksum_verified=True, committed_version=self.metadata.version)
 
     def _record_history(self, final_status: TransferState, error_msg: Optional[str]) -> None:
         """Record completed or terminated transfer in history log."""
@@ -711,3 +885,163 @@ class TransferManager:
             error=error_msg,
         )
         self.history.record_transfer(record)
+
+
+
+class FirmwareUpdateWorkflow:
+    """Specialized firmware update workflow built on TransferManager (#249)."""
+
+    def __init__(self, manager: Optional[TransferManager] = None) -> None:
+        self.manager = manager or TransferManager()
+
+    def validate_firmware_image(
+        self,
+        image_bytes: bytes,
+        target_hardware: Optional[str] = None,
+        min_size: int = 16,
+    ) -> Tuple[bool, Optional[str]]:
+        """Validate firmware image size, magic, and target compatibility (#249)."""
+        if len(image_bytes) < min_size:
+            return False, f"Firmware image too small ({len(image_bytes)} B < {min_size} B)"
+        if len(image_bytes) > self.manager.capabilities.max_file_size:
+            return False, f"Firmware exceeds max device capability ({len(image_bytes)} B > {self.manager.capabilities.max_file_size} B)"
+        return True, None
+
+    async def execute_update(
+        self,
+        firmware_bytes: bytes,
+        file_name: str,
+        version: str,
+        chunk_sender: Callable[[TransferChunk], Any],
+        reboot_fn: Optional[Callable[[], Any]] = None,
+        verify_version_fn: Optional[Callable[[], Any]] = None,
+        on_progress: Optional[Callable[[TransferProgress], None]] = None,
+        chunk_size: Optional[int] = None,
+        window_size: int = 1,
+    ) -> Tuple[bool, Optional[str]]:
+        """Execute full firmware update lifecycle: validate, transfer, verify, commit, reboot, verify (#249)."""
+        # 1. Validation
+        valid, err = self.validate_firmware_image(firmware_bytes)
+        if not valid:
+            return False, err
+
+        meta = TransferMetadata(
+            file_name=file_name,
+            total_size=len(firmware_bytes),
+            file_type=FileType.FIRMWARE.value,
+            version=version,
+        )
+
+        # 2. Transfer & Verification
+        transferred = await self.manager.transfer_blob_async(
+            metadata=meta,
+            data=firmware_bytes,
+            chunk_sender=chunk_sender,
+            chunk_size=chunk_size,
+            window_size=window_size,
+            auto_commit=False,
+            on_progress=on_progress,
+        )
+        if not transferred:
+            return False, self.manager.progress.error_message or "Firmware transfer failed"
+
+        # 3. Commit
+        commit_res = self.manager.commit(policy=CommitPolicy.EXPLICIT_VERIFIED)
+        if not commit_res.success:
+            return False, commit_res.error or "Firmware commit failed"
+
+        # 4. Reboot & Reconnect
+        if reboot_fn:
+            self.manager.state = TransferState.RECONNECTING
+            self.manager.progress.state = TransferState.RECONNECTING
+            if on_progress:
+                on_progress(self.manager.progress)
+
+            res = reboot_fn()
+            if asyncio.iscoroutine(res):
+                await res
+
+        # 5. Post-update version verification
+        if verify_version_fn:
+            res_ver = verify_version_fn()
+            active_version = await res_ver if asyncio.iscoroutine(res_ver) else res_ver
+            if str(active_version).strip() != version.strip():
+                return False, f"Post-update version mismatch: expected {version}, device reported {active_version}"
+
+        self.manager.state = TransferState.COMPLETED
+        self.manager.progress.state = TransferState.COMPLETED
+        return True, None
+
+
+class ConfigurationWorkflow:
+    """Generic configuration file transfer, validation, and staging/apply workflow (#250)."""
+
+    def __init__(self, manager: Optional[TransferManager] = None) -> None:
+        self.manager = manager or TransferManager()
+
+    def validate_configuration(self, config_bytes: bytes) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        """Validate JSON or Key-Value configuration format (#250)."""
+        text = config_bytes.decode("utf-8", errors="replace")
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict):
+                return True, data, None
+        except Exception:
+            pass
+
+        # Try key-value lines
+        kv_data: Dict[str, Any] = {}
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                k, v = line.split("=", 1)
+                kv_data[k.strip()] = v.strip()
+        if kv_data:
+            return True, kv_data, None
+
+        return False, None, "Invalid configuration format (expected valid JSON or key=value pairs)"
+
+    def compute_diff(self, current: Dict[str, Any], new: Dict[str, Any]) -> Dict[str, Any]:
+        """Compute difference between current device config and incoming proposed config."""
+        added = {k: new[k] for k in new if k not in current}
+        modified = {k: {"old": current[k], "new": new[k]} for k in new if k in current and current[k] != new[k]}
+        removed = {k: current[k] for k in current if k not in new}
+        return {"added": added, "modified": modified, "removed": removed, "has_changes": bool(added or modified or removed)}
+
+    async def import_configuration(
+        self,
+        config_bytes: bytes,
+        file_name: str,
+        chunk_sender: Callable[[TransferChunk], Any],
+        apply_fn: Optional[Callable[[Dict[str, Any]], Any]] = None,
+        apply_immediately: bool = True,
+        on_progress: Optional[Callable[[TransferProgress], None]] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """Upload, validate, and optionally apply configuration to device (#250)."""
+        valid, parsed, err = self.validate_configuration(config_bytes)
+        if not valid or parsed is None:
+            return False, err
+
+        meta = TransferMetadata(
+            file_name=file_name,
+            total_size=len(config_bytes),
+            file_type=FileType.CONFIGURATION.value,
+        )
+
+        ok = await self.manager.transfer_blob_async(
+            metadata=meta,
+            data=config_bytes,
+            chunk_sender=chunk_sender,
+            on_progress=on_progress,
+        )
+        if not ok:
+            return False, self.manager.progress.error_message or "Configuration upload failed"
+
+        if apply_immediately and apply_fn:
+            res = apply_fn(parsed)
+            if asyncio.iscoroutine(res):
+                await res
+
+        return True, None

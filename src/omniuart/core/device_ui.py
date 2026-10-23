@@ -7,11 +7,13 @@ capabilities, controls, telemetry, navigation, safety rules, grouping, and widge
 from __future__ import annotations
 
 from pathlib import Path
+from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field
 import yaml
 
+from omniuart.core.codec import DecodedFrame
 from omniuart.core.models import CommandSafety, FieldSpec, ProtocolSpec
 
 
@@ -75,14 +77,39 @@ class SafetyRuleSpec(BaseModel):
     danger_zone: bool = False
 
 
+
+class UIMode(str, Enum):
+    """Three presentation modes for Device Control Console (#235)."""
+
+    OPERATOR = "operator"    # Simple, safe, task-oriented controls and status
+    ENGINEER = "engineer"    # Decoded messages, timing, protocol diagnostics
+    DEVELOPER = "developer"  # Raw frames/hex, session internals, low-level debugging
+
+
+class TransferProtocolSpec(BaseModel):
+    """Declarative transfer definition attached to Device UI Schema (#251)."""
+
+    start_command: str = "transfer_start"
+    chunk_command: str = "transfer_data"
+    ack_command: str = "transfer_ack"
+    commit_command: str = "transfer_commit"
+    abort_command: str = "transfer_abort"
+    default_chunk_size: int = 256
+    max_chunk_size: int = 4096
+    window_size: int = 1
+
 class DeviceUISpec(BaseModel):
-    """Declarative Device UI Specification model."""
+    """Declarative Device UI Specification model (#229, #235, #251)."""
 
     schema_version: str = "1.0.0"
     identity: DeviceIdentity
     protocol_ref: str
     panels: List[PanelSpec] = Field(default_factory=list)
     safety_rules: List[SafetyRuleSpec] = Field(default_factory=list)
+    transfer_protocol: Optional[TransferProtocolSpec] = None
+    supported_modes: List[UIMode] = Field(
+        default_factory=lambda: [UIMode.OPERATOR, UIMode.ENGINEER, UIMode.DEVELOPER]
+    )
 
 
 def load_device_ui(source: Union[str, Path, Dict[str, Any]]) -> DeviceUISpec:
@@ -203,4 +230,117 @@ def infer_device_ui_from_spec(spec: ProtocolSpec) -> DeviceUISpec:
         protocol_ref=spec.metadata.name,
         panels=panels,
         safety_rules=safety_rules,
+    )
+
+
+
+class DeviceUIOverride(BaseModel):
+    """Declarative UI customization and override definitions (#237)."""
+
+    device_name: Optional[str] = None
+    hidden_widgets: List[str] = Field(default_factory=list)
+    widget_overrides: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    panel_order: List[str] = Field(default_factory=list)
+
+    def apply_overrides(self, ui_spec: DeviceUISpec) -> DeviceUISpec:
+        """Apply customization overrides to an existing DeviceUISpec (#237)."""
+        cloned = ui_spec.model_copy(deep=True)
+        if self.device_name:
+            cloned.identity.name = self.device_name
+
+        for panel in cloned.panels:
+            for group in panel.groups:
+                filtered_widgets = []
+                for w in group.widgets:
+                    if w.field_ref and w.field_ref in self.hidden_widgets:
+                        continue
+                    if w.field_ref and w.field_ref in self.widget_overrides:
+                        ov = self.widget_overrides[w.field_ref]
+                        for k, v in ov.items():
+                            if hasattr(w, k):
+                                setattr(w, k, v)
+                    filtered_widgets.append(w)
+                group.widgets = filtered_widgets
+
+        if self.panel_order:
+            ordered = []
+            panel_map = {p.name: p for p in cloned.panels}
+            for pname in self.panel_order:
+                if pname in panel_map:
+                    ordered.append(panel_map[pname])
+            for p in cloned.panels:
+                if p not in ordered:
+                    ordered.append(p)
+            cloned.panels = ordered
+
+        return cloned
+
+
+def infer_device_model_from_traffic(
+    frames: List[DecodedFrame],
+    protocol_name: str = "Discovered Device",
+) -> DeviceUISpec:
+    """Infer proposed device model and UI layout from captured protocol traffic (#238)."""
+    identity = DeviceIdentity(
+        name=protocol_name,
+        model="Traffic-Inferred Device",
+        version="1.0.0-inferred",
+        description=f"Auto-generated Device UI inferred from {len(frames)} captured frames",
+    )
+
+    observed_commands: Dict[str, Dict[str, Any]] = {}
+    observed_telemetry: Dict[str, Dict[str, Any]] = {}
+
+    for frame in frames:
+        if not frame.ok:
+            continue
+        msg_name = frame.name or "unknown_command"
+        if frame.kind == "command":
+            if msg_name not in observed_commands:
+                observed_commands[msg_name] = {"count": 0, "fields": {}}
+            observed_commands[msg_name]["count"] += 1
+            for fname, val in frame.fields.items():
+                observed_commands[msg_name]["fields"][fname] = val
+        else:
+            for fname, val in frame.fields.items():
+                if fname not in observed_telemetry:
+                    observed_telemetry[fname] = {"sample": val, "type": type(val).__name__}
+
+    control_widgets: List[WidgetSpec] = []
+    for cmd_name, info in observed_commands.items():
+        if info["fields"]:
+            for fname, val in info["fields"].items():
+                w_type = "slider" if isinstance(val, (int, float)) and not isinstance(val, bool) else "text_input"
+                control_widgets.append(WidgetSpec(
+                    widget_type=w_type,
+                    field_ref=f"{cmd_name}.{fname}",
+                    label=f"{cmd_name} {fname}".replace("_", " ").title(),
+                ))
+        else:
+            control_widgets.append(WidgetSpec(
+                widget_type="button",
+                field_ref=cmd_name,
+                label=f"Execute {cmd_name.replace('_', ' ').title()}",
+            ))
+
+    telemetry_widgets: List[WidgetSpec] = []
+    for tel_name, info in observed_telemetry.items():
+        val = info["sample"]
+        w_type = "gauge" if isinstance(val, (int, float)) and not isinstance(val, bool) else "badge"
+        telemetry_widgets.append(WidgetSpec(
+            widget_type=w_type,
+            field_ref=tel_name,
+            label=tel_name.replace("_", " ").title(),
+        ))
+
+    groups = []
+    if control_widgets:
+        groups.append(GroupSpec(name="controls", title="Inferred Controls", layout="grid", widgets=control_widgets))
+    if telemetry_widgets:
+        groups.append(GroupSpec(name="telemetry", title="Inferred Telemetry", layout="grid", widgets=telemetry_widgets))
+
+    return DeviceUISpec(
+        identity=identity,
+        protocol_ref=protocol_name,
+        panels=[PanelSpec(name="inferred", title="Inferred Device Console", groups=groups)],
     )

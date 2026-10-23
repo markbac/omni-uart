@@ -17,6 +17,8 @@ from omniuart.core.models import ProtocolSpec
 def generate_device_dashboard_html(
     spec: ProtocolSpec,
     ui_spec: Optional[DeviceUISpec] = None,
+    connection_status: str = "CONNECTED",
+    is_connected: Optional[bool] = None,
 ) -> str:
     """Generate Device Control Console HTML driven by ProtocolSpec and DeviceUISpec.
 
@@ -31,6 +33,16 @@ def generate_device_dashboard_html(
     device_model = html.escape(str(raw_device_model or ''))
     device_vendor = html.escape(str(raw_device_vendor or ''))
     device_version = html.escape(str(raw_device_version or ''))
+
+    if is_connected is not None:
+        status_label = "CONNECTED" if is_connected else "DISCONNECTED"
+    else:
+        status_label = connection_status.upper()
+
+    baudrate = spec.serial_config.baudrate
+    conn_text = f"{status_label} ({baudrate} bps)"
+    conn_class = "status-badge status-connected" if "CONNECT" in status_label and "DISCONNECT" not in status_label else "status-badge status-disconnected"
+
 
     # Collect widgets or build defaults from protocol spec
     panels_data: List[Dict[str, Any]] = []
@@ -141,6 +153,24 @@ def generate_device_dashboard_html(
     .btn-transfer {{ background: var(--accent); color: #000; }}
     .btn-cancel {{ background: #475569; color: #fff; }}
     .btn-retry {{ background: #d97706; color: #fff; }}
+    .status-connected {{ background: #14532d; color: var(--success); }}
+    .status-disconnected {{ background: #7f1d1d; color: #fca5a5; }}
+    .mode-tabs {{ display: flex; gap: 10px; margin-bottom: 20px; }}
+    .mode-tab {{
+      background: var(--panel); border: 1px solid var(--border); color: #94a3b8;
+      padding: 8px 18px; border-radius: 6px; cursor: pointer; font-weight: 600;
+    }}
+    .mode-tab.active {{ background: #0284c7; color: #fff; border-color: #38bdf8; }}
+    .mode-view {{ display: none; }}
+    .mode-view.active {{ display: block; }}
+    .gauge-container {{ display: flex; align-items: center; gap: 12px; }}
+    .gauge-bar-bg {{ background: #1e293b; width: 120px; height: 10px; border-radius: 5px; overflow: hidden; }}
+    .gauge-bar-fill {{ background: #38bdf8; height: 100%; width: 50%; }}
+    .widget-slider {{ width: 140px; }}
+    .widget-select, .widget-input {{
+      background: #0f172a; border: 1px solid var(--border); color: #fff;
+      padding: 4px 8px; border-radius: 4px;
+    }}
   </style>
 </head>
 <body>
@@ -150,11 +180,18 @@ def generate_device_dashboard_html(
       <div style="color: #94a3b8; font-size: 0.9rem;">Vendor: {device_vendor} | Firmware: {device_version}</div>
     </div>
     <div>
-      <span class="status-badge" id="connectionStatus">CONNECTED (115200 bps)</span>
+      <span class="{conn_class}" id="connectionStatus">{conn_text}</span>
     </div>
   </div>
 
-  <div class="dashboard-grid" id="panelsContainer">
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="operator">Operator Mode</button>
+    <button class="mode-tab" data-mode="engineer">Engineer Mode</button>
+    <button class="mode-tab" data-mode="developer">Developer Mode</button>
+  </div>
+
+  <div id="operatorView" class="mode-view active">
+    <div class="dashboard-grid" id="panelsContainer">
 """
     ]
 
@@ -224,9 +261,41 @@ def generate_device_dashboard_html(
 """)
             html_parts.append("    </div>\n")
 
-    html_parts.append("""  </div>
+    html_parts.append("""    </div>
+  </div>
+
+  <div id="engineerView" class="mode-view">
+    <div class="group-card" style="margin-bottom: 20px;">
+      <h3 style="color: var(--accent); margin-top:0;">🔧 Engineer Protocol Diagnostics</h3>
+      <p style="color: #94a3b8; font-size: 0.9rem;">Decoded message structures, packet timing, request/response correlation, and integrity verification.</p>
+      <div style="background: #0f172a; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.85rem;">
+        <div><strong>Baud Rate:</strong> {baudrate} bps | <strong>Framing:</strong> {html.escape(spec.framing.type.value.upper())}</div>
+        <div><strong>Integrity Algorithm:</strong> {html.escape(spec.framing.integrity.algorithm if spec.framing.integrity else "None")}</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="developerView" class="mode-view">
+    <div class="group-card">
+      <h3 style="color: var(--accent); margin-top:0;">💻 Developer Low-Level View</h3>
+      <p style="color: #94a3b8; font-size: 0.9rem;">Raw hex stream, byte boundaries, transport buffer counters, and session diagnostics.</p>
+      <pre style="background: #0f172a; padding: 12px; border-radius: 6px; color: #34d399; font-size: 0.85rem; overflow-x: auto;">// Active Protocol: {device_name} (v{device_version})
+// Commands defined: {len(spec.commands)}
+// Telemetry channels: {len(spec.telemetry)}</pre>
+    </div>
+  </div>
+
   <script>
     document.addEventListener("click", function(e) {
+      if (e.target && e.target.matches(".mode-tab")) {
+        var mode = e.target.getAttribute("data-mode");
+        document.querySelectorAll(".mode-tab").forEach(function(t) { t.classList.remove("active"); });
+        document.querySelectorAll(".mode-view").forEach(function(v) { v.classList.remove("active"); });
+        e.target.classList.add("active");
+        var view = document.getElementById(mode + "View");
+        if (view) view.classList.add("active");
+      }
+
       var btn = e.target;
       if (!btn) return;
 
