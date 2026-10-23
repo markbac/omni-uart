@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from omniuart import __version__
-from omniuart.core.catalog import CatalogManager
+from omniuart.core.catalog import CatalogError, CatalogManager
 from omniuart.core.models import CommandSafety, CommandSpec, ProtocolSpec, load_script
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -388,7 +388,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     setup_logging(log_file=getattr(args, "log_file", None), log_level=getattr(args, "log_level", "INFO"))
 
     catalog = CatalogManager()
+    try:
+        return _run(args, catalog)
+    except CatalogError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
+
+def _run(args: argparse.Namespace, catalog: CatalogManager) -> int:
+    """Run the parsed subcommand."""
     if args.subcommand == "list":
         summary = catalog.catalog_summary()
         if getattr(args, "json", False):

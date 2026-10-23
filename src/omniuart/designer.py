@@ -277,6 +277,303 @@ class DeviceUIDesigner:
         return self.add_group(panel_name, group_name, group_name.replace("_", " ").title())
 
 
+# Client-side editor. Kept out of the f-string below so its braces need no doubling.
+_DESIGNER_SCRIPT = r"""
+(function() {
+  'use strict';
+  const state = JSON.parse(document.getElementById('initial-data').textContent);
+  const spec = state.ui_spec;
+  spec.panels = spec.panels || [];
+  spec.safety_rules = spec.safety_rules || [];
+  const COMMAND_WIDGETS = ['button', 'file_transfer', 'firmware_update'];
+  let selected = null;      // {p, g, w} indices of the selected widget
+  let targetGroup = null;   // {p, g} indices that new bindings go to
+  let dragFrom = null;
+
+  function el(tag, attrs, text) {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (k === 'class') node.className = v; else node.setAttribute(k, v);
+    }
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    return node;
+  }
+
+  function title(name) {
+    return String(name).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function findCommand(name) {
+    return (state.protocol.commands || []).find(c => c.name === name) || null;
+  }
+
+  function findField(name) {
+    for (const c of state.protocol.commands || []) {
+      for (const p of c.parameters || []) if (p.name === name) return {field: p, writable: true, command: c};
+    }
+    for (const t of state.protocol.telemetry || []) {
+      for (const f of t.fields || []) if (f.name === name) return {field: f, writable: false, command: null};
+    }
+    return null;
+  }
+
+  // Mirrors infer_widget_for_field in core/device_ui.py.
+  function inferWidget(field, writable, kind) {
+    const type = String(field.type || '').toLowerCase();
+    const numeric = /^(u?int(8|16|32|64)|float(32|64)?|double)$/.test(type);
+    const w = {widget_type: 'text', field_ref: field.name, label: title(field.name), unit: field.unit || null,
+               min: field.min ?? null, max: field.max ?? null, step: null, options: null};
+    if (!writable) {
+      w.widget_type = kind || (type === 'bool' || type === 'boolean' ? 'badge' : (numeric ? 'gauge' : 'text'));
+      return w;
+    }
+    if (field.options || type === 'enum') { w.widget_type = 'dropdown'; w.options = field.options || null; }
+    else if (type === 'bool' || type === 'boolean') w.widget_type = 'switch';
+    else if (field.min !== null && field.min !== undefined && field.max !== null && field.max !== undefined) {
+      const isFloat = type.startsWith('float');
+      if (field.max - field.min <= 100 || isFloat) { w.widget_type = 'slider'; w.step = isFloat ? 0.1 : 1; }
+      else w.widget_type = 'number_input';
+    } else w.widget_type = numeric ? 'number_input' : 'text_input';
+    return w;
+  }
+
+  function ensureTargetGroup(preferred) {
+    if (targetGroup && spec.panels[targetGroup.p] && spec.panels[targetGroup.p].groups[targetGroup.g]) return targetGroup;
+    if (!spec.panels.length) spec.panels.push({name: 'main', title: 'Main Workspace', groups: []});
+    for (let p = 0; p < spec.panels.length; p++) {
+      const g = spec.panels[p].groups.findIndex(gr => gr.name === preferred);
+      if (g >= 0) return {p, g};
+    }
+    const panel = spec.panels[0];
+    if (!panel.groups.length) panel.groups.push({name: preferred, title: title(preferred), layout: 'grid', widgets: []});
+    return {p: 0, g: 0};
+  }
+
+  function bind(name, kind) {
+    let widget;
+    const cmd = kind === 'button' ? findCommand(name) : null;
+    if (cmd) {
+      widget = {widget_type: 'button', field_ref: cmd.name, label: 'Execute ' + title(cmd.name)};
+    } else {
+      const found = findField(name);
+      if (!found) { showModal('Bind failed', 'Field or command "' + name + '" is not in the protocol.'); return; }
+      widget = inferWidget(found.field, found.writable, kind === 'control' ? null : kind);
+    }
+    const t = ensureTargetGroup(cmd || kind === 'control' ? 'controls' : 'telemetry');
+    spec.panels[t.p].groups[t.g].widgets.push(widget);
+    selected = {p: t.p, g: t.g, w: spec.panels[t.p].groups[t.g].widgets.length - 1};
+    render();
+  }
+
+  function safetyRule(command) {
+    return spec.safety_rules.find(r => r.command === command) || null;
+  }
+
+  function render() {
+    const canvas = document.getElementById('canvas-area');
+    canvas.replaceChildren();
+    spec.panels.forEach((panel, pi) => {
+      const pCard = el('div', {class: 'designer-panel-card', 'data-panel': panel.name});
+      const pHead = el('div', {class: 'panel-header'});
+      pHead.append(el('h3', {}, panel.title));
+      const addGroup = el('button', {type: 'button', class: 'btn-xs'}, '+ Group');
+      addGroup.addEventListener('click', () => {
+        const name = prompt('New group name (identifier)', 'group_' + (panel.groups.length + 1));
+        if (!name) return;
+        panel.groups.push({name, title: title(name), layout: 'grid', widgets: []});
+        targetGroup = {p: pi, g: panel.groups.length - 1};
+        render();
+      });
+      pHead.append(addGroup);
+      pCard.append(pHead);
+      panel.groups.forEach((group, gi) => {
+        const isTarget = targetGroup && targetGroup.p === pi && targetGroup.g === gi;
+        const gCard = el('div', {class: 'designer-group-card' + (isTarget ? ' target' : ''), 'data-group': group.name});
+        const gHead = el('div', {class: 'group-header'});
+        const h4 = el('h4', {}, group.title + ' ');
+        h4.append(el('span', {class: 'dim-label'}, '(' + group.name + ')'));
+        gHead.append(h4);
+        const ctl = el('div', {class: 'group-controls'});
+        const tgt = el('button', {type: 'button', class: 'btn-xs btn-add-widget'}, isTarget ? 'Adding here' : '+ Add Widget');
+        tgt.title = 'New bindings from the left sidebar are added to this group';
+        tgt.addEventListener('click', () => { targetGroup = {p: pi, g: gi}; render(); });
+        const del = el('button', {type: 'button', class: 'btn-icon', title: 'Delete group'}, '×');
+        del.addEventListener('click', () => {
+          if (group.widgets.length && !confirm('Delete group "' + group.title + '" and its widgets?')) return;
+          panel.groups.splice(gi, 1); targetGroup = null; selected = null; render();
+        });
+        ctl.append(tgt, del);
+        gHead.append(ctl);
+        gCard.append(gHead);
+        const wc = el('div', {class: 'widgets-container'});
+        wc.addEventListener('dragover', e => { e.preventDefault(); wc.classList.add('drop'); });
+        wc.addEventListener('dragleave', () => wc.classList.remove('drop'));
+        wc.addEventListener('drop', e => {
+          e.preventDefault(); wc.classList.remove('drop');
+          if (!dragFrom) return;
+          const [w] = spec.panels[dragFrom.p].groups[dragFrom.g].widgets.splice(dragFrom.w, 1);
+          group.widgets.push(w);
+          selected = {p: pi, g: gi, w: group.widgets.length - 1};
+          dragFrom = null; render();
+        });
+        group.widgets.forEach((w, wi) => wc.append(widgetCard(w, pi, gi, wi)));
+        gCard.append(wc);
+        pCard.append(gCard);
+      });
+      canvas.append(pCard);
+    });
+    renderInspector();
+  }
+
+  function widgetCard(w, pi, gi, wi) {
+    const isSel = selected && selected.p === pi && selected.g === gi && selected.w === wi;
+    const card = el('div', {class: 'designer-widget-card' + (isSel ? ' selected' : ''), 'data-ref': w.field_ref || '',
+                            'data-type': w.widget_type, draggable: 'true'});
+    card.addEventListener('dragstart', () => { dragFrom = {p: pi, g: gi, w: wi}; });
+    card.addEventListener('click', () => { selected = {p: pi, g: gi, w: wi}; render(); });
+    const head = el('div', {class: 'widget-card-header'});
+    head.append(el('span', {class: 'widget-type-badge'}, String(w.widget_type).toUpperCase()));
+    head.append(el('span', {class: 'widget-label'}, w.label + (w.unit ? ' [' + w.unit + ']' : '')));
+    const group = spec.panels[pi].groups[gi].widgets;
+    const up = el('button', {type: 'button', class: 'btn-icon', title: 'Move up'}, '↑');
+    up.addEventListener('click', e => { e.stopPropagation(); if (wi > 0) { [group[wi - 1], group[wi]] = [group[wi], group[wi - 1]]; selected = {p: pi, g: gi, w: wi - 1}; render(); } });
+    const down = el('button', {type: 'button', class: 'btn-icon', title: 'Move down'}, '↓');
+    down.addEventListener('click', e => { e.stopPropagation(); if (wi < group.length - 1) { [group[wi + 1], group[wi]] = [group[wi], group[wi + 1]]; selected = {p: pi, g: gi, w: wi + 1}; render(); } });
+    const del = el('button', {type: 'button', class: 'btn-icon btn-del-widget', title: 'Delete widget'}, '×');
+    del.addEventListener('click', e => { e.stopPropagation(); group.splice(wi, 1); selected = null; render(); });
+    head.append(up, down, del);
+    card.append(head);
+    const ref = el('div', {class: 'widget-card-ref'}, 'field: ');
+    ref.append(el('code', {}, w.field_ref || ''));
+    card.append(ref);
+    if (COMMAND_WIDGETS.includes(w.widget_type) && safetyRule(w.field_ref)) {
+      card.append(el('div', {class: 'widget-card-ref safety'}, 'confirmation required'));
+    }
+    return card;
+  }
+
+  function current() {
+    if (!selected) return null;
+    const g = spec.panels[selected.p] && spec.panels[selected.p].groups[selected.g];
+    return g ? g.widgets[selected.w] || null : null;
+  }
+
+  function renderInspector() {
+    const w = current();
+    document.getElementById('inspector-placeholder').style.display = w ? 'none' : 'block';
+    document.getElementById('inspector-form').style.display = w ? 'block' : 'none';
+    if (!w) return;
+    const num = v => (v === undefined || v === null ? '' : v);
+    document.getElementById('prop-ref').value = w.field_ref || '';
+    document.getElementById('prop-label').value = w.label || '';
+    document.getElementById('prop-type').value = w.widget_type || 'text';
+    document.getElementById('prop-unit').value = w.unit || '';
+    document.getElementById('prop-min').value = num(w.min);
+    document.getElementById('prop-max').value = num(w.max);
+    document.getElementById('prop-step').value = num(w.step);
+    const isCommand = COMMAND_WIDGETS.includes(w.widget_type);
+    document.getElementById('safety-section').style.display = isCommand ? 'block' : 'none';
+    if (isCommand) {
+      const rule = safetyRule(w.field_ref);
+      const cmd = findCommand(w.field_ref);
+      document.getElementById('prop-safety-level').textContent = cmd ? 'Protocol safety: ' + cmd.safety : 'Command not in protocol';
+      document.getElementById('prop-confirm').checked = !!(rule && rule.require_confirmation);
+      document.getElementById('prop-danger').checked = !!(rule && rule.danger_zone);
+      document.getElementById('prop-warning').value = (rule && rule.warning_message) || '';
+    }
+  }
+
+  document.getElementById('btn-apply-props').addEventListener('click', () => {
+    const w = current();
+    if (!w) return;
+    const numOrNull = id => { const v = document.getElementById(id).value; return v === '' ? null : parseFloat(v); };
+    w.label = document.getElementById('prop-label').value;
+    w.widget_type = document.getElementById('prop-type').value;
+    w.unit = document.getElementById('prop-unit').value || null;
+    w.min = numOrNull('prop-min'); w.max = numOrNull('prop-max'); w.step = numOrNull('prop-step');
+    if (COMMAND_WIDGETS.includes(w.widget_type) && w.field_ref) {
+      const confirmOn = document.getElementById('prop-confirm').checked;
+      const danger = document.getElementById('prop-danger').checked;
+      const warning = document.getElementById('prop-warning').value || null;
+      spec.safety_rules = spec.safety_rules.filter(r => r.command !== w.field_ref);
+      if (confirmOn || danger || warning) {
+        spec.safety_rules.push({command: w.field_ref, require_confirmation: confirmOn, danger_zone: danger, warning_message: warning});
+      }
+    }
+    render();
+  });
+
+  document.querySelectorAll('.btn-bind').forEach(btn => {
+    btn.addEventListener('click', () => bind(btn.getAttribute('data-bind-field'), btn.getAttribute('data-kind')));
+  });
+
+  document.getElementById('btn-add-panel').addEventListener('click', () => {
+    const name = prompt('New panel name (identifier)', 'panel_' + (spec.panels.length + 1));
+    if (!name) return;
+    spec.panels.push({name, title: title(name), groups: []});
+    render();
+  });
+
+  const modal = document.getElementById('modal-dialog');
+  function showModal(heading, text) {
+    document.getElementById('modal-title').textContent = heading;
+    document.getElementById('modal-code').textContent = text;
+    modal.style.display = 'flex';
+  }
+  document.getElementById('btn-close-modal').addEventListener('click', () => { modal.style.display = 'none'; });
+
+  async function post(url, body) {
+    const res = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    if (!res.ok) {
+      let detail = res.statusText;
+      try { detail = (await res.json()).detail || detail; } catch (e) { /* not JSON */ }
+      throw new Error(res.status + ': ' + detail);
+    }
+    return res;
+  }
+  function serverError(action, err) {
+    showModal(action + ' failed', String(err.message || err) +
+      '\n\nThis needs the OmniUART web server (omniuart designer <protocol>).');
+  }
+
+  document.getElementById('btn-export-json').addEventListener('click', () => {
+    showModal('Device UI definition (JSON)', JSON.stringify(spec, null, 2));
+  });
+  document.getElementById('btn-export-yaml').addEventListener('click', async () => {
+    try {
+      const res = await post('/api/designer/export', {ui_spec: spec, format: 'yaml'});
+      showModal('Device UI definition (YAML)', await res.text());
+    } catch (err) { serverError('YAML export', err); }
+  });
+  document.getElementById('btn-save').addEventListener('click', async () => {
+    try {
+      const res = await post('/api/designer/save', {ui_spec: spec, format: 'yaml'});
+      const out = await res.json();
+      spec.revision = out.revision;
+      showModal('Saved', 'Saved revision ' + out.revision + ' to ' + out.path);
+    } catch (err) { serverError('Save', err); }
+  });
+  document.getElementById('btn-validate').addEventListener('click', async () => {
+    try {
+      const res = await post('/api/designer/validate', {protocol: state.protocol.metadata.name, ui_spec: spec});
+      const report = await res.json();
+      showModal(report.is_compatible ? 'Compatibility check: OK' : 'Compatibility issues found', JSON.stringify(report, null, 2));
+    } catch (err) { serverError('Validation', err); }
+  });
+  document.getElementById('btn-preview').addEventListener('click', async () => {
+    const win = window.open('', '_blank');
+    try {
+      const res = await post('/api/designer/preview', {protocol: state.protocol.metadata.name, ui_spec: spec});
+      const url = URL.createObjectURL(new Blob([await res.text()], {type: 'text/html'}));
+      if (win) win.location = url; else window.location = url;
+    } catch (err) { if (win) win.close(); serverError('Preview', err); }
+  });
+
+  render();
+})();
+"""
+
+
 def generate_designer_html(
     protocol: ProtocolSpec,
     ui_spec: Optional[DeviceUISpec] = None,
@@ -298,7 +595,8 @@ def generate_designer_html(
         "protocol": protocol.model_dump(mode="json"),
         "ui_spec": ui_spec.model_dump(mode="json"),
     }
-    json_blob = html.escape(json.dumps(initial_data))
+    # Script element content is raw text (entities are not decoded), so escape only what could close the element.
+    json_blob = json.dumps(initial_data).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
 
     # Build list of available protocol items
     commands_html = []
@@ -306,12 +604,17 @@ def generate_designer_html(
         cmd_name = html.escape(cmd.name)
         cmd_safety = cmd.safety.value if hasattr(cmd.safety, "value") else str(cmd.safety)
         params_info = f"{len(cmd.parameters)} params" if cmd.parameters else "no params"
+        param_buttons = "".join(
+            f'    <button type="button" class="btn-xs btn-bind" data-bind-field="{html.escape(p.name)}" data-kind="control">+ {html.escape(p.name)}</button>'
+            for p in cmd.parameters
+        )
         commands_html.append(
             f'<div class="protocol-item" data-type="command" data-name="{cmd_name}">'
             f'  <div class="item-header"><strong>{cmd_name}</strong> <span class="badge badge-{cmd_safety}">{cmd_safety}</span></div>'
             f'  <div class="item-meta">{params_info}</div>'
             f'  <div class="item-actions">'
             f'    <button type="button" class="btn-xs btn-bind" data-bind-field="{cmd_name}" data-kind="button">+ Button</button>'
+            f'{param_buttons}'
             f'  </div>'
             f'</div>'
         )
@@ -388,7 +691,7 @@ def generate_designer_html(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:;">
   <title>Device UI Designer - {safe_title}</title>
   <style>
     :root {{
@@ -563,6 +866,10 @@ def generate_designer_html(
     .widget-label {{ font-size: 0.85rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
     .widget-card-ref {{ font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; }}
     .widget-card-ref code {{ color: #a5f3fc; }}
+    .widget-card-ref.safety {{ color: var(--warning); }}
+    .designer-group-card.target {{ border-color: var(--accent); }}
+    .widgets-container.drop {{ outline: 2px dashed var(--accent); }}
+    .panel-header {{ display: flex; justify-content: space-between; align-items: baseline; }}
     .prop-row {{ margin-bottom: 0.75rem; }}
     .prop-row label {{ display: block; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; }}
     .prop-row input, .prop-row select {{
@@ -614,6 +921,7 @@ def generate_designer_html(
       <span class="dim-label">Vendor: {safe_vendor}</span>
     </div>
     <div class="toolbar">
+      <button type="button" class="btn" id="btn-add-panel">+ Panel</button>
       <button type="button" class="btn" id="btn-validate">Validate Compatibility</button>
       <button type="button" class="btn" id="btn-preview">Live Preview</button>
       <button type="button" class="btn" id="btn-export-yaml">Export YAML</button>
@@ -682,6 +990,13 @@ def generate_designer_html(
             <input type="number" id="prop-step" placeholder="Step" style="width: 33%;">
           </div>
         </div>
+        <div class="prop-row" id="safety-section" style="display: none;">
+          <label>Safety rule</label>
+          <p class="dim-label" id="prop-safety-level"></p>
+          <label><input type="checkbox" id="prop-confirm" style="width: auto;"> Require confirmation</label>
+          <label><input type="checkbox" id="prop-danger" style="width: auto;"> Danger zone</label>
+          <input type="text" id="prop-warning" placeholder="Warning message">
+        </div>
         <div class="prop-row">
           <button type="button" class="btn btn-primary" id="btn-apply-props" style="width: 100%;">Apply Changes</button>
         </div>
@@ -703,136 +1018,7 @@ def generate_designer_html(
   </div>
 
   <script type="application/json" id="initial-data">{json_blob}</script>
-  <script>
-    (function() {{
-      const dataEl = document.getElementById('initial-data');
-      let state = JSON.parse(dataEl.textContent);
-
-      let selectedWidgetRef = null;
-
-      function findWidget(ref) {{
-        for (const p of state.ui_spec.panels || []) {{
-          for (const g of p.groups || []) {{
-            for (const w of g.widgets || []) {{
-              if (w.field_ref === ref) return {{ panel: p, group: g, widget: w }};
-            }}
-          }}
-        }}
-        return null;
-      }}
-
-      // Select widget card
-      document.querySelectorAll('.designer-widget-card').forEach(card => {{
-        card.addEventListener('click', () => {{
-          document.querySelectorAll('.designer-widget-card').forEach(c => c.classList.remove('selected'));
-          card.classList.add('selected');
-          const ref = card.getAttribute('data-ref');
-          selectedWidgetRef = ref;
-          const found = findWidget(ref);
-          if (found) {{
-            document.getElementById('inspector-placeholder').style.display = 'none';
-            document.getElementById('inspector-form').style.display = 'block';
-            document.getElementById('prop-ref').value = found.widget.field_ref || '';
-            document.getElementById('prop-label').value = found.widget.label || '';
-            document.getElementById('prop-type').value = found.widget.widget_type || 'text';
-            document.getElementById('prop-unit').value = found.widget.unit || '';
-            document.getElementById('prop-min').value = found.widget.min !== undefined && found.widget.min !== null ? found.widget.min : '';
-            document.getElementById('prop-max').value = found.widget.max !== undefined && found.widget.max !== null ? found.widget.max : '';
-            document.getElementById('prop-step').value = found.widget.step !== undefined && found.widget.step !== null ? found.widget.step : '';
-          }}
-        }});
-      }});
-
-      // Apply changes to widget
-      document.getElementById('btn-apply-props').addEventListener('click', () => {{
-        if (!selectedWidgetRef) return;
-        const found = findWidget(selectedWidgetRef);
-        if (found) {{
-          found.widget.label = document.getElementById('prop-label').value;
-          found.widget.widget_type = document.getElementById('prop-type').value;
-          found.widget.unit = document.getElementById('prop-unit').value || null;
-          const minVal = document.getElementById('prop-min').value;
-          const maxVal = document.getElementById('prop-max').value;
-          const stepVal = document.getElementById('prop-step').value;
-          found.widget.min = minVal !== '' ? parseFloat(minVal) : null;
-          found.widget.max = maxVal !== '' ? parseFloat(maxVal) : null;
-          found.widget.step = stepVal !== '' ? parseFloat(stepVal) : null;
-
-          const card = document.querySelector(`.designer-widget-card[data-ref="${{CSS.escape(selectedWidgetRef)}}"]`);
-          if (card) {{
-            card.querySelector('.widget-label').textContent = found.widget.label + (found.widget.unit ? ` [${{found.widget.unit}}]` : '');
-            card.querySelector('.widget-type-badge').textContent = found.widget.widget_type.toUpperCase();
-          }}
-        }}
-      }});
-
-      // Delete widget
-      document.querySelectorAll('.btn-del-widget').forEach(btn => {{
-        btn.addEventListener('click', (e) => {{
-          e.stopPropagation();
-          const card = btn.closest('.designer-widget-card');
-          const ref = card.getAttribute('data-ref');
-          const found = findWidget(ref);
-          if (found) {{
-            found.group.widgets = found.group.widgets.filter(w => w.field_ref !== ref);
-            card.remove();
-            if (selectedWidgetRef === ref) {{
-              selectedWidgetRef = null;
-              document.getElementById('inspector-placeholder').style.display = 'block';
-              document.getElementById('inspector-form').style.display = 'none';
-            }}
-          }}
-        }});
-      }});
-
-      // Modal helpers
-      const modal = document.getElementById('modal-dialog');
-      const modalTitle = document.getElementById('modal-title');
-      const modalCode = document.getElementById('modal-code');
-      document.getElementById('btn-close-modal').addEventListener('click', () => {{
-        modal.style.display = 'none';
-      }});
-
-      // Export JSON
-      document.getElementById('btn-export-json').addEventListener('click', () => {{
-        modalTitle.textContent = "Declarative Device UI JSON";
-        modalCode.textContent = JSON.stringify(state.ui_spec, null, 2);
-        modal.style.display = 'flex';
-      }});
-
-      // Export YAML / Save
-      document.getElementById('btn-export-yaml').addEventListener('click', () => {{
-        modalTitle.textContent = "Export Specification";
-        modalCode.textContent = JSON.stringify(state.ui_spec, null, 2);
-        modal.style.display = 'flex';
-      }});
-
-      // Validate
-      document.getElementById('btn-validate').addEventListener('click', () => {{
-        fetch('/api/designer/validate', {{
-          method: 'POST',
-          headers: {{ 'Content-Type': 'application/json' }},
-          body: JSON.stringify({{ protocol: state.protocol.metadata.name, ui_spec: state.ui_spec }})
-        }})
-        .then(res => res.json())
-        .then(report => {{
-          modalTitle.textContent = report.is_compatible ? "Compatibility Check: OK" : "Compatibility Issues Detected";
-          modalCode.textContent = JSON.stringify(report, null, 2);
-          modal.style.display = 'flex';
-        }})
-        .catch(() => {{
-          modalTitle.textContent = "Compatibility Check";
-          modalCode.textContent = "UI Specification is syntactically valid.";
-          modal.style.display = 'flex';
-        }});
-      }});
-
-      // Live Preview
-      document.getElementById('btn-preview').addEventListener('click', () => {{
-        window.open('/?preview=true', '_blank');
-      }});
-    }})();
-  </script>
+  <script>{_DESIGNER_SCRIPT}</script>
 </body>
 </html>
 """

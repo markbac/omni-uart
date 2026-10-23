@@ -120,8 +120,9 @@ class ResponseSpec(BaseModel):
     id: Optional[Union[int, str]] = None
     timeout_ms: int = 1000
     fields: List[FieldSpec] = Field(default_factory=list)
+    # Text protocols only: regular expressions searched in the reply (multiline). A reply matching any
+    # error pattern, or not matching the success pattern, fails the exchange as an invalid response.
     success_pattern: Optional[str] = None
-    error_pattern: Optional[str] = None
     error_patterns: List[str] = Field(default_factory=list)
 
 

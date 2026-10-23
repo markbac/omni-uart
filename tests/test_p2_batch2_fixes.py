@@ -257,8 +257,9 @@ async def test_text_protocol_reply_and_operators():
         serial_config=SerialConfig(baudrate=115200),
         framing=FramingConfig(type=FramingType.DELIMITED, suffix="\r\n"),
         commands=[
-            CommandSpec(name="read_status", id="ERROR", safety=CommandSafety.READ_ONLY, response=ResponseSpec(timeout_ms=10)),
-            CommandSpec(name="reboot", id="REBOOT_ERR", safety=CommandSafety.DESTRUCTIVE, response=ResponseSpec(timeout_ms=10, error_pattern="ERR")),
+            CommandSpec(name="read_status", id="ERROR", safety=CommandSafety.READ_ONLY, response=ResponseSpec(timeout_ms=10, error_patterns=["^ERROR"])),
+            CommandSpec(name="syst_err", id="SYST:ERR?", safety=CommandSafety.READ_ONLY, response=ResponseSpec(timeout_ms=10)),
+            CommandSpec(name="reboot", id="REBOOT_ERR", safety=CommandSafety.DESTRUCTIVE, response=ResponseSpec(timeout_ms=10, error_patterns=["ERR"])),
         ],
     )
     vt = VirtualTransport()
@@ -275,3 +276,7 @@ async def test_text_protocol_reply_and_operators():
     ex_ro = await session.send("read_status", retries=2)
     assert ex_ro.ok is False
     assert session.stats.total_requests == 1 + 3
+
+    # Without declared patterns a reply that merely contains "ERR" is not a failure
+    ex_plain = await session.send("syst_err")
+    assert ex_plain.ok is True

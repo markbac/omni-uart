@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.codec import CodecError
@@ -78,9 +78,7 @@ def get_protocols() -> Dict[str, Any]:
 @router.get("/api/protocol/{identifier}")
 def get_protocol_spec(identifier: str) -> Dict[str, Any]:
     """Return parsed protocol specification and tag breakdown."""
-    spec = catalog.get_protocol(identifier)
-    if not spec:
-        raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
+    spec = _load_protocol(identifier)
 
     tag_groups: Dict[str, List[str]] = {}
     for cmd in spec.commands:
@@ -114,8 +112,13 @@ def list_serial_ports() -> Dict[str, Any]:
 @router.post("/api/serial/connect")
 async def connect_serial(req: SerialConnectRequest) -> Dict[str, Any]:
     """Open the requested serial port (or the labelled simulated device), replacing any open link."""
-    if req.port == VIRTUAL_PORT and (not req.protocol or not catalog.get_protocol(req.protocol)):
-        raise HTTPException(status_code=422, detail="The virtual device needs a valid 'protocol' to simulate.")
+    if req.port == VIRTUAL_PORT:
+        try:
+            known = bool(req.protocol) and catalog.get_protocol(req.protocol) is not None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if not known:
+            raise HTTPException(status_code=422, detail="The virtual device needs a valid 'protocol' to simulate.")
     try:
         await connection.connect(req.port, req.baudrate, req.rts, req.dtr, req.read_only)
     except Exception as exc:  # noqa: BLE001 - port missing, busy or not permitted
@@ -135,10 +138,19 @@ def serial_status() -> Dict[str, Any]:
     return {"connection": connection.state()}
 
 
-def _resolve(identifier: str, command: str) -> Tuple[ProtocolSpec, CommandSpec]:
-    spec = catalog.get_protocol(identifier)
+def _load_protocol(identifier: str) -> ProtocolSpec:
+    """Return the named protocol: 404 when there is none, 422 when its file fails to load (#339)."""
+    try:
+        spec = catalog.get_protocol(identifier)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not spec:
         raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
+    return spec
+
+
+def _resolve(identifier: str, command: str) -> Tuple[ProtocolSpec, CommandSpec]:
+    spec = _load_protocol(identifier)
     cmd = spec.get_command(command) or spec.get_command_by_id(command)
     if not cmd:
         raise HTTPException(status_code=404, detail=f"Command '{command}' not found")
@@ -235,7 +247,10 @@ async def run_script(script_name: str) -> Any:
         raise HTTPException(status_code=404, detail=f"Script '{script_name}' not found")
     spec = None
     for ref in (script.meta.protocol, Path(script.meta.protocol).name, Path(script.meta.protocol).stem):
-        spec = catalog.get_protocol(ref) if ref else None
+        try:
+            spec = catalog.get_protocol(ref) if ref else None
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         if spec:
             break
     if spec is None:
@@ -273,9 +288,7 @@ async def dashboard_auto_run(identifier: str) -> Dict[str, Any]:
 
     A dashboard command that is not marked ``safety: read_only`` is reported as skipped, never sent.
     """
-    spec = catalog.get_protocol(identifier)
-    if not spec:
-        raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
+    spec = _load_protocol(identifier)
 
     dashboard_cmds = [cmd for cmd in spec.commands if "dashboard" in cmd.tags]
     temp = SessionRecorder()
@@ -334,16 +347,13 @@ def get_designer_view(identifier: Optional[str] = None) -> str:
     from omniuart.designer import generate_designer_html
 
     store = DeviceUIStore()
-    spec = None
     if identifier:
-        spec = catalog.get_protocol(identifier)
-    if not spec:
+        spec = _load_protocol(identifier)
+    else:
         proto_files = catalog.list_protocol_files()
-        if proto_files:
-            spec = catalog.get_protocol(proto_files[0].stem)
-
-    if not spec:
-        raise HTTPException(status_code=404, detail="No protocols available in catalog for designer")
+        if not proto_files:
+            raise HTTPException(status_code=404, detail="No protocols available in catalog for designer")
+        spec = _load_protocol(proto_files[0].name)
 
     ui_spec = store.find_for_protocol(spec.metadata.name)
     return generate_designer_html(spec, ui_spec)
@@ -354,10 +364,7 @@ def get_designer_protocol_spec(identifier: str) -> Dict[str, Any]:
     """Return protocol spec and inferred or stored DeviceUISpec for designer (#241, #242)."""
     from omniuart.core.device_ui import DeviceUIStore, infer_device_ui_from_spec
 
-    spec = catalog.get_protocol(identifier)
-    if not spec:
-        raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
-
+    spec = _load_protocol(identifier)
     store = DeviceUIStore()
     ui_spec = store.find_for_protocol(spec.metadata.name) or infer_device_ui_from_spec(spec)
     return {
@@ -369,39 +376,65 @@ def get_designer_protocol_spec(identifier: str) -> Dict[str, Any]:
 @router.post("/api/designer/validate")
 def validate_designer_spec(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Validate a draft DeviceUISpec against a protocol for compatibility (#241, #242)."""
-    from omniuart.core.device_ui import check_protocol_compatibility, migrate_ui_spec
+    from omniuart.core.device_ui import check_protocol_compatibility
 
     proto_name = payload.get("protocol")
     if not proto_name:
         raise HTTPException(status_code=400, detail="Missing protocol identifier in payload")
-
-    spec = catalog.get_protocol(proto_name)
-    if not spec:
-        raise HTTPException(status_code=404, detail=f"Protocol '{proto_name}' not found")
-
-    ui_dict = payload.get("ui_spec")
-    if not ui_dict:
-        raise HTTPException(status_code=400, detail="Missing ui_spec dictionary in payload")
-
-    ui_spec = migrate_ui_spec(ui_dict)
-    report = check_protocol_compatibility(ui_spec, spec)
+    spec = _load_protocol(proto_name)
+    report = check_protocol_compatibility(_designer_ui_spec(payload), spec)
     return report.model_dump()
 
 
 @router.post("/api/designer/save")
 def save_designer_spec(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Persist a draft DeviceUISpec to the UI store repository (#241, #242)."""
-    from omniuart.core.device_ui import DeviceUIStore, migrate_ui_spec
+    from omniuart.core.device_ui import DeviceUIStore, import_device_ui
+
+    ui_spec = _designer_ui_spec(payload)
+    fmt = payload.get("format", "yaml")
+    try:
+        path = DeviceUIStore().save(ui_spec, format=fmt)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    saved = import_device_ui(path.read_text(encoding="utf-8"))
+    return {"ok": True, "path": str(path), "filename": path.name, "revision": saved.revision}
+
+
+@router.post("/api/designer/export", response_class=PlainTextResponse)
+def export_designer_spec(payload: Dict[str, Any]) -> str:
+    """Return a draft DeviceUISpec as YAML or JSON text (#241, #242)."""
+    from omniuart.core.device_ui import export_device_ui
+
+    ui_spec = _designer_ui_spec(payload)
+    try:
+        return export_device_ui(ui_spec, format=payload.get("format", "yaml"))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/api/designer/preview", response_class=HTMLResponse)
+def preview_designer_spec(payload: Dict[str, Any]) -> str:
+    """Render the device dashboard for a draft DeviceUISpec, so the designer can preview it (#241)."""
+    from omniuart.dashboard_generator import generate_device_dashboard_html
+
+    proto_name = payload.get("protocol")
+    if not proto_name:
+        raise HTTPException(status_code=400, detail="Missing protocol identifier in payload")
+    spec = _load_protocol(proto_name)
+    return generate_device_dashboard_html(spec, _designer_ui_spec(payload), connection_status="PREVIEW", is_connected=False)
+
+
+def _designer_ui_spec(payload: Dict[str, Any]) -> Any:
+    from omniuart.core.device_ui import migrate_ui_spec
 
     ui_dict = payload.get("ui_spec")
-    if not ui_dict:
+    if not isinstance(ui_dict, dict) or not ui_dict:
         raise HTTPException(status_code=400, detail="Missing ui_spec in payload")
-
-    fmt = payload.get("format", "yaml")
-    ui_spec = migrate_ui_spec(ui_dict)
-    store = DeviceUIStore()
-    path = store.save(ui_spec, format=fmt)
-    return {"ok": True, "path": str(path), "filename": path.name}
+    try:
+        return migrate_ui_spec(ui_dict)
+    except ValueError as exc:  # pydantic.ValidationError is a ValueError
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/api/designer/definitions")

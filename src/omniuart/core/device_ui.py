@@ -6,6 +6,7 @@ capabilities, controls, telemetry, navigation, safety rules, grouping, and widge
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
@@ -295,6 +296,12 @@ def import_device_ui(content: str, format: Optional[str] = None) -> DeviceUISpec
     return migrate_ui_spec(data)
 
 
+def _safe_name(text: str) -> str:
+    """Reduce ``text`` to a file-name stem of letters, digits, ``-`` and ``_``."""
+    cleaned = re.sub(r"[^A-Za-z0-9_-]+", "_", text.strip().lower()).strip("_")
+    return cleaned or "device"
+
+
 class DeviceUIStore:
     """Storage repository for persisting, versioning, and managing Device UI definitions (#242)."""
 
@@ -310,17 +317,48 @@ class DeviceUIStore:
         filename: Optional[str] = None,
         format: str = "yaml",
     ) -> Path:
-        """Persist a DeviceUISpec to disk (#242)."""
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
-        if not filename:
-            proto_clean = spec.protocol_ref.lower().replace(" ", "_")
-            ext = "json" if format.lower() == "json" else "yaml"
-            filename = f"{proto_clean}_ui.{ext}"
+        """Persist a DeviceUISpec to disk (#242).
 
-        target = self.storage_dir / filename
-        content = export_device_ui(spec, format=format)
-        target.write_text(content, encoding="utf-8")
+        Saving changed content over an existing definition archives the old file under ``history/`` and
+        stores the new one with the next revision number, so every saved revision can be reproduced.
+        """
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        ext = "json" if format.lower() == "json" else "yaml"
+        if not filename:
+            filename = f"{_safe_name(spec.protocol_ref)}_ui.{ext}"
+        target = self._resolve(filename)
+
+        if target.is_file():
+            previous = import_device_ui(target.read_text(encoding="utf-8"))
+            if previous.model_dump(exclude={"revision"}) == spec.model_dump(exclude={"revision"}):
+                return target
+            history = self.storage_dir / "history"
+            history.mkdir(exist_ok=True)
+            target.replace(history / f"{target.stem}.r{previous.revision}{target.suffix}")
+            spec = spec.model_copy(update={"revision": max(spec.revision, previous.revision + 1)})
+
+        target.write_text(export_device_ui(spec, format=format), encoding="utf-8")
         return target
+
+    def history(self, filename: str) -> List[Dict[str, Any]]:
+        """List archived revisions of a stored definition, oldest first (#242)."""
+        stem = self._resolve(filename).stem
+        folder = self.storage_dir / "history"
+        if not folder.is_dir():
+            return []
+        entries = []
+        for file in folder.glob(f"{stem}.r*.*"):
+            rev = file.name[len(stem) + 2:].split(".", 1)[0]
+            if rev.isdigit():
+                entries.append({"revision": int(rev), "file": str(file)})
+        return sorted(entries, key=lambda e: e["revision"])
+
+    def _resolve(self, filename: str) -> Path:
+        """Return ``filename`` inside the store, refusing paths that would leave it."""
+        name = Path(filename).name
+        if not name or name != filename or name in (".", ".."):
+            raise ValueError(f"Invalid Device UI definition file name '{filename}'")
+        return self.storage_dir / name
 
     def load(self, name_or_path: Union[str, Path]) -> DeviceUISpec:
         """Load a DeviceUISpec from a file path or registered definition name (#242)."""
@@ -368,7 +406,7 @@ class DeviceUIStore:
 
     def delete(self, filename: str) -> bool:
         """Delete a stored definition file (#242)."""
-        target = self.storage_dir / filename
+        target = self._resolve(filename)
         if target.is_file():
             target.unlink()
             return True

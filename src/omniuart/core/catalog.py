@@ -16,7 +16,11 @@ logger = logging.getLogger(__name__)
 
 PROTOCOL_PATH_ENV = "OMNIUART_PROTOCOL_PATH"
 SCRIPT_PATH_ENV = "OMNIUART_SCRIPT_PATH"
-DEFAULT_IGNORED_PATTERNS = ["g460", "*schema.json"]
+DEFAULT_IGNORED_PATTERNS = ["*g460*", "*schema.json"]
+
+
+class CatalogError(ValueError):
+    """A catalog lookup that cannot give an answer: the identifier is ambiguous or its file fails to load."""
 
 
 def _env_dirs(name: str) -> List[Path]:
@@ -247,7 +251,7 @@ class CatalogManager:
     def get_protocol(self, identifier: str, first: bool = False) -> Optional[ProtocolSpec]:
         """Lookup and parse a protocol definition by filename, protocol name, or partial match.
 
-        Raises ValueError if identifier is ambiguous or if the matching protocol file fails to load.
+        Raises :class:`CatalogError` if identifier is ambiguous or if the matching protocol file fails to load.
         """
         if not identifier or not identifier.strip():
             return None
@@ -262,7 +266,7 @@ class CatalogManager:
                     return self._load_protocol_cached(f)
                 except Exception as exc:
                     logger.warning("Failed loading protocol file %s: %s", f, exc)
-                    raise ValueError(f"Protocol file '{f.name}' failed to load: {exc}") from exc
+                    raise CatalogError(f"Protocol file '{f.name}' failed to load: {exc}") from exc
 
         # 2. Match by protocol title/name
         title_matches: List[Tuple[Path, ProtocolSpec]] = []
@@ -282,10 +286,11 @@ class CatalogManager:
             if first:
                 logger.warning("Ambiguous protocol title '%s' matched %s; selecting first", identifier, matching_names)
                 return title_matches[0][1]
-            raise ValueError(f"Ambiguous protocol title '{identifier}' matches multiple files: {matching_names}. Specify exact filename or use --first.")
+            raise CatalogError(f"Ambiguous protocol title '{identifier}' matches multiple files: {matching_names}. Specify exact filename or use --first.")
 
         # 3. Partial substring match
         partial_matches: List[Tuple[Path, ProtocolSpec]] = []
+        partial_failures: List[Tuple[Path, Exception]] = []
         for f in files:
             if ident in f.name.lower():
                 try:
@@ -293,7 +298,7 @@ class CatalogManager:
                     partial_matches.append((f, spec))
                 except Exception as exc:
                     logger.warning("Could not parse protocol %s during partial lookup: %s", f, exc)
-                    continue
+                    partial_failures.append((f, exc))
 
         if len(partial_matches) == 1:
             return partial_matches[0][1]
@@ -302,7 +307,10 @@ class CatalogManager:
             if first:
                 logger.warning("Ambiguous partial match '%s' matched %s; selecting first", identifier, matching_names)
                 return partial_matches[0][1]
-            raise ValueError(f"Ambiguous identifier '{identifier}' matches multiple protocol files: {matching_names}. Specify exact filename or use --first.")
+            raise CatalogError(f"Ambiguous identifier '{identifier}' matches multiple protocol files: {matching_names}. Specify exact filename or use --first.")
+        if len(partial_failures) == 1:
+            failed_file, error = partial_failures[0]
+            raise CatalogError(f"Protocol file '{failed_file.name}' failed to load: {error}") from error
 
         return None
 
@@ -363,7 +371,7 @@ class CatalogManager:
             if first:
                 logger.warning("Ambiguous script name '%s' matched %s; selecting first", identifier, matching_names)
                 return name_matches[0][1]
-            raise ValueError(f"Ambiguous script name '{identifier}' matches multiple files: {matching_names}. Specify exact filename or use --first.")
+            raise CatalogError(f"Ambiguous script name '{identifier}' matches multiple files: {matching_names}. Specify exact filename or use --first.")
 
         # 3. Partial substring match
         partial_matches: List[Tuple[Path, ScriptSpec]] = []
@@ -383,7 +391,7 @@ class CatalogManager:
             if first:
                 logger.warning("Ambiguous partial match '%s' matched %s; selecting first", identifier, matching_names)
                 return partial_matches[0][1]
-            raise ValueError(f"Ambiguous identifier '{identifier}' matches multiple script files: {matching_names}. Specify exact filename or use --first.")
+            raise CatalogError(f"Ambiguous identifier '{identifier}' matches multiple script files: {matching_names}. Specify exact filename or use --first.")
 
         return None
 

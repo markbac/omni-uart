@@ -745,18 +745,6 @@
           "default": null,
           "title": "Success Pattern"
         },
-        "error_pattern": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Error Pattern"
-        },
         "error_patterns": {
           "items": {
             "type": "string"

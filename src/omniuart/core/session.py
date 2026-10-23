@@ -6,19 +6,21 @@ decoded answer, so the CLI, script runner, web API and desktop GUI all behave id
 
 from __future__ import annotations
 
-import re
-
 import asyncio
+import itertools
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec
 from omniuart.core.models import CommandSafety, CommandSpec, ProtocolSpec
-import time
 from omniuart.core.recorder import PacketEvent, SessionRecorder, Transaction
 from omniuart.core.transport import AsyncTransport, HardwareSerialTransport, VirtualTransport
 
+
+# Transaction ids are unique within the process, so sessions sharing a recorder never collide.
+_TRANSACTION_IDS = itertools.count(1)
 
 # Decides whether a received frame answers a request: (command, request values, frame) -> bool.
 ResponseMatcher = Callable[[CommandSpec, Mapping[str, Any], DecodedFrame], bool]
@@ -216,17 +218,7 @@ class SerialSession:
             if cmd.response is None:
                 exchange.latency_ms = (loop.time() - start) * 1000.0
                 self._update_stats(exchange, len(request), 0)
-                if self.recorder:
-                    transaction = Transaction(
-                        transaction_id=f"tx_{int(time.time()*1000)}_{cmd.name}",
-                        command_name=cmd.name,
-                        command_id=cmd.id,
-                        tx_event=tx_event,
-                        rx_events=[],
-                        latency_ms=exchange.latency_ms,
-                        status="ok" if exchange.ok else "error",
-                    )
-                    self.recorder.add_transaction(transaction)
+                self._record_transaction(cmd, exchange, tx_event, None)
                 return exchange
             wait_ms = timeout_ms if timeout_ms is not None else cmd.response.timeout_ms
             await self._await_response(cmd, exchange, wait_ms, self._request_values(cmd, params), matcher or self.matcher)
@@ -246,19 +238,26 @@ class SerialSession:
                 crc_valid=None if exchange.response is None else exchange.response.ok,
                 latency_ms=exchange.latency_ms,
             )
-        if self.recorder:
-            rx_events = [rx_event] if rx_event is not None else []
-            transaction = Transaction(
-                transaction_id=f"tx_{int(time.time()*1000)}_{cmd.name}",
+        self._record_transaction(cmd, exchange, tx_event, rx_event)
+        return exchange
+
+    def _record_transaction(
+        self, cmd: CommandSpec, exchange: Exchange, tx_event: Optional[PacketEvent], rx_event: Optional[PacketEvent]
+    ) -> None:
+        """Record the request and its response (if any) as one transaction (#333)."""
+        if not self.recorder:
+            return
+        self.recorder.add_transaction(
+            Transaction(
+                transaction_id=f"tx{next(_TRANSACTION_IDS)}",
                 command_name=cmd.name,
                 command_id=cmd.id,
                 tx_event=tx_event,
-                rx_events=rx_events,
+                rx_events=[rx_event] if rx_event is not None else [],
                 latency_ms=exchange.latency_ms,
-                status="ok" if exchange.ok else "error",
+                status=exchange.status.value,
             )
-            self.recorder.add_transaction(transaction)
-        return exchange
+        )
 
     def _update_stats(self, exchange: Exchange, tx_len: int, rx_len: int) -> None:
         self.stats.total_requests += 1
@@ -305,27 +304,17 @@ class SerialSession:
             text = data.decode("utf-8", errors="replace").strip()
             exchange.response = DecodedFrame(raw=data, kind="response", name=cmd.name, payload=data, fields={"text": text})
 
-            # Check error patterns in text protocol responses
-            upper_text = text.upper()
-            err_patterns = ["ERROR", "+CME ERROR", "+CMS ERROR"]
-            if cmd.response:
-                if cmd.response.error_pattern:
-                    err_patterns.append(cmd.response.error_pattern.upper())
-                if cmd.response.error_patterns:
-                    err_patterns.extend(p.upper() for p in cmd.response.error_patterns)
-
-            if any(err in upper_text for err in err_patterns):
-                exchange.status = ExchangeStatus.INVALID_RESPONSE
-                exchange.error = f"command '{cmd.name}' failed with error response: {text}"
-                return
-
-            if cmd.response and cmd.response.success_pattern:
-                pat = cmd.response.success_pattern
-                if not re.search(pat, text):
+            # Only patterns the protocol declares decide failure: "ERROR" can be ordinary reply text
+            # (SCPI answers SYST:ERR? with 0,"No error"), so nothing is assumed.
+            for pat in cmd.response.error_patterns if cmd.response else []:
+                if re.search(pat, text, re.MULTILINE):
                     exchange.status = ExchangeStatus.INVALID_RESPONSE
-                    exchange.error = f"response '{text}' did not match success pattern '{pat}'"
+                    exchange.error = f"'{cmd.name}' returned an error response: {text}"
                     return
-
+            success = cmd.response.success_pattern if cmd.response else None
+            if success and not re.search(success, text, re.MULTILINE):
+                exchange.status = ExchangeStatus.INVALID_RESPONSE
+                exchange.error = f"response '{text}' did not match success pattern '{success}'"
             return
 
         deadline = loop.time() + timeout_ms / 1000.0

@@ -17,6 +17,7 @@ from omniuart.core.device_ui import (
     check_protocol_compatibility,
     export_device_ui,
     import_device_ui,
+    infer_device_ui_from_spec,
     migrate_ui_spec,
 )
 from omniuart.core.models import (
@@ -354,8 +355,9 @@ def test_device_ui_win32_classic_theme_generation(sample_protocol: ProtocolSpec)
 # -----------------------------------------------------------------------------
 # Web API endpoints for Designer (#241, #242)
 # -----------------------------------------------------------------------------
-def test_designer_web_api_endpoints() -> None:
+def test_designer_web_api_endpoints(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify FastAPI routes for Designer and persistence (#241, #242)."""
+    monkeypatch.chdir(tmp_path)  # the store writes to .omniuart/ui under the working directory
     client = TestClient(app)
 
     # GET /designer
@@ -403,3 +405,66 @@ def test_designer_web_api_endpoints() -> None:
     res_save = client.post("/api/designer/save", json=save_payload)
     assert res_save.status_code == 200
     assert res_save.json()["ok"] is True
+
+
+def test_designer_initial_data_is_parseable_json(sample_protocol: ProtocolSpec) -> None:
+    """The embedded state must be plain JSON: browsers do not decode entities inside <script> (#241)."""
+    import json
+    import re
+
+    hostile = sample_protocol.model_copy(deep=True)
+    hostile.metadata.description = '</script><script>alert(1)</script> & "quotes"'
+    page = generate_designer_html(hostile)
+    match = re.search(r'<script type="application/json" id="initial-data">(.*?)</script>', page, re.S)
+    assert match is not None
+    data = json.loads(match.group(1))
+    assert data["protocol"]["metadata"]["description"] == hostile.metadata.description
+    assert "</script><script>" not in match.group(1)
+
+
+def test_device_ui_store_rejects_paths_outside_the_store(tmp_path: Path, sample_protocol: ProtocolSpec) -> None:
+    """A protocol_ref or file name must not write or delete outside the store (#242)."""
+    store = DeviceUIStore(storage_dir=tmp_path / "ui")
+    spec = infer_device_ui_from_spec(sample_protocol)
+    spec.protocol_ref = "../../escape"
+    path = store.save(spec)
+    assert path.parent == tmp_path / "ui"
+    assert path.name == "escape_ui.yaml"
+    with pytest.raises(ValueError):
+        store.save(spec, filename="../outside.yaml")
+    with pytest.raises(ValueError):
+        store.delete("../ui/escape_ui.yaml")
+
+
+def test_device_ui_store_versions_changed_definitions(tmp_path: Path, sample_protocol: ProtocolSpec) -> None:
+    """Saving changed content bumps the revision and archives the previous file (#242)."""
+    store = DeviceUIStore(storage_dir=tmp_path)
+    spec = infer_device_ui_from_spec(sample_protocol)
+    path = store.save(spec)
+    assert store.load(path).revision == 1
+    assert store.save(spec) == path and store.history(path.name) == []  # unchanged: no new revision
+
+    spec.identity.name = "Renamed"
+    store.save(spec)
+    assert store.load(path).revision == 2
+    history = store.history(path.name)
+    assert [h["revision"] for h in history] == [1]
+    assert store.load(history[0]["file"]).identity.name == "SensorMaster"
+
+
+def test_designer_export_preview_and_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Export, preview and error paths of the designer API (#241)."""
+    monkeypatch.chdir(tmp_path)
+    client = TestClient(app)
+    ui = {"identity": {"name": "AsciiDevice"}, "protocol_ref": "AsciiDevice", "panels": []}
+
+    res = client.post("/api/designer/export", json={"ui_spec": ui, "format": "yaml"})
+    assert res.status_code == 200
+    assert "protocol_ref: AsciiDevice" in res.text
+
+    res = client.post("/api/designer/preview", json={"protocol": "ascii_device", "ui_spec": ui})
+    assert res.status_code == 200
+    assert "<html" in res.text.lower()
+
+    assert client.post("/api/designer/save", json={"ui_spec": {"panels": "bad"}}).status_code == 422
+    assert client.get("/designer/no_such_protocol_xyz").status_code == 404
