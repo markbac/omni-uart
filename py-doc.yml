@@ -90,3 +90,12 @@ lint:
     spelling: en-GB
     rules_file: vale-rules.yml
     ignore: ["docs/protocols/**", "_site/**", "site/**"]
+
+poster:
+  footer:
+    centre: OmniUART Project
+
+posters:
+  omni-uart:
+    source: docs/poster.md
+    output: docs/poster.html
