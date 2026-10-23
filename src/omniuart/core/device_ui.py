@@ -99,9 +99,11 @@ class TransferProtocolSpec(BaseModel):
     window_size: int = 1
 
 class DeviceUISpec(BaseModel):
-    """Declarative Device UI Specification model (#229, #235, #251)."""
+    """Declarative Device UI Specification model (#229, #235, #242, #251)."""
 
     schema_version: str = "1.0.0"
+    revision: int = 1
+    compatible_protocol_version: Optional[str] = None
     identity: DeviceIdentity
     protocol_ref: str
     panels: List[PanelSpec] = Field(default_factory=list)
@@ -112,19 +114,284 @@ class DeviceUISpec(BaseModel):
     )
 
 
+class DeviceUICompatibilityReport(BaseModel):
+    """Compatibility report between a DeviceUISpec and a ProtocolSpec (#242)."""
+
+    is_compatible: bool
+    schema_version_compatible: bool = True
+    protocol_version_matches: bool = True
+    missing_commands: List[str] = Field(default_factory=list)
+    missing_fields: List[str] = Field(default_factory=list)
+    missing_telemetry: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    errors: List[str] = Field(default_factory=list)
+
+
+def check_protocol_compatibility(
+    ui_spec: DeviceUISpec,
+    protocol_spec: ProtocolSpec,
+) -> DeviceUICompatibilityReport:
+    """Validate compatibility between a DeviceUISpec and a ProtocolSpec (#242).
+
+    Checks:
+    - Protocol reference match.
+    - Protocol version compatibility.
+    - Bound fields exist in protocol parameters or telemetry.
+    - Bound commands in buttons, transfers, and safety rules exist in protocol.
+    """
+    errors: List[str] = []
+    warnings: List[str] = []
+    missing_commands: List[str] = []
+    missing_fields: List[str] = []
+    missing_telemetry: List[str] = []
+
+    # Check protocol reference
+    if ui_spec.protocol_ref and ui_spec.protocol_ref.lower() != protocol_spec.metadata.name.lower():
+        warnings.append(
+            f"Device UI protocol_ref '{ui_spec.protocol_ref}' differs from protocol name '{protocol_spec.metadata.name}'"
+        )
+
+    # Check protocol version compatibility
+    protocol_version_matches = True
+    if ui_spec.compatible_protocol_version:
+        if ui_spec.compatible_protocol_version != protocol_spec.metadata.version:
+            protocol_version_matches = False
+            warnings.append(
+                f"Protocol version '{protocol_spec.metadata.version}' does not match UI compatible version '{ui_spec.compatible_protocol_version}'"
+            )
+
+    cmd_map = {cmd.name: cmd for cmd in protocol_spec.commands}
+    all_param_names = {p.name for cmd in protocol_spec.commands for p in cmd.parameters}
+    all_telemetry_fields = {f.name for tel in protocol_spec.telemetry for f in tel.fields}
+
+    # Validate safety rules
+    for rule in ui_spec.safety_rules:
+        if rule.command not in cmd_map:
+            missing_commands.append(rule.command)
+            errors.append(f"Safety rule references non-existent command '{rule.command}'")
+
+    # Validate widgets in panels
+    for panel in ui_spec.panels:
+        for group in panel.groups:
+            for widget in group.widgets:
+                if not widget.field_ref:
+                    continue
+
+                ref = widget.field_ref
+                # Check if it's a command reference (button, transfer, or command-level widget)
+                if widget.widget_type in ("button", "file_transfer", "firmware_update"):
+                    if ref not in cmd_map:
+                        missing_commands.append(ref)
+                        errors.append(f"Widget '{widget.label}' references non-existent command '{ref}'")
+                    continue
+
+                # Check if dotted: cmd.param
+                if "." in ref:
+                    cmd_part, param_part = ref.split(".", 1)
+                    if cmd_part in cmd_map:
+                        cmd_params = {p.name for p in cmd_map[cmd_part].parameters}
+                        if param_part not in cmd_params:
+                            missing_fields.append(ref)
+                            errors.append(f"Widget '{widget.label}' references unknown parameter '{param_part}' on command '{cmd_part}'")
+                    else:
+                        missing_commands.append(cmd_part)
+                        errors.append(f"Widget '{widget.label}' references parameter on unknown command '{cmd_part}'")
+                    continue
+
+                # Plain field reference: check parameter names, telemetry fields, or command names
+                if ref not in all_param_names and ref not in all_telemetry_fields and ref not in cmd_map:
+                    if group.name == "telemetry":
+                        missing_telemetry.append(ref)
+                    else:
+                        missing_fields.append(ref)
+                    errors.append(f"Widget '{widget.label}' references unknown field '{ref}'")
+
+    is_compatible = len(errors) == 0
+
+    return DeviceUICompatibilityReport(
+        is_compatible=is_compatible,
+        schema_version_compatible=True,
+        protocol_version_matches=protocol_version_matches,
+        missing_commands=sorted(set(missing_commands)),
+        missing_fields=sorted(set(missing_fields)),
+        missing_telemetry=sorted(set(missing_telemetry)),
+        warnings=warnings,
+        errors=errors,
+    )
+
+
+def migrate_ui_spec(data: Dict[str, Any], target_version: str = "1.0.0") -> DeviceUISpec:
+    """Migrate a raw or legacy Device UI definition dictionary to target schema version (#242)."""
+    migrated = dict(data)
+
+    # Legacy identity: string to dict
+    if isinstance(migrated.get("identity"), str):
+        migrated["identity"] = {"name": migrated["identity"], "model": "Migrated Device"}
+    elif not migrated.get("identity"):
+        name = migrated.get("protocol_ref") or migrated.get("protocol") or "Device"
+        migrated["identity"] = {"name": name, "model": "Migrated Device"}
+
+    # Legacy protocol -> protocol_ref
+    if "protocol" in migrated and "protocol_ref" not in migrated:
+        migrated["protocol_ref"] = migrated.pop("protocol")
+    elif "protocol_ref" not in migrated:
+        migrated["protocol_ref"] = migrated.get("identity", {}).get("name", "generic_protocol")
+
+    # Legacy sections/controls -> panels/groups
+    if "panels" not in migrated:
+        groups: List[Dict[str, Any]] = []
+        if "sections" in migrated and isinstance(migrated["sections"], list):
+            for sec in migrated.pop("sections"):
+                if isinstance(sec, dict):
+                    widgets = sec.get("widgets", [])
+                    groups.append({
+                        "name": sec.get("name", "section"),
+                        "title": sec.get("title", "Section"),
+                        "layout": sec.get("layout", "grid"),
+                        "widgets": widgets,
+                    })
+        elif "controls" in migrated and isinstance(migrated["controls"], list):
+            controls = migrated.pop("controls")
+            groups.append({
+                "name": "controls",
+                "title": "Controls",
+                "layout": "grid",
+                "widgets": controls,
+            })
+        migrated["panels"] = [{"name": "main", "title": "Main Workspace", "groups": groups}]
+
+    migrated["schema_version"] = target_version
+    return DeviceUISpec.model_validate(migrated)
+
+
+def export_device_ui(spec: DeviceUISpec, format: str = "yaml") -> str:
+    """Export DeviceUISpec definition to YAML or JSON string (#242)."""
+    fmt = format.lower().strip()
+    if fmt in ("json", "js"):
+        return spec.model_dump_json(indent=2)
+    elif fmt in ("yaml", "yml"):
+        data = spec.model_dump(mode="json")
+        return yaml.safe_dump(data, sort_keys=False)
+    else:
+        raise ValueError(f"Unsupported export format '{format}'. Use 'yaml' or 'json'.")
+
+
+def import_device_ui(content: str, format: Optional[str] = None) -> DeviceUISpec:
+    """Import and validate a DeviceUISpec definition from YAML or JSON string (#242)."""
+    stripped = content.strip()
+    if not stripped:
+        raise ValueError("Cannot import empty UI specification")
+
+    if (format and format.lower() == "json") or stripped.startswith("{"):
+        import json
+        data = json.loads(stripped)
+    else:
+        data = yaml.safe_load(stripped)
+
+    if not isinstance(data, dict):
+        raise ValueError("UI specification content must be a JSON/YAML mapping object")
+
+    return migrate_ui_spec(data)
+
+
+class DeviceUIStore:
+    """Storage repository for persisting, versioning, and managing Device UI definitions (#242)."""
+
+    def __init__(self, storage_dir: Optional[Union[str, Path]] = None) -> None:
+        if storage_dir is None:
+            self.storage_dir = Path(".omniuart") / "ui"
+        else:
+            self.storage_dir = Path(storage_dir)
+
+    def save(
+        self,
+        spec: DeviceUISpec,
+        filename: Optional[str] = None,
+        format: str = "yaml",
+    ) -> Path:
+        """Persist a DeviceUISpec to disk (#242)."""
+        self.storage_dir.mkdir(parents=True, exist_ok=True)
+        if not filename:
+            proto_clean = spec.protocol_ref.lower().replace(" ", "_")
+            ext = "json" if format.lower() == "json" else "yaml"
+            filename = f"{proto_clean}_ui.{ext}"
+
+        target = self.storage_dir / filename
+        content = export_device_ui(spec, format=format)
+        target.write_text(content, encoding="utf-8")
+        return target
+
+    def load(self, name_or_path: Union[str, Path]) -> DeviceUISpec:
+        """Load a DeviceUISpec from a file path or registered definition name (#242)."""
+        p = Path(name_or_path)
+        if not p.is_file():
+            # Search in storage_dir
+            for ext in (".yaml", ".yml", ".json"):
+                candidate = self.storage_dir / f"{name_or_path}{ext}"
+                if candidate.is_file():
+                    p = candidate
+                    break
+                candidate_ui = self.storage_dir / f"{name_or_path}_ui{ext}"
+                if candidate_ui.is_file():
+                    p = candidate_ui
+                    break
+
+        if not p.is_file():
+            raise FileNotFoundError(f"Device UI definition '{name_or_path}' not found in {self.storage_dir}")
+
+        content = p.read_text(encoding="utf-8")
+        return import_device_ui(content)
+
+    def list_definitions(self) -> List[Dict[str, Any]]:
+        """List all stored Device UI definitions (#242)."""
+        if not self.storage_dir.exists():
+            return []
+
+        results: List[Dict[str, Any]] = []
+        for file in self.storage_dir.glob("*"):
+            if file.suffix.lower() in (".yaml", ".yml", ".json"):
+                try:
+                    spec = import_device_ui(file.read_text(encoding="utf-8"))
+                    results.append({
+                        "name": spec.identity.name,
+                        "protocol_ref": spec.protocol_ref,
+                        "version": spec.identity.version,
+                        "schema_version": spec.schema_version,
+                        "revision": spec.revision,
+                        "file": str(file),
+                        "filename": file.name,
+                    })
+                except Exception:
+                    pass
+        return results
+
+    def delete(self, filename: str) -> bool:
+        """Delete a stored definition file (#242)."""
+        target = self.storage_dir / filename
+        if target.is_file():
+            target.unlink()
+            return True
+        return False
+
+    def find_for_protocol(self, protocol_name: str) -> Optional[DeviceUISpec]:
+        """Find the matching DeviceUISpec for a given protocol name (#242)."""
+        for item in self.list_definitions():
+            if item.get("protocol_ref", "").lower() == protocol_name.lower():
+                return self.load(item["file"])
+        return None
+
+
 def load_device_ui(source: Union[str, Path, Dict[str, Any]]) -> DeviceUISpec:
-    """Load and validate a DeviceUISpec from a file path, YAML/JSON string, or dict."""
+    """Load and validate a DeviceUISpec from a file path, YAML/JSON string, or dict (#229, #242)."""
     if isinstance(source, dict):
-        return DeviceUISpec.model_validate(source)
+        return migrate_ui_spec(source)
 
     if isinstance(source, Path) or (isinstance(source, str) and (source.endswith(".yaml") or source.endswith(".yml") or source.endswith(".json")) and Path(source).is_file()):
         content = Path(source).read_text(encoding="utf-8")
-        data = yaml.safe_load(content)
-        return DeviceUISpec.model_validate(data)
+        return import_device_ui(content)
 
     if isinstance(source, str):
-        data = yaml.safe_load(source)
-        return DeviceUISpec.model_validate(data)
+        return import_device_ui(source)
 
     raise ValueError("Invalid source type for DeviceUISpec")
 

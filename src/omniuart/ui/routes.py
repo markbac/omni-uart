@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -324,3 +324,90 @@ def get_available_serial_ports() -> Dict[str, Any]:
 def index() -> str:
     """Serve the single-page Tag-Based Dynamic Web UI application with Workspace Navigation."""
     return get_index_html()
+
+
+@router.get("/designer", response_class=HTMLResponse)
+@router.get("/designer/{identifier}", response_class=HTMLResponse)
+def get_designer_view(identifier: Optional[str] = None) -> str:
+    """Serve the visual Device UI Designer editor interface (#241)."""
+    from omniuart.core.device_ui import DeviceUIStore
+    from omniuart.designer import generate_designer_html
+
+    store = DeviceUIStore()
+    spec = None
+    if identifier:
+        spec = catalog.get_protocol(identifier)
+    if not spec:
+        proto_files = catalog.list_protocol_files()
+        if proto_files:
+            spec = catalog.get_protocol(proto_files[0].stem)
+
+    if not spec:
+        raise HTTPException(status_code=404, detail="No protocols available in catalog for designer")
+
+    ui_spec = store.find_for_protocol(spec.metadata.name)
+    return generate_designer_html(spec, ui_spec)
+
+
+@router.get("/api/designer/spec/{identifier}")
+def get_designer_protocol_spec(identifier: str) -> Dict[str, Any]:
+    """Return protocol spec and inferred or stored DeviceUISpec for designer (#241, #242)."""
+    from omniuart.core.device_ui import DeviceUIStore, infer_device_ui_from_spec
+
+    spec = catalog.get_protocol(identifier)
+    if not spec:
+        raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
+
+    store = DeviceUIStore()
+    ui_spec = store.find_for_protocol(spec.metadata.name) or infer_device_ui_from_spec(spec)
+    return {
+        "protocol": spec.model_dump(),
+        "ui_spec": ui_spec.model_dump(),
+    }
+
+
+@router.post("/api/designer/validate")
+def validate_designer_spec(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a draft DeviceUISpec against a protocol for compatibility (#241, #242)."""
+    from omniuart.core.device_ui import check_protocol_compatibility, migrate_ui_spec
+
+    proto_name = payload.get("protocol")
+    if not proto_name:
+        raise HTTPException(status_code=400, detail="Missing protocol identifier in payload")
+
+    spec = catalog.get_protocol(proto_name)
+    if not spec:
+        raise HTTPException(status_code=404, detail=f"Protocol '{proto_name}' not found")
+
+    ui_dict = payload.get("ui_spec")
+    if not ui_dict:
+        raise HTTPException(status_code=400, detail="Missing ui_spec dictionary in payload")
+
+    ui_spec = migrate_ui_spec(ui_dict)
+    report = check_protocol_compatibility(ui_spec, spec)
+    return report.model_dump()
+
+
+@router.post("/api/designer/save")
+def save_designer_spec(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist a draft DeviceUISpec to the UI store repository (#241, #242)."""
+    from omniuart.core.device_ui import DeviceUIStore, migrate_ui_spec
+
+    ui_dict = payload.get("ui_spec")
+    if not ui_dict:
+        raise HTTPException(status_code=400, detail="Missing ui_spec in payload")
+
+    fmt = payload.get("format", "yaml")
+    ui_spec = migrate_ui_spec(ui_dict)
+    store = DeviceUIStore()
+    path = store.save(ui_spec, format=fmt)
+    return {"ok": True, "path": str(path), "filename": path.name}
+
+
+@router.get("/api/designer/definitions")
+def list_designer_definitions() -> Dict[str, Any]:
+    """List all stored Device UI definitions (#242)."""
+    from omniuart.core.device_ui import DeviceUIStore
+
+    store = DeviceUIStore()
+    return {"definitions": store.list_definitions()}

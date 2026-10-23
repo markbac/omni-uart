@@ -105,10 +105,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     # 10. ui (Interactive Dynamic UI Launcher)
     ui_parser = subparsers.add_parser("ui", help="Launch interactive UI application")
+    ui_parser.add_argument("protocol", nargs="?", help="Protocol name or file to open")
     ui_parser.add_argument("--host", default="127.0.0.1", help="UI server bind host (default: 127.0.0.1)")
     ui_parser.add_argument("--port", type=int, default=8000, help="UI server bind port (default: 8000)")
     ui_parser.add_argument("--mode", choices=["desktop", "web"], default="desktop", help="UI display mode: 'desktop' (native window) or 'web' (browser tab)")
     ui_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open browser in web mode")
+    ui_parser.add_argument("--designer", action="store_true", help="Launch visual Device UI Designer editor (#241)")
+
+    # designer (Visual Device UI Designer)
+    designer_parser = subparsers.add_parser("designer", help="Launch visual Device UI Designer editor (#241)")
+    designer_parser.add_argument("protocol", nargs="?", help="Protocol definition file or catalog name")
+    designer_parser.add_argument("--host", default="127.0.0.1", help="UI server bind host (default: 127.0.0.1)")
+    designer_parser.add_argument("--port", type=int, default=8000, help="UI server bind port (default: 8000)")
+    designer_parser.add_argument("--mode", choices=["desktop", "web"], default="web", help="Display mode: 'desktop' or 'web'")
+    designer_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open browser")
 
     # 11. generate (Artefact Generator)
     gen_parser = subparsers.add_parser("generate", help="Generate Wireshark dissector, C header, Python dataclasses, or JSON Schema")
@@ -837,7 +847,16 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     elif args.subcommand == "ui":
+        if getattr(args, "designer", False):
+            proto = getattr(args, "protocol", None)
+            path = f"/designer/{proto}" if proto else "/designer"
+            return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode, initial_path=path)
         return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode)
+
+    elif args.subcommand == "designer":
+        proto = getattr(args, "protocol", None)
+        path = f"/designer/{proto}" if proto else "/designer"
+        return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode, initial_path=path)
 
     else:
         # Default behavior when launched with no subcommand (e.g. double-clicking standalone EXE)
@@ -845,7 +864,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return launch_ui_server(host="127.0.0.1", port=8000, open_browser=True, mode="desktop")
 
 
-def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True, mode: str = "desktop") -> int:
+def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True, mode: str = "desktop", initial_path: str = "") -> int:
     """Launch local Uvicorn FastAPI server and open Desktop App window or browser tab."""
     import threading
     import uvicorn
@@ -865,7 +884,7 @@ def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bo
         print(f"Warning: refusing to listen on '{host}': the web UI is local-only. Using 127.0.0.1 instead.", file=sys.stderr)
         host = "127.0.0.1"
 
-    url = f"http://{host}:{port}"
+    url = f"http://{host}:{port}{initial_path}"
     print("\n========================================================")
     print(f"  ⚡ OmniUART Interactive Control Workbench ({mode.upper()} Mode)")
     print(f"  URL: {url}")
