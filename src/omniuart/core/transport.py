@@ -723,8 +723,8 @@ class PtySerialPair:
 
         import pty
 
-        self.master_fd, self.slave_fd = pty.openpty()  # type: ignore[attr-defined]
-        self.slave_pts_path = os.ttyname(self.slave_fd)  # type: ignore[attr-defined]
+        self.master_fd, self.slave_fd = pty.openpty()
+        self.slave_pts_path = os.ttyname(self.slave_fd)
         self.host = PtyTransport(fd=self.master_fd, port_name="PTY_MASTER", owns_fd=False)
         self.device = PtyTransport(fd=self.slave_fd, port_name=self.slave_pts_path, owns_fd=False)
         self._closed = False

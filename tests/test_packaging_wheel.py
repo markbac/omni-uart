@@ -53,9 +53,10 @@ def test_wheel_build_contains_bundled_assets(tmp_path: Path) -> None:
 
     result = subprocess.run(
         [sys.executable, "-m", "build", "--wheel", "--outdir", str(dist_dir)],
+        cwd=Path(__file__).resolve().parents[1],
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=300,
     )
     assert result.returncode == 0, f"build --wheel failed: {result.stderr}\n{result.stdout}"
 

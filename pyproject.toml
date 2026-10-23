@@ -56,6 +56,7 @@ dev = [
     "types-Markdown>=3.0",
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.5.0",
+    "build>=1.2.0",
 ]
 
 [project.scripts]

@@ -14,6 +14,7 @@ lint:
   exclude: [protocols, schemas, _site, site]   # directory names, wherever they are
   rules:
     DOC003: info                       # undefined acronyms are a nudge, not a failure
+    DOC006: off                        # structure/broken-link below checks links and knows docs/schemas/ is generated
   glossary:                            # the canonical spelling, then the wrong ones
     OmniUART: [Omniuart, OmniUart, omniUART]
     UART: [Uart]
