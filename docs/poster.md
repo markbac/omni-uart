@@ -5,7 +5,7 @@ byline: Mark Bacon, Embedded Systems & Tooling Architecture
 paper: a1
 width: 1250
 document_number: OU-PO-001
-version: "1.0.0"
+version: "1.1.0"
 footer:
   left: OmniUART Architecture & Protocol Specification
   right: github.com/markbac/omni-uart
@@ -20,11 +20,11 @@ footer:
 | 100% | Zero-Python Standalone Executables | +native | good |
 | 40+ | Standard Protocol Codecs & Envelopes | +18 | good |
 | 32-bit | Arbitrary Rocksoft Parametric CRC | +custom | good |
-| 1,000+ | Verification & Conformance Tests | 100% pass | good |
+| 1,050+ | Verification & Conformance Tests | 100% pass | good |
 
 ## Introduction {.abstract}
 
-OmniUART decouples serial communication and embedded protocol engineering from custom tooling code by using declarative YAML and JSON schemas. It provides instant CLI batch automation, a 100% native zero-dependency Tkinter desktop application, a reactive WebSockets web workspace, an offline Virtual MCU simulation harness, and multi-format traffic export (PCAPNG, JSONL, CSV).
+OmniUART decouples serial communication and embedded protocol engineering from custom tooling code by using declarative YAML and JSON schemas. It provides instant CLI automation alongside a native Tkinter desktop application. Additional workspaces include reactive WebSockets web monitoring, offline Virtual MCU simulation, and multi-format PCAPNG traffic export.
 
 ## 1. System architecture: end-to-end data pipeline
 
@@ -94,7 +94,7 @@ OmniUART offers three dedicated operating workspaces tailored to different engin
 ```
 
 ```cards cols=3 style=plain
-Operator Workspace | Simplified one-click telemetry dials, big-button command triggers, pass/fail thresholds, and connection health | blue
+Operator Workspace | Simplified one-click telemetry dials, paired Get/Set registers, segmented 16x2 matrix LCDs, and health indicators | blue
 Engineer Workspace | Side-by-side hex/ASCII dumps, interactive field editor, CRC error injection, and transaction latency logs | navy
 Developer Workspace | Automated regression script runner, property-based fuzzer, and hot-reloading YAML protocol schema catalog | green
 ```
@@ -126,7 +126,7 @@ Wireshark Dissectors | Generates PCAPNG captures and dissector scripts for deep 
 
 - **Virtual MCU Simulation Engine**: Emulates device responses, baud rates, configurable delays, and jitter without physical hardware.
 - **Fault Injection**: Automatically injects corrupted preambles, truncated length fields, bit flips, and CRC errors.
-- **1,000+ Conformance Tests**: Pre-built suites validating Modbus RTU/ASCII, NMEA0183, MAVLink, BACnet, SLIP, COBS, and XMODEM.
+- **1,050+ Conformance Tests**: Pre-built suites validating Modbus RTU/ASCII, NMEA0183, MAVLink, BACnet, SLIP, COBS, and XMODEM with 100% pass rate.
 
 ## 7. Deployment: zero-friction distribution {cols=2}
 
