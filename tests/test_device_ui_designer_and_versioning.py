@@ -299,6 +299,58 @@ def test_device_ui_designer_html_rendering_and_escaping(sample_protocol: Protoco
     assert '&lt;b&gt;danger_cmd&lt;/b&gt;' in safe_html
 
 
+def test_device_ui_win32_classic_theme_generation(sample_protocol: ProtocolSpec) -> None:
+    """Verify that setting theme='win32' renders classic desktop layout with tabs and LCD (#241, #242)."""
+    from omniuart.dashboard_generator import generate_device_dashboard_html
+
+    ui_spec = DeviceUISpec(
+        theme="win32",
+        identity=DeviceIdentity(name="G460 Product Config Tool", version="1.42"),
+        protocol_ref="SensorMaster",
+        panels=[
+            PanelSpec(
+                name="info",
+                title="Info",
+                groups=[
+                    GroupSpec(
+                        name="lcd",
+                        title="Display",
+                        widgets=[
+                            WidgetSpec(widget_type="lcd_matrix", label="LCD Display", field_ref="read_lcd")
+                        ],
+                    )
+                ],
+            ),
+            PanelSpec(
+                name="config",
+                title="Config",
+                groups=[
+                    GroupSpec(
+                        name="voss",
+                        title="VOSS",
+                        widgets=[
+                            WidgetSpec(widget_type="paired_register", label="Flow threshold", field_ref="threshold_val", unit="lph")
+                        ],
+                    )
+                ],
+            ),
+        ],
+    )
+
+    html_res = generate_device_dashboard_html(sample_protocol, ui_spec)
+    assert "G460 Product Config Tool - V1.42" in html_res
+    assert "win32-tab-button" in html_res
+    assert "win32-tab-pane" in html_res
+    assert "LCD Display" in html_res
+    assert "win32-lcd-grid" in html_res
+    assert "Flow threshold" in html_res
+    assert "win32-btn-get" in html_res
+    assert "win32-btn-set" in html_res
+    assert "Clear Text" in html_res
+    assert "Log Payloads" in html_res
+    assert "win32-log-textarea" in html_res
+
+
 # -----------------------------------------------------------------------------
 # Web API endpoints for Designer (#241, #242)
 # -----------------------------------------------------------------------------

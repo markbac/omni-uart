@@ -103,6 +103,7 @@ class DeviceUISpec(BaseModel):
 
     schema_version: str = "1.0.0"
     revision: int = 1
+    theme: str = "modern"
     compatible_protocol_version: Optional[str] = None
     identity: DeviceIdentity
     protocol_ref: str
