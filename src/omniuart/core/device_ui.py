@@ -27,9 +27,9 @@ class DeviceIdentity(BaseModel):
 
 
 class WidgetSpec(BaseModel):
-    """Declarative UI control or telemetry widget element."""
+    """Declarative UI control, telemetry widget, or transfer control element (#229, #246)."""
 
-    widget_type: str = Field(description="Widget type: slider, switch, button, dropdown, gauge, line_plot, badge, text")
+    widget_type: str = Field(description="Widget type: slider, switch, button, dropdown, gauge, line_plot, badge, text, file_transfer, firmware_update")
     field_ref: Optional[str] = Field(default=None, description="Mapped protocol field or command parameter")
     label: str
     icon: Optional[str] = None
@@ -39,6 +39,12 @@ class WidgetSpec(BaseModel):
     unit: Optional[str] = None
     options: Optional[Dict[Any, str]] = None
     presentation_hints: Dict[str, Any] = Field(default_factory=dict)
+    supported_file_types: Optional[List[str]] = Field(default=None, description="Allowed file extensions e.g. ['.bin', '.hex', '.json']")
+    max_size_bytes: Optional[int] = Field(default=None, description="Max allowed file size in bytes")
+    transfer_type: Optional[str] = Field(default=None, description="Transfer semantic type: firmware, configuration, certificate, log, binary")
+    destructive: bool = Field(default=False, description="Flag indicating destructive or device-changing operation requiring confirmation")
+    confirm_prompt: Optional[str] = Field(default=None, description="Confirmation prompt displayed before executing transfer")
+    safety_warning: Optional[str] = Field(default=None, description="Detailed hazard warning for dangerous device operations")
 
 
 class GroupSpec(BaseModel):
@@ -163,9 +169,30 @@ def infer_device_ui_from_spec(spec: ProtocolSpec) -> DeviceUISpec:
         for f in tel.fields:
             telemetry_widgets.append(infer_widget_for_field(f, is_writable=False))
 
+    transfer_widgets: List[WidgetSpec] = []
+    for cmd in spec.commands:
+        cname = cmd.name.lower()
+        if any(kw in cname for kw in ("firmware", "flash", "ota", "bootload", "transfer", "upload", "download", "dump", "log", "cert")):
+            is_firmware = any(kw in cname for kw in ("firmware", "flash", "ota", "bootload"))
+            transfer_widgets.append(
+                WidgetSpec(
+                    widget_type="firmware_update" if is_firmware else "file_transfer",
+                    field_ref=cmd.name,
+                    label=f"{cmd.name.replace('_', ' ').title()}",
+                    transfer_type="firmware" if is_firmware else "binary",
+                    supported_file_types=[".bin", ".hex", ".img", ".elf"] if is_firmware else [".bin", ".json", ".cfg", ".log", ".txt"],
+                    max_size_bytes=16 * 1024 * 1024,
+                    destructive=is_firmware or (cmd.safety is CommandSafety.MUTATING),
+                    confirm_prompt=f"Are you sure you want to execute {cmd.name}? This modifies device state." if (is_firmware or cmd.safety is CommandSafety.MUTATING) else None,
+                    safety_warning="Hazardous Operation: Do not interrupt or disconnect power/UART during transfer!" if is_firmware else None,
+                )
+            )
+
     groups: List[GroupSpec] = []
     if control_widgets:
         groups.append(GroupSpec(name="controls", title="Device Controls", layout="grid", widgets=control_widgets))
+    if transfer_widgets:
+        groups.append(GroupSpec(name="transfer", title="File & Blob Transfers", layout="grid", widgets=transfer_widgets))
     if telemetry_widgets:
         groups.append(GroupSpec(name="telemetry", title="Live Telemetry", layout="grid", widgets=telemetry_widgets))
 

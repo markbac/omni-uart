@@ -126,6 +126,21 @@ def generate_device_dashboard_html(
       border: none; border-radius: 6px; cursor: pointer;
     }}
     .btn:hover {{ opacity: 0.9; }}
+    .transfer-card {{
+      background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 12px; margin: 10px 0;
+    }}
+    .transfer-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }}
+    .transfer-badge {{ background: #0369a1; color: #fff; font-size: 0.75rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; }}
+    .transfer-danger {{ background: #991b1b; color: #fecaca; }}
+    .file-input {{ display: block; width: 100%; margin: 8px 0; font-size: 0.85rem; color: #94a3b8; }}
+    .progress-bar-bg {{ background: #1e293b; border-radius: 4px; height: 10px; width: 100%; overflow: hidden; margin: 8px 0; }}
+    .progress-bar-fill {{ background: var(--accent); height: 100%; width: 0%; transition: width 0.3s; }}
+    .transfer-meta-text {{ font-size: 0.8rem; color: #94a3b8; display: flex; justify-content: space-between; margin-bottom: 4px; }}
+    .safety-alert {{ background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); border-radius: 6px; padding: 8px; margin: 8px 0; font-size: 0.8rem; color: #fca5a5; }}
+    .transfer-actions {{ display: flex; gap: 8px; margin-top: 10px; }}
+    .btn-transfer {{ background: var(--accent); color: #000; }}
+    .btn-cancel {{ background: #475569; color: #fff; }}
+    .btn-retry {{ background: #d97706; color: #fff; }}
   </style>
 </head>
 <body>
@@ -154,12 +169,55 @@ def generate_device_dashboard_html(
       <h3 style="margin-top:0; color: var(--accent);">{group_title}</h3>
 """)
             for widget in group.get("widgets", []):
+                w_type = str(widget.get("widget_type") or "").lower()
                 label = html.escape(str(widget.get("label") or ""))
-                unit = widget.get("unit")
-                unit_str = f" ({html.escape(str(unit))})" if unit else ""
                 field_ref = html.escape(str(widget.get("field_ref") or ""))
-                widget_type = html.escape(str(widget.get("widget_type") or "BUTTON").upper())
-                html_parts.append(f"""      <div class="widget-row">
+
+                if w_type in ("file_transfer", "firmware_update"):
+                    supported_exts = widget.get("supported_file_types") or [".bin"]
+                    accept_attr = html.escape(",".join(supported_exts))
+                    max_size = int(widget.get("max_size_bytes") or (16 * 1024 * 1024))
+                    max_size_mb = round(max_size / (1024 * 1024), 1)
+                    transfer_type = html.escape(str(widget.get("transfer_type") or "binary").upper())
+                    is_destructive = bool(widget.get("destructive", False))
+                    prompt_text = html.escape(str(widget.get("confirm_prompt") or ""))
+                    warning_text = html.escape(str(widget.get("safety_warning") or ""))
+                    badge_class = "transfer-badge transfer-danger" if is_destructive else "transfer-badge"
+
+                    html_parts.append(f"""      <div class="transfer-card" data-transfer-ref="{field_ref}" data-destructive="{str(is_destructive).lower()}" data-max-size="{max_size}">
+        <div class="transfer-header">
+          <strong>{label}</strong>
+          <span class="{badge_class}">{transfer_type}</span>
+        </div>
+        <div class="transfer-meta-text">
+          <span>Supported: {accept_attr} | Max: {max_size_mb} MB</span>
+          <span id="badge_state_{field_ref}" style="font-weight:600; color:var(--accent);">IDLE</span>
+        </div>
+""")
+                    if is_destructive or warning_text:
+                        alert_msg = warning_text or prompt_text or "Warning: Destructive device operation."
+                        html_parts.append(f"""        <div class="safety-alert">⚠️ {alert_msg}</div>\n""")
+
+                    html_parts.append(f"""        <input type="file" class="file-input" id="file_{field_ref}" accept="{accept_attr}" data-field-ref="{field_ref}" />
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="bar_{field_ref}"></div>
+        </div>
+        <div class="transfer-meta-text">
+          <span id="progress_text_{field_ref}">0% | 0 kB/s</span>
+          <span id="eta_text_{field_ref}">ETA: --</span>
+        </div>
+        <div class="transfer-actions">
+          <button class="btn btn-transfer" data-action="start-transfer" data-field-ref="{field_ref}" data-prompt="{prompt_text}">Start Transfer</button>
+          <button class="btn btn-cancel" data-action="cancel-transfer" data-field-ref="{field_ref}">Cancel</button>
+          <button class="btn btn-retry" data-action="retry-transfer" data-field-ref="{field_ref}">Retry</button>
+        </div>
+      </div>
+""")
+                else:
+                    unit = widget.get("unit")
+                    unit_str = f" ({html.escape(str(unit))})" if unit else ""
+                    widget_type = html.escape(str(widget.get("widget_type") or "BUTTON").upper())
+                    html_parts.append(f"""      <div class="widget-row">
         <span>{label}{unit_str}</span>
         <button class="btn" data-field-ref="{field_ref}">{widget_type}</button>
       </div>
@@ -169,8 +227,48 @@ def generate_device_dashboard_html(
     html_parts.append("""  </div>
   <script>
     document.addEventListener("click", function(e) {
-      if (e.target && e.target.matches("button[data-field-ref]")) {
-        var ref = e.target.getAttribute("data-field-ref");
+      var btn = e.target;
+      if (!btn) return;
+
+      var action = btn.getAttribute("data-action");
+      var ref = btn.getAttribute("data-field-ref");
+
+      if (action === "start-transfer") {
+        var card = btn.closest(".transfer-card");
+        var isDestructive = card ? card.getAttribute("data-destructive") === "true" : false;
+        var promptMsg = btn.getAttribute("data-prompt");
+
+        if (isDestructive || promptMsg) {
+          var confirmed = window.confirm(promptMsg || "Warning: This operation will modify device memory or firmware. Do you wish to continue?");
+          if (!confirmed) {
+            console.log("Transfer aborted by user confirmation dialog:", ref);
+            return;
+          }
+        }
+
+        var fileInput = document.getElementById("file_" + ref);
+        if (fileInput && fileInput.files && fileInput.files.length > 0) {
+          var file = fileInput.files[0];
+          var maxSize = parseInt(card.getAttribute("data-max-size") || "0", 10);
+          if (maxSize > 0 && file.size > maxSize) {
+            alert("Selected file exceeds max capability: " + file.size + " > " + maxSize + " bytes.");
+            return;
+          }
+          console.log("Initiating transfer for:", ref, "file:", file.name, "size:", file.size);
+          var badge = document.getElementById("badge_state_" + ref);
+          if (badge) badge.textContent = "TRANSFERRING";
+        } else {
+          alert("Please select a file to transfer first.");
+        }
+      } else if (action === "cancel-transfer") {
+        console.log("Cancelling transfer for:", ref);
+        var badge = document.getElementById("badge_state_" + ref);
+        if (badge) badge.textContent = "CANCELLED";
+      } else if (action === "retry-transfer") {
+        console.log("Retrying transfer for:", ref);
+        var badge = document.getElementById("badge_state_" + ref);
+        if (badge) badge.textContent = "TRANSFERRING";
+      } else if (btn.matches("button[data-field-ref]")) {
         console.log("Triggering widget for field/command:", ref);
       }
     });
