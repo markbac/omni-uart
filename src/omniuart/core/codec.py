@@ -322,6 +322,85 @@ def decode_value(spec: FieldSpec, data: bytes) -> Any:
     return val
 
 
+_BIT_TYPES = set(_INT_FORMATS) | {FieldType.ENUM, FieldType.BOOL}
+
+
+def _units(specs: Sequence[FieldSpec]) -> List[Union[FieldSpec, List[FieldSpec]]]:
+    """Split ``specs`` into single fields and runs of consecutive ``bit_width`` fields packed together (#327).
+
+    A run is packed LSB-first (the first field in the lowest bits) into the fewest whole bytes, written in
+    the first field's byte order. Bit fields cannot be conditional, positioned by ``offset`` or derived.
+    """
+    units: List[Union[FieldSpec, List[FieldSpec]]] = []
+    for spec in specs:
+        if not spec.bit_width:
+            units.append(spec)
+            continue
+        if spec.type not in _BIT_TYPES:
+            raise CodecError(f"Field '{spec.name}': bit_width needs an integer, enum or bool type, not {spec.type.value}")
+        if spec.condition or spec.discriminator or spec.offset is not None or spec.expression:
+            raise CodecError(f"Bit field '{spec.name}' cannot use condition, discriminator, offset or expression")
+        if units and isinstance(units[-1], list):
+            units[-1].append(spec)
+        else:
+            units.append([spec])
+    return units
+
+
+def _bit_group_size(group: Sequence[FieldSpec]) -> int:
+    return (sum(s.bit_width or 0 for s in group) + 7) // 8
+
+
+def _bit_value(spec: FieldSpec, value: Any) -> int:
+    """Validate one bit-field value and return the raw integer stored in its bits."""
+    width = spec.bit_width or 0
+    if spec.type is FieldType.BOOL:
+        return 1 if encode_value(FieldSpec(name=spec.name, type=FieldType.BOOL), value) == b"\x01" else 0
+    if (spec.scale is not None or spec.offset_val is not None) and not isinstance(value, bool):
+        try:
+            value = round((float(value) - (spec.offset_val or 0.0)) / (spec.scale if spec.scale is not None else 1.0))
+        except (TypeError, ValueError):
+            raise CodecError(f"Parameter '{spec.name}' scaling error for {value!r}") from None
+    if isinstance(value, bool) or isinstance(value, float) and not value.is_integer():
+        raise CodecError(f"Parameter '{spec.name}' expects an integer, got {value!r}")
+    try:
+        number = _as_int(value, f"Parameter '{spec.name}'") if isinstance(value, str) else int(value)
+    except (TypeError, ValueError):
+        raise CodecError(f"Parameter '{spec.name}' expects an integer, got {value!r}") from None
+    if spec.min is not None and number < spec.min:
+        raise CodecError(f"Parameter '{spec.name}' value {number} is below the minimum {spec.min:g}")
+    if spec.max is not None and number > spec.max:
+        raise CodecError(f"Parameter '{spec.name}' value {number} is above the maximum {spec.max:g}")
+    if not 0 <= number < (1 << width):
+        raise CodecError(f"Parameter '{spec.name}' value {number} does not fit {width} bit(s) (0..{(1 << width) - 1})")
+    return number
+
+
+def _encode_bits(group: Sequence[FieldSpec], values: Mapping[str, Any]) -> bytes:
+    raw, shift = 0, 0
+    for spec in group:
+        value = values.get(spec.name, spec.default if spec.default is not None else 0)
+        raw |= _bit_value(spec, value) << shift
+        shift += spec.bit_width or 0
+    return raw.to_bytes(_bit_group_size(group), "big" if group[0].endian == "big" else "little")
+
+
+def _decode_bits(group: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
+    raw = int.from_bytes(data, "big" if group[0].endian == "big" else "little")
+    out: Dict[str, Any] = {}
+    for spec in group:
+        width = spec.bit_width or 0
+        number = raw & ((1 << width) - 1)
+        raw >>= width
+        if spec.type is FieldType.BOOL:
+            out[spec.name] = number != 0
+        elif spec.scale is not None or spec.offset_val is not None:
+            out[spec.name] = number * (spec.scale if spec.scale is not None else 1.0) + (spec.offset_val or 0.0)
+        else:
+            out[spec.name] = number
+    return out
+
+
 def encode_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> bytes:
     """Encode ``values`` in declaration order, applying declared defaults for omitted fields."""
     known = {s.name for s in specs}
@@ -330,32 +409,32 @@ def encode_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> byte
         raise CodecError(f"Unknown parameter(s): {', '.join(unknown)}")
     out = bytearray()
     values_copy = dict(values)
-    for spec in specs:
+    for unit in _units(specs):
+        if isinstance(unit, list):
+            out.extend(_encode_bits(unit, values_copy))
+            continue
+        spec = unit
         if spec.condition and not _eval_condition(spec.condition, values_copy):
             continue
         if spec.discriminator is not None and spec.discriminator_value is not None:
             if values_copy.get(spec.discriminator) != spec.discriminator_value:
                 continue
+        if spec.expression:
+            # Derived fields are computed, never carried on the wire (decode_fields does the same).
+            values_copy[spec.name] = _eval_expression(spec.expression, values_copy)
+            continue
         if spec.name in values_copy:
             value = values_copy[spec.name]
-        elif spec.expression:
-            value = _eval_expression(spec.expression, values_copy)
-            values_copy[spec.name] = value
-            continue
         elif spec.default is not None:
             value = spec.default
         else:
             continue
         val_bytes = encode_value(spec, value)
         if spec.offset is not None:
-            if spec.offset > len(out):
-                out.extend(b"\x00" * (spec.offset - len(out)))
-                out.extend(val_bytes)
-            else:
-                end_pos = spec.offset + len(val_bytes)
-                if end_pos > len(out):
-                    out.extend(b"\x00" * (end_pos - len(out)))
-                out[spec.offset:end_pos] = val_bytes
+            end_pos = spec.offset + len(val_bytes)
+            if end_pos > len(out):
+                out.extend(b"\x00" * (end_pos - len(out)))
+            out[spec.offset:end_pos] = val_bytes
         else:
             out.extend(val_bytes)
     return bytes(out)
@@ -364,9 +443,30 @@ def encode_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> byte
 
 def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
     """Decode ``data`` as a sequence of fields. Trailing or missing bytes raise :class:`CodecError`."""
+    return decode_fields_with_layout(specs, data)[0]
+
+
+def decode_fields_with_layout(
+    specs: Sequence[FieldSpec], data: bytes
+) -> Tuple[Dict[str, Any], List[Tuple[FieldSpec, int, int]]]:
+    """Decode like :func:`decode_fields` and also return ``(spec, start, end)`` for every field on the wire.
+
+    Fields packed into one bit group share the group's byte range; derived fields have no range.
+    """
     out: Dict[str, Any] = {}
+    layout: List[Tuple[FieldSpec, int, int]] = []
     pos = 0
-    for index, spec in enumerate(specs):
+    units = _units(specs)
+    for index, unit in enumerate(units):
+        if isinstance(unit, list):
+            group_size = _bit_group_size(unit)
+            if pos + group_size > len(data):
+                raise CodecError(f"Payload too short for bit field '{unit[0].name}' ({len(data) - pos} of {group_size} bytes)")
+            out.update(_decode_bits(unit, data[pos : pos + group_size]))
+            layout.extend((spec, pos, pos + group_size) for spec in unit)
+            pos += group_size
+            continue
+        spec = unit
         if spec.condition and not _eval_condition(spec.condition, out):
             continue
         if spec.discriminator is not None and spec.discriminator_value is not None:
@@ -385,7 +485,7 @@ def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
             item_sz = field_size(item_spec) or 1
             size = int(out[spec.count_ref]) * item_sz
         elif size is None:
-            if index != len(specs) - 1:
+            if index != len(units) - 1:
                 raise CodecError(f"Variable-length field '{spec.name}' must be the last field")
             size = len(data) - pos
 
@@ -393,16 +493,14 @@ def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
         if cur_pos + size > len(data):
             raise CodecError(f"Payload too short for field '{spec.name}' ({len(data) - cur_pos} of {size} bytes)")
         out[spec.name] = decode_value(spec, data[cur_pos : cur_pos + size])
-        if spec.expression:
-            out[spec.name] = _eval_expression(spec.expression, out)
+        layout.append((spec, cur_pos, cur_pos + size))
         if spec.offset is None:
             pos += size
         else:
             pos = max(pos, cur_pos + size)
     if pos != len(data) and not any(s.offset is not None for s in specs):
         raise CodecError(f"{len(data) - pos} unexpected trailing payload byte(s)")
-    return out
-
+    return out, layout
 
 
 def validate_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> Optional[str]:
@@ -684,8 +782,13 @@ class FrameCodec:
         if fields is None:
             return None
         total = 0
-        for spec in fields:
-            size = field_size(spec)
+        for unit in _units(fields):
+            if isinstance(unit, list):
+                total += _bit_group_size(unit)
+                continue
+            if unit.expression:
+                continue
+            size = field_size(unit)
             if size is None:
                 return None
             total += size

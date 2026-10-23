@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
-from omniuart.core.dissector import dissect_frame
+from omniuart.core.dissector import DissectedFrame, dissect_frame
 from omniuart.core.models import ProtocolSpec
 from omniuart.core.session import Exchange
 
@@ -67,40 +67,18 @@ class EngineerProtocolView:
 
         req_slices: List[Dict[str, Any]] = []
         resp_slices: List[Dict[str, Any]] = []
+        crc_ok: Optional[bool] = None  # None: nothing received, or no integrity field to check
 
         if exchange.request:
-            req_dissected = dissect_frame(self.spec, exchange.request, direction="request")
-            req_slices = [
-                {
-                    "name": s.field_name,
-                    "offset": s.start_offset,
-                    "length": s.length_bytes,
-                    "value": s.decoded_value,
-                    "type": s.field_type,
-                    "hex_chunk": s.hex_str,
-                }
-                for s in req_dissected.field_slices
-            ]
+            req_slices = self._slices(dissect_frame(self.spec, exchange.request, direction="request"))
 
         if exchange.response_bytes:
             resp_dissected = dissect_frame(self.spec, exchange.response_bytes, direction="response")
-            resp_slices = [
-                {
-                    "name": s.field_name,
-                    "offset": s.start_offset,
-                    "length": s.length_bytes,
-                    "value": s.decoded_value,
-                    "type": s.field_type,
-                    "hex_chunk": s.hex_str,
-                }
-                for s in resp_dissected.field_slices
-            ]
+            resp_slices = self._slices(resp_dissected)
+            if resp_dissected.crc_info is not None:
+                crc_ok = bool(resp_dissected.crc_info["valid"])
 
         crc_alg = self.spec.framing.integrity.algorithm if self.spec.framing.integrity else "none"
-        if crc_alg == "none" or not exchange.response_bytes or not exchange.response:
-            crc_ok: Optional[bool] = None
-        else:
-            crc_ok = getattr(exchange.response, "crc_valid", exchange.response.ok)
 
         detail = ProtocolExchangeDetail(
             exchange_id=ex_id,
@@ -119,6 +97,20 @@ class EngineerProtocolView:
 
         self.exchanges[ex_id] = detail
         return detail
+
+    @staticmethod
+    def _slices(dissected: DissectedFrame) -> List[Dict[str, Any]]:
+        return [
+            {
+                "name": s.field_name,
+                "offset": s.start_offset,
+                "length": s.length_bytes,
+                "value": s.decoded_value,
+                "type": s.field_type,
+                "hex_chunk": s.hex_str,
+            }
+            for s in dissected.field_slices
+        ]
 
     def get_exchange(self, exchange_id: str) -> Optional[ProtocolExchangeDetail]:
         return self.exchanges.get(exchange_id)

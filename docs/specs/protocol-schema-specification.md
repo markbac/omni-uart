@@ -174,10 +174,26 @@ Individual command parameters and response fields support the following primitiv
 | `float32`, `float64` | 4, 8 | `endian`, `precision`, `min`, `max`, `default`, `unit` |
 | `bool` | 1 | `default` |
 | `enum` | 1, 2, 4 | `endian`, `options` (dictionary of numeric values to string labels) |
-| `string` | dynamic / fixed | `encoding` (utf-8, ascii), `max_length`, `null_terminated` |
+| `string` | dynamic / fixed | `encoding` (utf-8, ascii), `length` |
 | `bytes` | dynamic / fixed | `length` |
 
 [[CAPTION:Table]] Supported primitive field data types.
+
+### 3.5 Field Layout Attributes
+
+These attributes change how a field is placed on the wire or computed. The codec, the dissector and the generated documentation all apply them the same way.
+
+| Attribute | Effect |
+| :--- | :--- |
+| `bit_width` | Consecutive fields with `bit_width` are packed into shared bytes, least significant bit first (the first field takes the lowest bits). The group takes the fewest whole bytes and is written in the first field's `endian`. Only integer, `enum` and `bool` fields can be bit fields, and a bit field cannot also use `condition`, `discriminator`, `offset` or `expression`. |
+| `offset` | Places the field at a fixed byte offset in the payload, padding with zeros when encoding. Trailing-byte checks are relaxed for a payload that uses `offset`. |
+| `expression` | A derived field: its value is calculated from earlier fields (arithmetic and bitwise operators only) when encoding and decoding, and it takes no bytes on the wire. |
+| `encoding` | For `string` fields, the text encoding. Otherwise the name of a plugin encoding registered with the plugin registry, which then encodes and decodes the field. |
+| `length_ref`, `count_ref` | Take a variable field's byte length, or an array's item count, from an earlier field. |
+| `condition`, `discriminator` + `discriminator_value` | Include the field only when the condition holds, or when the discriminator field has the given value. |
+| `scale`, `offset_val` | Physical value = raw value × `scale` + `offset_val`. |
+
+[[CAPTION:Table]] Field layout attributes.
 
 ---
 
@@ -293,6 +309,13 @@ Commands specify outbound requests dispatched to the device. Each command can de
 
 ### 5.2 Response correlation
 A response is accepted for a request only if it is a response frame for that command and every `correlate` field in the response equals the value that was sent. Use `correlate` for a transaction id, sequence number or device address. Any other frame received while waiting does not end the wait and does not fail the exchange. Such a frame (unsolicited telemetry, a late response to an earlier request, a response from another device) is collected in `Exchange.unsolicited` and passed to the session's `on_unsolicited` callback. If only such frames arrive the exchange times out with "no matching response". A response frame for a different command with no `correlate` rule is still reported as an invalid response. In code, `DeviceSession(matcher=...)` or `send(..., matcher=...)` replaces the rule with a predicate `(command, request_values, frame) -> bool`. Correlation applies to binary protocols; a delimited text reply is matched by timing only.
+
+For a delimited text protocol, a `response` can declare how to tell success from failure. Both are regular expressions searched in the reply text, with `^` and `$` matching at line boundaries:
+
+- `error_patterns`: a list of patterns; a reply matching any of them fails the exchange (for example `["^ERROR$", "^\\+CME ERROR:"]` for AT commands).
+- `success_pattern`: a reply that does not match it fails the exchange (for example `"^OK$"`).
+
+Nothing is assumed when neither is declared: a reply containing the word "error" can be ordinary data, such as SCPI's `0,"No error"`. Scripts can check text replies with the `contains`, `startswith`, `endswith` and `matches` assertion operators.
 
 ### 5.3 UI Tags & Dashboard Generation
 Commands can include semantic tags to drive auto-generated Win32 and web dashboards:

@@ -114,7 +114,7 @@ async def connect_serial(req: SerialConnectRequest) -> Dict[str, Any]:
     """Open the requested serial port (or the labelled simulated device), replacing any open link."""
     if req.port == VIRTUAL_PORT:
         try:
-            known = bool(req.protocol) and catalog.get_protocol(req.protocol) is not None
+            known = bool(req.protocol) and catalog.get_protocol(req.protocol or "") is not None
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         if not known:

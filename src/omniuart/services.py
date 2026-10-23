@@ -7,6 +7,7 @@ fuzzing, replay, documentation and artefact generation from CLI and UI presentat
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -27,6 +28,8 @@ from omniuart.generators import (
     generate_wireshark_dissector,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class CatalogService:
     """Service for discovering, querying, and loading protocols and scripts."""
@@ -35,33 +38,36 @@ class CatalogService:
         self.catalog = catalog or CatalogManager()
 
     def list_catalog(self) -> Dict[str, Any]:
-        """Return dict listing all discovered protocols and scripts."""
+        """Return dict listing all discovered protocols and scripts, and every file that failed to load."""
         protocols: List[Dict[str, Any]] = []
+        errors: List[Dict[str, str]] = []
         for pf in self.catalog.list_protocol_files():
             try:
                 p = self.catalog._load_protocol_cached(pf)
-                protocols.append({
-                    "name": p.metadata.name,
-                    "version": p.metadata.version,
-                    "filename": pf.name,
-                    "commands": [c.name for c in p.commands],
-                })
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 - reported to the caller, not swallowed
+                errors.append({"filename": pf.name, "kind": "protocol", "error": str(exc)})
+                continue
+            protocols.append({
+                "name": p.metadata.name,
+                "version": p.metadata.version,
+                "filename": pf.name,
+                "commands": [c.name for c in p.commands],
+            })
 
         scripts: List[Dict[str, Any]] = []
         for sf in self.catalog.list_script_files():
             try:
                 s = self.catalog._load_script_cached(sf)
-                scripts.append({
-                    "name": s.meta.name if s.meta else sf.stem,
-                    "filename": sf.name,
-                    "protocol": s.meta.protocol if s.meta else "",
-                })
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 - reported to the caller, not swallowed
+                errors.append({"filename": sf.name, "kind": "script", "error": str(exc)})
+                continue
+            scripts.append({
+                "name": s.meta.name if s.meta else sf.stem,
+                "filename": sf.name,
+                "protocol": s.meta.protocol if s.meta else "",
+            })
 
-        return {"protocols": protocols, "scripts": scripts}
+        return {"protocols": protocols, "scripts": scripts, "errors": errors}
 
     def get_protocol(self, query: str) -> ProtocolSpec:
         """Resolve a protocol by name or file path."""
@@ -151,12 +157,13 @@ class AutomationService:
         if recorder and record_file:
             recorder.export_jsonl(record_file)
         passed = sum(1 for r in result.steps if r.status == StepStatus.PASSED)
-        failed = sum(1 for r in result.steps if r.status != StepStatus.PASSED)
+        skipped = sum(1 for r in result.steps if r.status == StepStatus.SKIPPED)
         summary: Dict[str, Any] = {
             "script": script.meta.name if script.meta else script_query,
             "total_steps": len(result.steps),
             "passed": passed,
-            "failed": failed,
+            "skipped": skipped,
+            "failed": len(result.steps) - passed - skipped,
             "results": [
                 {
                     "step": r.index,
@@ -189,14 +196,17 @@ class DocumentationService:
         out_path.mkdir(parents=True, exist_ok=True)
 
         if all_protocols:
+            failed: List[str] = []
             for pf in cat.list_protocol_files():
                 try:
                     p_spec = cat._load_protocol_cached(pf)
-                    if p_spec is not None:
-                        html = generate_html_docs(p_spec)
-                        (out_path / f"{p_spec.metadata.name}.html").write_text(html, encoding="utf-8")
-                except Exception:
-                    pass
+                except Exception as exc:  # noqa: BLE001 - one bad file must not stop the others
+                    logger.warning("Skipping documentation for %s: %s", pf.name, exc)
+                    failed.append(pf.name)
+                    continue
+                (out_path / f"{pf.stem}.html").write_text(generate_html_docs(p_spec), encoding="utf-8")
+            if failed:
+                raise ValueError(f"Documentation written to {out_path}, but these protocol files failed to load: {failed}")
             return out_path
         elif protocol:
             spec = cat.get_protocol(protocol)
@@ -229,10 +239,13 @@ class FuzzingService:
         report = await fuzzer.run_campaign(max_vectors=num_vectors)
         return {
             "protocol": spec.metadata.name,
+            "target": "simulator",
             "seed": fuzzer.seed,
-            "vectors": num_vectors,
-            "passed": report.outcomes.get("ok", 0),
-            "failed": report.outcomes.get("error", 0) + report.outcomes.get("hang", 0) + report.outcomes.get("malformed", 0),
+            "vectors": report.total_vectors,
+            "handled": report.handled_count,
+            "failed": report.total_vectors - report.handled_count,
+            "outcomes": dict(report.outcomes),
+            "passed": report.passed,
         }
 
 
@@ -257,8 +270,14 @@ class ReplayService:
         await transport.open()
         try:
             replayer = SessionReplayer(transport=transport, speed_multiplier=speed)
-            count = await replayer.replay_file(session_file)
-            return {"session_file": session_file, "events_replayed": count}
+            result = await replayer.replay_file(session_file)
+            return {
+                "session_file": session_file,
+                "events_replayed": result.frames_sent,
+                "events_skipped": result.frames_skipped,
+                "truncated": result.truncated,
+                "duration_s": result.duration_s,
+            }
         finally:
             await transport.close()
 

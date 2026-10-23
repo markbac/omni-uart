@@ -54,3 +54,26 @@ def test_engineer_view_escaping_hostile_inputs():
     assert "<img src=x onerror=alert(3)>" not in html
     assert "&lt;img src=x onerror=alert(3)&gt;" in html
     assert "ex_&lt;test&gt;" in html
+
+
+def test_engineer_view_crc_valid_comes_from_the_integrity_check() -> None:
+    """#318: crc_valid reflects the real CRC, not whether the response decoded."""
+    from omniuart.core.codec import FrameCodec
+
+    spec = load_protocol(Path("examples/protocols/binary_sensor_node.yaml"))
+    view = EngineerProtocolView(spec)
+    codec = FrameCodec(spec)
+    request = codec.encode_command("ping")
+    good = codec.encode_response("ping", {"uptime_seconds": 10})
+
+    def inspect(resp: bytes) -> ProtocolExchangeDetail:
+        frame = codec.extract_frames(resp, direction="response")[0][0]
+        return view.inspect_exchange(Exchange(command="ping", request=request, response_bytes=resp, response=frame))
+
+    assert inspect(good).crc_valid is True
+    corrupted = bytearray(good)
+    corrupted[-3] ^= 0xFF  # integrity field, just before the 2-byte footer
+    assert inspect(bytes(corrupted)).crc_valid is False
+    # A well-formed frame with an unknown id is a decode error, not a CRC failure
+    unknown = codec.encode_message(0x7E, b"")
+    assert inspect(unknown).crc_valid is True

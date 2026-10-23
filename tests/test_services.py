@@ -9,7 +9,9 @@ from omniuart.services import (
     DocumentationService,
     FuzzingService,
     GeneratorService,
+    ReplayService,
 )
+from omniuart.core.catalog import CatalogManager
 
 def test_catalog_service():
     service = CatalogService()
@@ -53,8 +55,9 @@ async def test_fuzzing_service():
     fuzz_service = FuzzingService()
     res = await fuzz_service.run_fuzz_campaign("binary_sensor_node.yaml", num_vectors=5, seed=42)
     assert res["protocol"] == "BinarySensorNode"
-    assert res["vectors"] == 5
-    assert "passed" in res
+    assert res["vectors"] == sum(res["outcomes"].values()) > 0
+    assert res["handled"] + res["failed"] == res["vectors"]
+    assert res["passed"] is (res["failed"] == 0)
 
 @pytest.mark.asyncio
 async def test_generator_service():
@@ -64,3 +67,29 @@ async def test_generator_service():
 
     schema = service.generate("schema")
     assert "schema" in schema.lower()
+
+
+def test_catalog_service_reports_files_that_fail_to_load(tmp_path: Path):
+    (tmp_path / "broken.yaml").write_text("metadata: [not, a, mapping]\n", encoding="utf-8")
+    (tmp_path / "scripts").mkdir()
+    service = CatalogService(CatalogManager(protocol_dirs=[tmp_path], script_dirs=[tmp_path / "scripts"]))
+    summary = service.list_catalog()
+    assert summary["protocols"] == []
+    assert [e["filename"] for e in summary["errors"]] == ["broken.yaml"]
+
+
+def test_documentation_service_all_protocols(tmp_path: Path):
+    out = DocumentationService().generate_documentation(all_protocols=True, output_dir=str(tmp_path))
+    assert any(out.glob("*.html"))
+
+
+@pytest.mark.asyncio
+async def test_automation_and_replay_services(tmp_path: Path):
+    record = tmp_path / "session.jsonl"
+    res = await AutomationService().run_script("sensor_test_suite.yaml", virtual=True, record_file=str(record))
+    assert res["passed"] + res["skipped"] + res["failed"] == res["total_steps"]
+    assert record.is_file()
+
+    replayed = await ReplayService().replay(str(record), virtual=True, speed=100.0)
+    assert replayed["events_replayed"] > 0
+    assert replayed["truncated"] is False

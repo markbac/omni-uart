@@ -265,3 +265,14 @@ def test_asyncapi_hex_and_x_unit():
     assert "unit" not in temp_schema
     assert "multipleOf" not in temp_schema
     assert temp_schema.get("x-scale") == 0.1
+
+
+def test_docs_all_markdown_writes_one_file_per_protocol(tmp_path, capsys) -> None:
+    """#322: `docs --all --format markdown` writes Markdown for every protocol, not the HTML site."""
+    from omniuart.cli import main
+    from omniuart.core.catalog import CatalogManager
+
+    assert main(["docs", "--all", "--format", "markdown", "--output-dir", str(tmp_path)]) == 0
+    written = sorted(p.stem for p in tmp_path.glob("*.md"))
+    assert written == sorted(p.stem for p in CatalogManager().list_protocol_files())
+    assert not list(tmp_path.glob("*.html"))

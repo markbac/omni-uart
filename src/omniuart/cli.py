@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -459,20 +460,19 @@ def _run(args: argparse.Namespace, catalog: CatalogManager) -> int:
         out_dir.mkdir(parents=True, exist_ok=True)
         if args.all or not args.protocol:
             if getattr(args, "format", "html") == "markdown":
-                proto_files = catalog.list_protocol_files()
-                count = 0
-                for pf in proto_files:
+                count, failed = 0, 0
+                for pf in catalog.list_protocol_files():
                     try:
                         spec = catalog.get_protocol(pf.name)
-                        if spec:
-                            doc_str = generate_markdown_docs(spec)
-                            target_file = out_dir / f"{spec.metadata.name.lower().replace(' ', '_')}.md"
-                            target_file.write_text(doc_str, encoding="utf-8")
-                            count += 1
-                    except Exception:
+                    except CatalogError as exc:
+                        print(f"Error: {exc}", file=sys.stderr)
+                        failed += 1
                         continue
+                    if spec:
+                        (out_dir / f"{pf.stem}.md").write_text(generate_markdown_docs(spec), encoding="utf-8")
+                        count += 1
                 print(f"Generated Markdown protocol docs for {count} protocols: {out_dir.resolve()}")
-                return 0
+                return 1 if failed else 0
             site_path = build_site_documentation(out_dir)
             print(f"Built complete protocol documentation site at: {site_path.resolve()}")
             return 0
@@ -484,7 +484,8 @@ def _run(args: argparse.Namespace, catalog: CatalogManager) -> int:
             out_dir.mkdir(parents=True, exist_ok=True)
             doc_str = generate_html_docs(spec) if args.format == "html" else generate_markdown_docs(spec)
             ext = "html" if args.format == "html" else "md"
-            target_file = out_dir / f"{spec.metadata.name.lower().replace(' ', '_')}.{ext}"
+            stem = re.sub(r"[^a-z0-9_-]+", "_", spec.metadata.name.lower()).strip("_") or "protocol"
+            target_file = out_dir / f"{stem}.{ext}"
             target_file.write_text(doc_str, encoding="utf-8")
             print(f"Generated protocol docs: {target_file.resolve()}")
             return 0
