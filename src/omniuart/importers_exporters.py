@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 
 from omniuart.core.models import (
@@ -24,14 +24,32 @@ from omniuart.core.models import (
 )
 
 
-def export_csv_protocol(spec: ProtocolSpec) -> str:
-    """Export protocol commands and parameters to tabular CSV string."""
+def export_csv_protocol(spec: ProtocolSpec, losses: Optional[List[str]] = None) -> str:
+    """Export protocol commands and parameters to tabular CSV string, recording dropped features in losses if provided."""
+    if losses is not None:
+        if spec.framing.integrity and spec.framing.integrity.algorithm != "none":
+            losses.append(f"integrity check '{spec.framing.integrity.algorithm}' dropped in CSV export")
+        if spec.telemetry:
+            losses.append(f"{len(spec.telemetry)} telemetry definition(s) dropped in CSV export")
+        for cmd in spec.commands:
+            if cmd.response:
+                losses.append(f"response definition for '{cmd.name}' dropped in CSV export")
+            for f in cmd.parameters:
+                if f.options:
+                    losses.append(f"enum options for field '{f.name}' dropped in CSV export")
+                if f.min is not None or f.max is not None:
+                    losses.append(f"range bounds for field '{f.name}' dropped in CSV export")
+                if f.encoding:
+                    losses.append(f"encoding '{f.encoding}' for field '{f.name}' dropped in CSV export")
+
     output = io.StringIO()
     writer = csv.writer(output)
 
     writer.writerow([
         "protocol_name",
         "protocol_version",
+        "baudrate",
+        "framing_type",
         "command_name",
         "command_id",
         "command_safety",
@@ -41,11 +59,16 @@ def export_csv_protocol(spec: ProtocolSpec) -> str:
         "field_unit",
     ])
 
+    baud_str = str(spec.serial_config.baudrate)
+    framing_str = spec.framing.type.value
+
     for cmd in spec.commands:
         if not cmd.parameters:
             writer.writerow([
                 spec.metadata.name,
                 spec.metadata.version,
+                baud_str,
+                framing_str,
                 cmd.name,
                 cmd.id if cmd.id is not None else "",
                 cmd.safety.value,
@@ -56,6 +79,8 @@ def export_csv_protocol(spec: ProtocolSpec) -> str:
                 writer.writerow([
                     spec.metadata.name,
                     spec.metadata.version,
+                    baud_str,
+                    framing_str,
                     cmd.name,
                     cmd.id if cmd.id is not None else "",
                     cmd.safety.value,
@@ -75,6 +100,8 @@ def import_csv_protocol(csv_text: str) -> Tuple[ProtocolSpec, List[str]]:
 
     proto_name = "ImportedCSVProtocol"
     proto_ver = "1.0.0"
+    baudrate: Optional[int] = None
+    framing_type: Optional[FramingType] = None
     commands_map: Dict[str, Dict[str, Any]] = {}
 
     for line_no, row in enumerate(reader, 2):
@@ -82,6 +109,20 @@ def import_csv_protocol(csv_text: str) -> Tuple[ProtocolSpec, List[str]]:
         proto_name = name
         ver = row.get("protocol_version") or proto_ver
         proto_ver = ver
+
+        baud_raw = (row.get("baudrate") or "").strip()
+        if baud_raw and baudrate is None:
+            try:
+                baudrate = int(baud_raw)
+            except ValueError:
+                pass
+
+        framing_raw = (row.get("framing_type") or "").strip().lower()
+        if framing_raw and framing_type is None:
+            try:
+                framing_type = FramingType(framing_raw)
+            except ValueError:
+                pass
 
         cmd_name = row.get("command_name", "").strip()
         if not cmd_name:
@@ -124,6 +165,16 @@ def import_csv_protocol(csv_text: str) -> Tuple[ProtocolSpec, List[str]]:
                 FieldSpec(name=fname, type=ftype, length=flen, unit=unit)
             )
 
+    if baudrate is None:
+        baudrate = 115200
+        losses.append("Baud rate not specified in CSV; defaulted to 115200.")
+
+    if framing_type is None:
+        framing_type = FramingType.BINARY
+        losses.append("Framing type not specified in CSV; defaulted to 'binary'.")
+
+    losses.append("Responses, telemetry, checksum algorithms and encodings are not represented in CSV.")
+
     cmds = [
         CommandSpec(
             name=c["name"],
@@ -136,9 +187,33 @@ def import_csv_protocol(csv_text: str) -> Tuple[ProtocolSpec, List[str]]:
 
     spec = ProtocolSpec(
         metadata=ProtocolMeta(name=proto_name, version=proto_ver),
-        serial_config=SerialConfig(baudrate=115200),
-        framing=FramingConfig(type=FramingType.BINARY),
+        serial_config=SerialConfig(baudrate=baudrate),
+        framing=FramingConfig(type=framing_type),
         commands=cmds,
     )
 
     return spec, losses
+
+
+def find_csv_losses(original: ProtocolSpec, imported: ProtocolSpec) -> List[str]:
+    """Compare original protocol with CSV-imported protocol and return list of differences / losses."""
+    losses: List[str] = []
+    if original.serial_config.baudrate != imported.serial_config.baudrate:
+        losses.append(f"baudrate changed: {original.serial_config.baudrate} -> {imported.serial_config.baudrate}")
+    if original.framing.type != imported.framing.type:
+        losses.append(f"framing changed: {original.framing.type.value} -> {imported.framing.type.value}")
+    if original.framing.integrity and original.framing.integrity.algorithm != "none":
+        losses.append(f"integrity check '{original.framing.integrity.algorithm}' dropped")
+    if original.telemetry:
+        losses.append(f"{len(original.telemetry)} telemetry definition(s) dropped")
+    for cmd in original.commands:
+        imp_cmd = imported.get_command(cmd.name)
+        if not imp_cmd:
+            losses.append(f"command '{cmd.name}' dropped")
+            continue
+        if cmd.response:
+            losses.append(f"response for '{cmd.name}' dropped")
+        for f in cmd.parameters:
+            if f.options or f.encoding or f.min is not None or f.max is not None:
+                losses.append(f"constraints / options for field '{f.name}' in command '{cmd.name}' dropped")
+    return losses

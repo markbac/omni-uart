@@ -67,10 +67,12 @@ class DissectedFrame:
             lines.append(f"{off_str:<8} {s.length_bytes:<4} {s.field_name:<18} {s.field_type:<10} {s.hex_str:<14} {val_str}")
 
         if self.crc_info:
+            bits = self.crc_info.get("bits", 16)
+            hex_width = max(2, (bits + 3) // 4)
             lines.append("-" * 72)
             lines.append(f" Integrity Check : {self.crc_info.get('algorithm', 'CRC')}")
-            lines.append(f"   Calculated    : 0x{self.crc_info.get('calculated', 0):04X}")
-            lines.append(f"   Received      : 0x{self.crc_info.get('received', 0):04X}")
+            lines.append(f"   Calculated    : 0x{self.crc_info.get('calculated', 0):0{hex_width}X}")
+            lines.append(f"   Received      : 0x{self.crc_info.get('received', 0):0{hex_width}X}")
             lines.append(f"   CRC Valid     : {self.crc_info.get('valid', False)}")
 
         lines.append("=" * 72)
@@ -128,12 +130,34 @@ def dissect_frame(spec: ProtocolSpec, frame_bytes: bytes, direction: str = "requ
             payload_pos += sz
 
     # CRC info if integrity model present
-    if spec.framing and spec.framing.integrity:
+    if spec.framing and spec.framing.integrity and spec.framing.integrity.algorithm.lower() != "none":
+        from omniuart.core.crc import parse_crc_bytes
+        crc_bits = codec._crc_bits
+        calc_val = frame.integrity_calculated
+        recv_val = frame.integrity_received
+        if calc_val is None or recv_val is None:
+            try:
+                trailer_crc = codec._integrity_width
+                footer_len = len(codec._footer)
+                if len(frame_bytes) >= trailer_crc + footer_len:
+                    integrity = spec.framing.integrity
+                    recv_bytes = frame_bytes[len(frame_bytes) - trailer_crc - footer_len : len(frame_bytes) - footer_len]
+                    recv_val = parse_crc_bytes(recv_bytes, crc_bits, integrity.endian)
+                    head, length_size, id_size = codec._layout()
+                    payload_len = len(frame_bytes) - head - length_size - id_size - trailer_crc - footer_len
+                    body_start = len(frame_bytes) - trailer_crc - footer_len - max(0, payload_len)
+                    expected_bytes = codec._integrity_bytes(body_start, frame_bytes[: len(frame_bytes) - trailer_crc - footer_len])
+                    calc_val = parse_crc_bytes(expected_bytes, crc_bits, integrity.endian)
+            except Exception:
+                pass
+        calc = calc_val if calc_val is not None else 0
+        recv = recv_val if recv_val is not None else 0
         dissected.crc_info = {
             "algorithm": spec.framing.integrity.algorithm,
-            "valid": frame.ok,
-            "calculated": 0,
-            "received": 0,
+            "valid": frame.ok and (calc == recv),
+            "calculated": calc,
+            "received": recv,
+            "bits": crc_bits,
         }
 
 

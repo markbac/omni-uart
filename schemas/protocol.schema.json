@@ -720,6 +720,37 @@
           },
           "title": "Fields",
           "type": "array"
+        },
+        "success_pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Success Pattern"
+        },
+        "error_pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Pattern"
+        },
+        "error_patterns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Error Patterns",
+          "type": "array"
         }
       },
       "title": "ResponseSpec",

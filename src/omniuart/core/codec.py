@@ -15,6 +15,7 @@ Delimited frame layout::
 
 from __future__ import annotations
 
+import ast
 import math
 import struct
 from dataclasses import dataclass, field
@@ -74,6 +75,8 @@ class DecodedFrame:
     payload: bytes = b""
     fields: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
+    integrity_received: Optional[int] = None
+    integrity_calculated: Optional[int] = None
 
     @property
     def ok(self) -> bool:
@@ -116,6 +119,56 @@ def field_size(spec: FieldSpec) -> Optional[int]:
         return 1
     return spec.length  # string / bytes: fixed only when ``length`` is declared
 
+
+
+def _eval_expression(expr: str, scope: Mapping[str, Any]) -> Any:
+    """Safely evaluate a mathematical expression against field scope."""
+    try:
+        parsed = ast.parse(expr, mode="eval")
+    except SyntaxError as e:
+        raise CodecError(f"Invalid field expression '{expr}': {e}") from e
+
+    def _eval_node(node: ast.AST) -> Any:
+        if isinstance(node, ast.Expression):
+            return _eval_node(node.body)
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.Name):
+            if node.id in scope:
+                return scope[node.id]
+            raise CodecError(f"Unknown variable '{node.id}' in expression '{expr}'")
+        if isinstance(node, ast.UnaryOp):
+            operand = _eval_node(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return +operand
+            if isinstance(node.op, ast.USub):
+                return -operand
+            if isinstance(node.op, ast.Not):
+                return not operand
+        if isinstance(node, ast.BinOp):
+            left = _eval_node(node.left)
+            right = _eval_node(node.right)
+            from typing import Callable
+            ops: Dict[Any, Callable[[Any, Any], Any]] = {
+                ast.Add: lambda a, b: a + b,
+                ast.Sub: lambda a, b: a - b,
+                ast.Mult: lambda a, b: a * b,
+                ast.Div: lambda a, b: a / b,
+                ast.FloorDiv: lambda a, b: a // b,
+                ast.Mod: lambda a, b: a % b,
+                ast.Pow: lambda a, b: a ** b,
+                ast.BitAnd: lambda a, b: int(a) & int(b),
+                ast.BitOr: lambda a, b: int(a) | int(b),
+                ast.BitXor: lambda a, b: int(a) ^ int(b),
+                ast.LShift: lambda a, b: int(a) << int(b),
+                ast.RShift: lambda a, b: int(a) >> int(b),
+            }
+            op_fn = ops.get(type(node.op))
+            if op_fn:
+                return op_fn(left, right)
+        raise CodecError(f"Unsupported expression element in '{expr}'")
+
+    return _eval_node(parsed)
 
 def _eval_condition(cond: str, env: Mapping[str, Any]) -> bool:
     try:
@@ -276,19 +329,35 @@ def encode_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> byte
     if unknown:
         raise CodecError(f"Unknown parameter(s): {', '.join(unknown)}")
     out = bytearray()
+    values_copy = dict(values)
     for spec in specs:
-        if spec.condition and not _eval_condition(spec.condition, values):
+        if spec.condition and not _eval_condition(spec.condition, values_copy):
             continue
         if spec.discriminator is not None and spec.discriminator_value is not None:
-            if values.get(spec.discriminator) != spec.discriminator_value:
+            if values_copy.get(spec.discriminator) != spec.discriminator_value:
                 continue
-        if spec.name in values:
-            value = values[spec.name]
+        if spec.name in values_copy:
+            value = values_copy[spec.name]
+        elif spec.expression:
+            value = _eval_expression(spec.expression, values_copy)
+            values_copy[spec.name] = value
+            continue
         elif spec.default is not None:
             value = spec.default
         else:
             continue
-        out.extend(encode_value(spec, value))
+        val_bytes = encode_value(spec, value)
+        if spec.offset is not None:
+            if spec.offset > len(out):
+                out.extend(b"\x00" * (spec.offset - len(out)))
+                out.extend(val_bytes)
+            else:
+                end_pos = spec.offset + len(val_bytes)
+                if end_pos > len(out):
+                    out.extend(b"\x00" * (end_pos - len(out)))
+                out[spec.offset:end_pos] = val_bytes
+        else:
+            out.extend(val_bytes)
     return bytes(out)
 
 
@@ -304,6 +373,10 @@ def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
             if out.get(spec.discriminator) != spec.discriminator_value:
                 continue
 
+        if spec.expression is not None:
+            out[spec.name] = _eval_expression(spec.expression, out)
+            continue
+
         size = field_size(spec)
         if spec.length_ref and spec.length_ref in out:
             size = int(out[spec.length_ref])
@@ -316,11 +389,17 @@ def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
                 raise CodecError(f"Variable-length field '{spec.name}' must be the last field")
             size = len(data) - pos
 
-        if pos + size > len(data):
-            raise CodecError(f"Payload too short for field '{spec.name}' ({len(data) - pos} of {size} bytes)")
-        out[spec.name] = decode_value(spec, data[pos : pos + size])
-        pos += size
-    if pos != len(data):
+        cur_pos = spec.offset if spec.offset is not None else pos
+        if cur_pos + size > len(data):
+            raise CodecError(f"Payload too short for field '{spec.name}' ({len(data) - cur_pos} of {size} bytes)")
+        out[spec.name] = decode_value(spec, data[cur_pos : cur_pos + size])
+        if spec.expression:
+            out[spec.name] = _eval_expression(spec.expression, out)
+        if spec.offset is None:
+            pos += size
+        else:
+            pos = max(pos, cur_pos + size)
+    if pos != len(data) and not any(s.offset is not None for s in specs):
         raise CodecError(f"{len(data) - pos} unexpected trailing payload byte(s)")
     return out
 
@@ -662,6 +741,8 @@ class FrameCodec:
                 self._crc_bits,
                 integrity.endian,
             )
+            frame.integrity_received = received
+            frame.integrity_calculated = expected
             if received != expected:
                 frame.error = f"integrity mismatch: received {received:#x}, expected {expected:#x}"
                 return frame

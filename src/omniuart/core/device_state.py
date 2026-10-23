@@ -33,7 +33,8 @@ class StateValue:
 
     @property
     def age_s(self) -> float:
-        return max(0.0, time.monotonic() - self.timestamp)
+        now = time.time() if self.timestamp > 1e8 else time.monotonic()
+        return max(0.0, now - self.timestamp)
 
     @property
     def is_stale(self) -> bool:
@@ -107,6 +108,8 @@ class LiveDeviceState:
             connection_online=True,
         )
         self.values[key] = state_val
+        if namespace and field_name not in self.values:
+            self.values[field_name] = state_val
         self.connection_online = True
         self.notify_listeners(key, state_val)
         return state_val

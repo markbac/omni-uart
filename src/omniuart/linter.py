@@ -197,7 +197,7 @@ def convert_protocol_to_kit(
             "dataBits": spec.serial_config.bytesize,
             "parity": spec.serial_config.parity,
             "stopBits": spec.serial_config.stopbits,
-            "hardwareFlowControl": spec.serial_config.flow_control != "none",
+            "flowControl": "rts-cts" if spec.serial_config.flow_control != "none" else "none",
         },
         "framing": {"style": "delimiter-framed" if delimited else "sync-length-payload-crc"},
         "commands": [],

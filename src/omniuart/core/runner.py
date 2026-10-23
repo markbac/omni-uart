@@ -118,6 +118,10 @@ _OPERATORS = {
     ">=": "ge", "ge": "ge", "gte": "ge", "greaterthanorequal": "ge",
     "in": "in",
     "tolerance": "approx", "approx": "approx", "within": "approx",
+    "contains": "contains", "contain": "contains",
+    "startswith": "startswith", "starts_with": "startswith",
+    "endswith": "endswith", "ends_with": "endswith",
+    "regex": "matches", "matches": "matches", "match": "matches",
 }
 
 
@@ -165,6 +169,14 @@ def evaluate_assertion(assertion: StepAssertion, fields: Dict[str, Any], variabl
             if not isinstance(expected, (list, tuple, set)):
                 raise ScriptError("the 'in' operator needs a list value")
             ok = actual in expected
+        elif op == "contains":
+            ok = str(expected) in str(actual)
+        elif op == "startswith":
+            ok = str(actual).startswith(str(expected))
+        elif op == "endswith":
+            ok = str(actual).endswith(str(expected))
+        elif op == "matches":
+            ok = bool(re.search(str(expected), str(actual)))
         else:
             a, e = float(actual), float(expected)
             ok = {"lt": a < e, "le": a <= e, "gt": a > e, "ge": a >= e}[op]

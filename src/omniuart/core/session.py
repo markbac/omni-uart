@@ -6,13 +6,15 @@ decoded answer, so the CLI, script runner, web API and desktop GUI all behave id
 
 from __future__ import annotations
 
+import re
+
 import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec
-from omniuart.core.models import CommandSpec, ProtocolSpec
+from omniuart.core.models import CommandSafety, CommandSpec, ProtocolSpec
 from omniuart.core.recorder import SessionRecorder
 from omniuart.core.transport import AsyncTransport, HardwareSerialTransport, VirtualTransport
 
@@ -170,13 +172,17 @@ class SerialSession:
         timeout_ms: Optional[int] = None,
         retries: int = 0,
         matcher: Optional[ResponseMatcher] = None,
+        force_retry: bool = False,
     ) -> Exchange:
         """Transmit ``command`` and wait for its response, optionally retrying on failure.
 
         Invalid parameters raise :class:`CodecError`, and a non-``read_only`` command in a read-only session raises :class:`CommandBlockedError`, before anything is written. Failures on the
         link or in the response are reported through the returned :class:`Exchange` instead.
         """
-        attempts = max(1, retries + 1)
+        cmd = self.resolve(command)
+        is_safe_to_retry = force_retry or cmd.is_read_only or (cmd.safety == CommandSafety.IDEMPOTENT)
+        effective_retries = retries if is_safe_to_retry else 0
+        attempts = max(1, effective_retries + 1)
         last_exchange: Optional[Exchange] = None
         for _ in range(attempts):
             exchange = await self._send_once(command, params=params, timeout_ms=timeout_ms, matcher=matcher)
@@ -272,6 +278,28 @@ class SerialSession:
                 return
             text = data.decode("utf-8", errors="replace").strip()
             exchange.response = DecodedFrame(raw=data, kind="response", name=cmd.name, payload=data, fields={"text": text})
+
+            # Check error patterns in text protocol responses
+            upper_text = text.upper()
+            err_patterns = ["ERROR", "+CME ERROR", "+CMS ERROR"]
+            if cmd.response:
+                if cmd.response.error_pattern:
+                    err_patterns.append(cmd.response.error_pattern.upper())
+                if cmd.response.error_patterns:
+                    err_patterns.extend(p.upper() for p in cmd.response.error_patterns)
+
+            if any(err in upper_text for err in err_patterns):
+                exchange.status = ExchangeStatus.INVALID_RESPONSE
+                exchange.error = f"command '{cmd.name}' failed with error response: {text}"
+                return
+
+            if cmd.response and cmd.response.success_pattern:
+                pat = cmd.response.success_pattern
+                if not re.search(pat, text):
+                    exchange.status = ExchangeStatus.INVALID_RESPONSE
+                    exchange.error = f"response '{text}' did not match success pattern '{pat}'"
+                    return
+
             return
 
         deadline = loop.time() + timeout_ms / 1000.0

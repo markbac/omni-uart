@@ -120,6 +120,9 @@ class ResponseSpec(BaseModel):
     id: Optional[Union[int, str]] = None
     timeout_ms: int = 1000
     fields: List[FieldSpec] = Field(default_factory=list)
+    success_pattern: Optional[str] = None
+    error_pattern: Optional[str] = None
+    error_patterns: List[str] = Field(default_factory=list)
 
 
 class CommandSpec(BaseModel):

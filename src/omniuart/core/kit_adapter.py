@@ -267,7 +267,7 @@ def parse_kit_protocol(data: Dict[str, Any], source_name: Optional[str] = None) 
     parity = parity_val if parity_val in ("none", "even", "odd", "mark", "space") else "none"
     stopbits = float(phys.get("stopBits", 1))
 
-    flow_ctrl = phys.get("hardwareFlowControl", "none")
+    flow_ctrl = phys.get("flowControl", phys.get("hardwareFlowControl", "none"))
     flow_str = "hardware" if flow_ctrl in (True, "rts-cts") else "none"
 
     serial_config = SerialConfig(

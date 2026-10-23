@@ -6,6 +6,7 @@ Generates Wireshark Lua dissectors, C headers, Python dataclasses, and JSON Sche
 from __future__ import annotations
 
 import json
+import keyword
 import re
 from omniuart.core.models import FieldType, ProtocolSpec
 
@@ -13,8 +14,30 @@ from omniuart.core.models import FieldType, ProtocolSpec
 def _c_ident(name: str) -> str:
     """Sanitise string to valid C identifier."""
     clean = re.sub(r"[^a-zA-Z0-9_]", "_", name)
-    if clean and clean[0].isdigit():
+    if not clean:
+        clean = "unnamed"
+    if clean[0].isdigit():
         clean = f"_{clean}"
+    if clean.lower() in {
+        "auto", "break", "case", "char", "const", "continue", "default", "do",
+        "double", "else", "enum", "extern", "float", "for", "goto", "if",
+        "inline", "int", "long", "register", "restrict", "return", "short",
+        "signed", "sizeof", "static", "struct", "switch", "typedef", "union",
+        "unsigned", "void", "volatile", "while",
+    }:
+        clean = f"{clean}_"
+    return clean
+
+
+def _py_ident(name: str) -> str:
+    """Sanitise string to valid Python identifier."""
+    clean = re.sub(r"[^a-zA-Z0-9_]", "_", name)
+    if not clean:
+        clean = "unnamed"
+    if clean[0].isdigit():
+        clean = f"_{clean}"
+    if keyword.iskeyword(clean):
+        clean = f"{clean}_"
     return clean
 
 
@@ -98,9 +121,13 @@ def generate_c_header(spec: ProtocolSpec) -> str:
         "/* Command Opcodes */",
         "typedef enum {",
     ]
+    has_enum = False
     for cmd in spec.commands:
-        cmd_id = cmd.id if isinstance(cmd.id, int) else 0
-        lines.append(f"    CMD_{_c_ident(cmd.name).upper()} = {cmd_id},")
+        if isinstance(cmd.id, int):
+            lines.append(f"    CMD_{_c_ident(cmd.name).upper()} = {cmd.id},")
+            has_enum = True
+    if not has_enum:
+        lines.append("    CMD_NONE = 0,")
     lines.extend([
         "} command_id_t;",
         "",
@@ -134,26 +161,49 @@ def generate_python_dataclasses(spec: ProtocolSpec) -> str:
     ]
 
     for cmd in spec.commands:
-        class_name = _c_ident(cmd.name).title().replace("_", "") + "Request"
+        class_clean = _py_ident(_c_ident(cmd.name).title().replace("_", ""))
+        class_name = f"{class_clean}Request"
         lines.append("@dataclass")
         lines.append(f"class {class_name}:")
         lines.append(f'    """Payload for command {cmd.name} (ID: {cmd.id})."""')
-        lines.append(f"    command_id: int = {cmd.id}")
+        if isinstance(cmd.id, int):
+            lines.append(f"    command_id: int = {cmd.id}")
+        else:
+            quoted_id = json.dumps(str(cmd.id))
+            lines.append(f"    command_id: str = {quoted_id}")
         if cmd.parameters:
             for p in cmd.parameters:
-                lines.append(f"    {_c_ident(p.name)}: {_py_type(p.type)} = 0")
-        else:
-            lines.append("    pass")
+                py_t = _py_type(p.type)
+                default_val = "0"
+                if py_t == "float":
+                    default_val = "0.0"
+                elif py_t == "bool":
+                    default_val = "False"
+                elif py_t == "str":
+                    default_val = '""'
+                elif py_t == "bytes":
+                    default_val = "b''"
+                lines.append(f"    {_py_ident(p.name)}: {py_t} = {default_val}")
         lines.append("")
 
         if cmd.response:
-            resp_class = _c_ident(cmd.name).title().replace("_", "") + "Response"
+            resp_class = f"{class_clean}Response"
             lines.append("@dataclass")
             lines.append(f"class {resp_class}:")
             lines.append(f'    """Response payload for command {cmd.name}."""')
             if cmd.response.fields:
                 for rf in cmd.response.fields:
-                    lines.append(f"    {_c_ident(rf.name)}: {_py_type(rf.type)} = 0")
+                    py_t = _py_type(rf.type)
+                    default_val = "0"
+                    if py_t == "float":
+                        default_val = "0.0"
+                    elif py_t == "bool":
+                        default_val = "False"
+                    elif py_t == "str":
+                        default_val = '""'
+                    elif py_t == "bytes":
+                        default_val = "b''"
+                    lines.append(f"    {_py_ident(rf.name)}: {py_t} = {default_val}")
             else:
                 lines.append("    pass")
             lines.append("")
