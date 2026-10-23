@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import time
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
@@ -14,16 +13,22 @@ from omniuart.core.catalog import CatalogManager
 from omniuart.core.codec import CodecError
 from omniuart.core.models import CommandSpec, ProtocolSpec
 from omniuart.core.recorder import SessionRecorder
-from omniuart.core.runner import ScriptRunner, StepStatus
-from omniuart.core.session import CommandBlockedError, ExchangeStatus
+from omniuart.core.runner import StepStatus
+from omniuart.core.session import ExchangeStatus
 from omniuart.ui.connection import VIRTUAL_PORT, ConnectionManager, NotConnectedError
 from omniuart.ui.models import CommandRequest, SerialConnectRequest
 from omniuart.ui.views import get_index_html
+from omniuart.services import AutomationService, CatalogService, CommandExecutionService, ErrorKind, ServiceError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 catalog = CatalogManager()
+
+
+def _services() -> CatalogService:
+    """Services over the module's catalog (looked up per call, so a replaced catalog takes effect)."""
+    return CatalogService(catalog)
 recorder = SessionRecorder()
 active_connections: Set[WebSocket] = set()
 
@@ -72,7 +77,7 @@ async def websocket_serial_stream(websocket: WebSocket) -> None:
 @router.get("/api/protocols")
 def get_protocols() -> Dict[str, Any]:
     """Return summary of all protocols discovered in definition directories."""
-    return catalog.catalog_summary()
+    return _services().summary()
 
 
 @router.get("/api/protocol/{identifier}")
@@ -138,23 +143,34 @@ def serial_status() -> Dict[str, Any]:
     return {"connection": connection.state()}
 
 
+# HTTP status for a ServiceError, by kind
+_HTTP_CODES = {
+    ErrorKind.NOT_FOUND: 404,
+    ErrorKind.INVALID: 422,
+    ErrorKind.BLOCKED: 403,
+    ErrorKind.CONFIRMATION_REQUIRED: 428,
+    ErrorKind.TRANSPORT: 502,
+}
+
+
+def _http_error(exc: ServiceError) -> HTTPException:
+    return HTTPException(status_code=_HTTP_CODES[exc.kind], detail=str(exc))
+
+
 def _load_protocol(identifier: str) -> ProtocolSpec:
     """Return the named protocol: 404 when there is none, 422 when its file fails to load (#339)."""
     try:
-        spec = catalog.get_protocol(identifier)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    if not spec:
-        raise HTTPException(status_code=404, detail=f"Protocol '{identifier}' not found")
-    return spec
+        return _services().get_protocol(identifier)
+    except ServiceError as exc:
+        raise _http_error(exc) from exc
 
 
 def _resolve(identifier: str, command: str) -> Tuple[ProtocolSpec, CommandSpec]:
     spec = _load_protocol(identifier)
-    cmd = spec.get_command(command) or spec.get_command_by_id(command)
-    if not cmd:
-        raise HTTPException(status_code=404, detail=f"Command '{command}' not found")
-    return spec, cmd
+    try:
+        return spec, _services().get_command(spec, command)
+    except ServiceError as exc:
+        raise _http_error(exc) from exc
 
 
 async def _publish(events: List[Any]) -> None:
@@ -185,21 +201,16 @@ async def send_command(identifier: str, req: CommandRequest) -> Any:
     read-only connection, 428 a mutating or destructive command sent without ``confirm: true``.
     """
     spec, cmd = _resolve(identifier, req.command)
-    if cmd.needs_confirmation and not req.confirm and not (connection.read_only):
-        raise HTTPException(
-            status_code=428,
-            detail=f"'{cmd.name}' is {cmd.safety.value}: resend with \"confirm\": true to send it.",
-        )
     temp = SessionRecorder()
     try:
         async with connection.use(spec, temp) as session:
-            exchange = await session.send(cmd, req.params)
+            exchange = await CommandExecutionService(_services()).send_on(session, cmd, req.params, confirmed=req.confirm)
     except NotConnectedError as exc:
         raise _not_connected(exc) from exc
-    except CommandBlockedError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except CodecError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ServiceError as exc:
+        if exc.kind is ErrorKind.CONFIRMATION_REQUIRED:
+            raise HTTPException(status_code=428, detail=f"{exc}: resend with \"confirm\": true to send it.") from exc
+        raise _http_error(exc) from exc
     await _publish(temp.events)
 
     body: Dict[str, Any] = {
@@ -242,24 +253,15 @@ async def run_script(script_name: str) -> Any:
     404 unknown script, 409 not connected, 422 invalid script, 502 link failure. A script whose
     assertions fail returns 200 with ``"status": "FAILED"``.
     """
-    script = catalog.get_script(script_name)
-    if not script:
-        raise HTTPException(status_code=404, detail=f"Script '{script_name}' not found")
-    spec = None
-    for ref in (script.meta.protocol, Path(script.meta.protocol).name, Path(script.meta.protocol).stem):
-        try:
-            spec = catalog.get_protocol(ref) if ref else None
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        if spec:
-            break
-    if spec is None:
-        raise HTTPException(status_code=422, detail=f"Protocol '{script.meta.protocol}' for this script was not found")
+    try:
+        script, spec = AutomationService(_services()).prepare(script_name, allow_path=False)  # catalog names only, never file paths
+    except ServiceError as exc:
+        raise _http_error(exc) from exc
 
     temp = SessionRecorder()
     try:
         async with connection.use(spec, temp) as session:
-            result = await ScriptRunner(script, session).run()
+            result = await AutomationService(_services()).run_on(session, script)
     except NotConnectedError as exc:
         raise _not_connected(exc) from exc
     await _publish(temp.events)
