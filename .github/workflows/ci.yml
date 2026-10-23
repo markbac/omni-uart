@@ -208,3 +208,46 @@ jobs:
           PYTHONPATH: src
         run: |
           python -m pytest tests/test_binary_smoke.py
+
+  verify-wheel-package:
+    name: Build & Verify Wheel Package (Clean venv)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Build wheel package
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+
+      - name: Install wheel in clean virtualenv and verify commands
+        run: |
+          python -m venv test_env
+          . test_env/bin/activate
+          pip install dist/*.whl
+          cd "$RUNNER_TEMP"
+          omniuart --help
+          omniuart list
+          omniuart docs --all --output-dir ./docs_site
+          test -f ./docs_site/index.html
+          test -f ./docs_site/protocols/index.html
+          python -c "
+          import omniuart
+          from omniuart.core.catalog import CatalogManager
+          from omniuart.linter import load_kit_schema, lint_protocol_file
+          catalog = CatalogManager()
+          protocols = catalog.list_protocol_files()
+          assert len(protocols) >= 30, f'Expected >= 30 protocols in wheel, got {len(protocols)}'
+          schema = load_kit_schema(False)
+          assert isinstance(schema, dict) and ('properties' in schema or 'title' in schema)
+          valid, errs = lint_protocol_file(protocols[0])
+          assert valid, f'Lint failed on bundled protocol: {errs}'
+          print('Wheel validation succeeded with', len(protocols), 'protocols')
+          "

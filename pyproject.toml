@@ -68,6 +68,11 @@ allow-direct-references = true
 [tool.hatch.build.targets.wheel]
 packages = ["src/omniuart"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"schemas" = "omniuart/schemas"
+"examples" = "omniuart/examples"
+"docs" = "omniuart/docs" 
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "-ra -q --tb=short"

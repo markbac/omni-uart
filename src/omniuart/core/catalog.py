@@ -68,6 +68,16 @@ class CatalogManager:
         default_proto_dirs = [b / sub for b in bases for sub in ("schemas", "examples/protocols", "protocols")]
         default_script_dirs = [b / sub for b in bases for sub in ("examples/scripts", "scripts")]
 
+        from omniuart.utils.resources import get_resource_path
+        for sub in ("examples/protocols", "protocols", "schemas"):
+            pkg_path = get_resource_path(sub)
+            if pkg_path.is_dir() and pkg_path not in default_proto_dirs:
+                default_proto_dirs.append(pkg_path)
+        for sub in ("examples/scripts", "scripts"):
+            pkg_path = get_resource_path(sub)
+            if pkg_path.is_dir() and pkg_path not in default_script_dirs:
+                default_script_dirs.append(pkg_path)
+
         for pd in protocol_dirs or _env_dirs(PROTOCOL_PATH_ENV) or default_proto_dirs:
             if protocol_dirs or Path(pd).is_dir():
                 self.add_protocol_dir(pd)
