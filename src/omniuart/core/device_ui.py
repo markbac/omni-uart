@@ -6,6 +6,7 @@ capabilities, controls, telemetry, navigation, safety rules, grouping, and widge
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from enum import Enum
@@ -16,6 +17,8 @@ import yaml
 
 from omniuart.core.codec import DecodedFrame
 from omniuart.core.models import CommandSafety, FieldSpec, ProtocolSpec
+
+logger = logging.getLogger(__name__)
 
 
 class DeviceIdentity(BaseModel):
@@ -88,16 +91,51 @@ class UIMode(str, Enum):
 
 
 class TransferProtocolSpec(BaseModel):
-    """Declarative transfer definition attached to Device UI Schema (#251)."""
+    """How a device's protocol carries a file transfer, attached to the Device UI Schema (#251).
 
-    start_command: str = "transfer_start"
+    Each phase names a protocol command. Chunks are sent one at a time: the chunk command's successful
+    response (or, when ``ack_command`` is set, that command's successful response) acknowledges the
+    chunk, and a failed one is retried up to ``retries`` times. A transfer counts as installed only when
+    the device answers ``commit_command`` successfully; without a commit command it is reported as
+    transferred but not committed.
+    """
+
+    start_command: Optional[str] = None
     chunk_command: str = "transfer_data"
-    ack_command: str = "transfer_ack"
-    commit_command: str = "transfer_commit"
-    abort_command: str = "transfer_abort"
-    default_chunk_size: int = 256
-    max_chunk_size: int = 4096
-    window_size: int = 1
+    ack_command: Optional[str] = None
+    commit_command: Optional[str] = None
+    abort_command: Optional[str] = None
+    default_chunk_size: int = Field(default=256, gt=0)
+    max_chunk_size: int = Field(default=4096, gt=0)
+    retries: int = Field(default=3, ge=0)
+    # Logical transfer value -> the protocol parameter that carries it. A value is sent only to a
+    # command that has that parameter.
+    params: Dict[str, str] = Field(
+        default_factory=lambda: {
+            "file_name": "file_name",
+            "file_type": "file_type",
+            "total_size": "total_size",
+            "checksum": "checksum",
+            "chunk_size": "chunk_size",
+            "sequence": "sequence",
+            "offset": "offset",
+            "data": "data",
+            "chunk_crc32": "chunk_crc32",
+            "is_last": "is_last",
+        }
+    )
+
+    def commands(self) -> Dict[str, str]:
+        """Phase -> command name, for every phase that is configured."""
+        named = {
+            "start": self.start_command,
+            "chunk": self.chunk_command,
+            "ack": self.ack_command,
+            "commit": self.commit_command,
+            "abort": self.abort_command,
+        }
+        return {phase: name for phase, name in named.items() if name}
+
 
 class DeviceUISpec(BaseModel):
     """Declarative Device UI Specification model (#229, #235, #242, #251)."""
@@ -165,6 +203,13 @@ def check_protocol_compatibility(
     cmd_map = {cmd.name: cmd for cmd in protocol_spec.commands}
     all_param_names = {p.name for cmd in protocol_spec.commands for p in cmd.parameters}
     all_telemetry_fields = {f.name for tel in protocol_spec.telemetry for f in tel.fields}
+
+    # Validate the transfer definition (#251)
+    if ui_spec.transfer_protocol is not None:
+        for phase, name in ui_spec.transfer_protocol.commands().items():
+            if name not in cmd_map:
+                missing_commands.append(name)
+                errors.append(f"Transfer {phase} command '{name}' does not exist in the protocol")
 
     # Validate safety rules
     for rule in ui_spec.safety_rules:
@@ -420,6 +465,33 @@ class DeviceUIStore:
         return None
 
 
+def find_device_ui(spec: ProtocolSpec, file_stem: Optional[str] = None, store: Optional[DeviceUIStore] = None) -> Optional[DeviceUISpec]:
+    """The saved Device UI definition for ``spec``: from the store first, then the bundled ``examples/device_ui``.
+
+    A definition matches when its ``protocol_ref`` is the protocol's name or its file stem.
+    """
+    from omniuart.utils.resources import get_resource_path
+
+    names = {spec.metadata.name.lower(), (file_stem or "").lower()} - {""}
+    store = store or DeviceUIStore()
+    for item in store.list_definitions():
+        if str(item.get("protocol_ref", "")).lower() in names:
+            return store.load(item["file"])
+    bundled = get_resource_path("examples/device_ui")
+    if bundled.is_dir():
+        for file in sorted(bundled.iterdir()):
+            if file.suffix.lower() not in (".yaml", ".yml", ".json"):
+                continue
+            try:
+                ui = import_device_ui(file.read_text(encoding="utf-8"))
+            except Exception as exc:  # noqa: BLE001 - a broken bundled file must not hide the inferred UI
+                logger.warning("Skipping Device UI definition %s: %s", file.name, exc)
+                continue
+            if ui.protocol_ref.lower() in names:
+                return ui
+    return None
+
+
 def load_device_ui(source: Union[str, Path, Dict[str, Any]]) -> DeviceUISpec:
     """Load and validate a DeviceUISpec from a file path, YAML/JSON string, or dict (#229, #242)."""
     if isinstance(source, dict):
@@ -488,7 +560,7 @@ def infer_device_ui_from_spec(spec: ProtocolSpec) -> DeviceUISpec:
     safety_rules: List[SafetyRuleSpec] = []
 
     for cmd in spec.commands:
-        if cmd.safety is CommandSafety.MUTATING:
+        if cmd.safety in (CommandSafety.MUTATING, CommandSafety.DESTRUCTIVE):
             safety_rules.append(SafetyRuleSpec(command=cmd.name, require_confirmation=True, danger_zone=True))
 
         if cmd.parameters:
@@ -497,9 +569,14 @@ def infer_device_ui_from_spec(spec: ProtocolSpec) -> DeviceUISpec:
         else:
             control_widgets.append(WidgetSpec(widget_type="button", field_ref=cmd.name, label=f"Execute {cmd.name.title()}"))
 
+    # Values the device reports: telemetry fields and the response fields of read-only commands
     telemetry_widgets: List[WidgetSpec] = []
-    for tel in spec.telemetry:
-        for f in tel.fields:
+    shown: set[str] = set()
+    reported = [f for tel in spec.telemetry for f in tel.fields]
+    reported += [f for cmd in spec.commands if cmd.is_read_only and cmd.response for f in cmd.response.fields]
+    for f in reported:
+        if f.name not in shown:
+            shown.add(f.name)
             telemetry_widgets.append(infer_widget_for_field(f, is_writable=False))
 
     transfer_widgets: List[WidgetSpec] = []

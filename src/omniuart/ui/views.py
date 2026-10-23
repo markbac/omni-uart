@@ -158,6 +158,8 @@ def get_index_html() -> str:
       <button onclick="document.body.classList.toggle('compact-mode')" style="background:var(--card-bg); border:1px solid var(--border); color:var(--text); padding:5px 10px; border-radius:4px; cursor:pointer;">↕️ Compact</button>
       <label>Protocol: </label>
       <select id="protocolSelect" onchange="loadProtocol(this.value)"></select>
+      <button title="Live device console for this protocol" onclick="window.open('/dashboard/' + encodeURIComponent(currentProtoId), '_blank')" style="background:var(--card-bg); border:1px solid var(--border); color:var(--text); padding:5px 10px; border-radius:4px; cursor:pointer;">🎛 Device console</button>
+      <button title="Visual Device UI designer for this protocol" onclick="window.open('/designer/' + encodeURIComponent(currentProtoId), '_blank')" style="background:var(--card-bg); border:1px solid var(--border); color:var(--text); padding:5px 10px; border-radius:4px; cursor:pointer;">✏️ UI designer</button>
     </div>
 
     <!-- Serial Port Connection Toolbar -->

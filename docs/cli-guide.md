@@ -121,3 +121,21 @@ omniuart ui --mode web --port 8000
 # Launch Native Desktop GUI Workbench
 omniuart ui --mode desktop
 ```
+
+## 9. Device Console (`dashboard`)
+
+Opens the live device console for one protocol in the web workbench. It uses the protocol's saved Device UI definition (from `.omniuart/ui/` or the bundled `examples/device_ui/`), or one inferred from the protocol.
+
+```bash
+# Open the device console for the binary sensor node
+omniuart dashboard binary_sensor_node
+```
+
+Connect a port, or the simulated device, from the workbench first. In the console:
+
+- Command buttons and parameter controls send real commands. A command marked `mutating` or `destructive`, or one with a safety rule, asks for confirmation first.
+- Values come only from the device's responses, and are shown as current, stale or offline. *Read device* sends every read-only command that needs no input; *Auto refresh* repeats it every two seconds.
+- The Engineer view lists each exchange with its frames, latency and CRC result. The Developer view shows the raw frame log, the connection and the stored state.
+- A transfer widget uploads a file through the commands named in the UI definition's `transfer_protocol`. The file counts as installed only when the device accepts the commit command.
+
+The console uses `GET /api/device/{protocol}/state`, `POST /api/device/{protocol}/refresh` and `POST /api/device/{protocol}/transfer`, with `GET` and `POST .../transfer/{job}/cancel` for a running transfer.

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from omniuart.core.codec import DecodedFrame
@@ -22,10 +22,11 @@ class StateValue:
 
     field_name: str
     value: Any
-    timestamp: float
+    timestamp: float  # time.monotonic() when the value arrived; ages are measured on this clock only
     stale_timeout_s: float = 30.0
     namespace: Optional[str] = None
     connection_online: bool = True
+    wall_time: float = field(default_factory=time.time)  # for display; never used to measure age
 
     @property
     def key(self) -> str:
@@ -33,8 +34,7 @@ class StateValue:
 
     @property
     def age_s(self) -> float:
-        now = time.time() if self.timestamp > 1e8 else time.monotonic()
-        return max(0.0, now - self.timestamp)
+        return max(0.0, time.monotonic() - self.timestamp)
 
     @property
     def is_stale(self) -> bool:
@@ -56,7 +56,7 @@ class StateValue:
             "field_name": self.field_name,
             "namespace": self.namespace,
             "value": self.value,
-            "timestamp": self.timestamp,
+            "timestamp": self.wall_time,
             "age_s": round(self.age_s, 2),
             "quality": self.quality,
             "is_stale": self.is_stale,
@@ -108,8 +108,6 @@ class LiveDeviceState:
             connection_online=True,
         )
         self.values[key] = state_val
-        if namespace and field_name not in self.values:
-            self.values[field_name] = state_val
         self.connection_online = True
         self.notify_listeners(key, state_val)
         return state_val
@@ -132,18 +130,11 @@ class LiveDeviceState:
         return updated
 
     def get_field(self, field_name: str, namespace: Optional[str] = None) -> Optional[StateValue]:
-        """Retrieve state value for field, checking namespaced key then bare field (#318)."""
+        """The value of ``namespace.field_name``; without a namespace, the most recent value of that field from any message (#318)."""
         if namespace:
-            key = f"{namespace}.{field_name}"
-            if key in self.values:
-                return self.values[key]
-        if field_name in self.values:
-            return self.values[field_name]
-        # Suffix matching fallback
-        for k, v in self.values.items():
-            if k.endswith(f".{field_name}"):
-                return v
-        return None
+            return self.values.get(f"{namespace}.{field_name}")
+        matches = [v for v in self.values.values() if v.field_name == field_name]
+        return max(matches, key=lambda v: v.timestamp) if matches else None
 
     def mark_connection_lost(self) -> None:
         """Mark device connection as offline and update all stored values to offline quality (#318)."""

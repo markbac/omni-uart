@@ -121,6 +121,14 @@ def build_parser() -> argparse.ArgumentParser:
     designer_parser.add_argument("--mode", choices=["desktop", "web"], default="web", help="Display mode: 'desktop' or 'web'")
     designer_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open browser")
 
+    # dashboard (Live Device Console)
+    dashboard_parser = subparsers.add_parser("dashboard", help="Open the live device console for a protocol")
+    dashboard_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    dashboard_parser.add_argument("--host", default="127.0.0.1", help="UI server bind host (default: 127.0.0.1)")
+    dashboard_parser.add_argument("--port", type=int, default=8000, help="UI server bind port (default: 8000)")
+    dashboard_parser.add_argument("--mode", choices=["desktop", "web"], default="web", help="Display mode: 'desktop' or 'web'")
+    dashboard_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open browser")
+
     # 11. generate (Artefact Generator)
     gen_parser = subparsers.add_parser("generate", help="Generate Wireshark dissector, C header, Python dataclasses, or JSON Schema")
     gen_parser.add_argument("target", choices=["wireshark", "c", "python", "schema", "asyncapi"], help="Generation target: wireshark, c, python, schema, or asyncapi")
@@ -685,6 +693,12 @@ def _run(args: argparse.Namespace, catalog: CatalogManager) -> int:
             path = f"/designer/{proto}" if proto else "/designer"
             return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode, initial_path=path)
         return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode)
+
+    elif args.subcommand == "dashboard":
+        service.get_protocol(args.protocol)  # fail here, not in the browser, for an unknown protocol
+        from urllib.parse import quote
+        return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode,
+                                initial_path=f"/dashboard/{quote(args.protocol)}")
 
     elif args.subcommand == "designer":
         proto = getattr(args, "protocol", None)

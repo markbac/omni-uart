@@ -21,3 +21,11 @@ class SerialConnectRequest(BaseModel):
     dtr: bool = True
     read_only: bool = Field(default=False, description="Refuse every command that is not marked safety: read_only")
     protocol: Optional[str] = Field(default=None, description="Protocol the simulated device implements (required when port is 'virtual')")
+
+
+class TransferRequest(BaseModel):
+    """Payload for starting a file transfer from a dashboard transfer widget."""
+    widget_ref: str = Field(min_length=1, description="field_ref of the file_transfer or firmware_update widget")
+    file_name: str = Field(min_length=1)
+    data_base64: str = Field(description="The file's bytes, base64 encoded")
+    confirm: bool = Field(default=False, description="Must be true for a transfer that changes the device")

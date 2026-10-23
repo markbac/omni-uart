@@ -478,23 +478,6 @@ class TransferHistory:
         self._records.clear()
 
 
-@dataclass
-class DeclarativeTransferDefinition:
-    """Declarative specification mapping protocol commands to transfer phases (#245)."""
-
-    protocol_name: str
-    start_command: str = "transfer_start"
-    data_command: str = "transfer_data"
-    ack_command: str = "transfer_ack"
-    finish_command: str = "transfer_finish"
-    abort_command: str = "transfer_abort"
-    chunk_size_param: str = "chunk_size"
-    offset_param: str = "offset"
-    data_param: str = "payload"
-    crc_param: str = "crc32"
-    seq_param: str = "sequence_number"
-
-
 class TransferManager:
     """Transport- and protocol-independent Transfer Manager (#244, #245, #246, #243)."""
 
