@@ -1,7 +1,6 @@
 """Unit tests for Live Device State Model (#233)."""
 
 import time
-import pytest
 
 from omniuart.core.codec import DecodedFrame
 from omniuart.core.device_state import LiveDeviceState, StateValue

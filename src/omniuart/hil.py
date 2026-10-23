@@ -7,14 +7,12 @@ including power/reset line pulsing, setup/teardown sequences, capture artifact c
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.models import ProtocolSpec, load_script
 from omniuart.core.recorder import SessionRecorder
 from omniuart.core.runner import ScriptRunner, StepStatus
 from omniuart.core.session import DeviceSession, create_transport

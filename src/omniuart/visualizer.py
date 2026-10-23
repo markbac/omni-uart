@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import html
 from typing import List, Optional
-from omniuart.core.models import ProtocolSpec, CommandSpec, FieldSpec
+from omniuart.core.models import ProtocolSpec
 
 
 def render_mermaid_diagram(spec: ProtocolSpec) -> str:
     """Render protocol command request/response sequence diagram in Mermaid format."""
-    lines: List[str] = ["sequenceDiagram", f"    autonumber", f"    participant Host"]
+    lines: List[str] = ["sequenceDiagram", "    autonumber", "    participant Host"]
     device_label = spec.metadata.name or "Device"
     lines.append(f"    participant Device as {device_label}")
 
@@ -39,7 +39,7 @@ def render_svg_frame(spec: ProtocolSpec, command_name: Optional[str] = None) -> 
 
     svg_lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{svg_width}" height="{svg_height}" viewBox="0 0 {svg_width} {svg_height}">',
-        f'  <style>rect {{ stroke: #333; stroke-width: 1.5; }} text {{ font-family: monospace; font-size: 12px; }}</style>',
+        '  <style>rect { stroke: #333; stroke-width: 1.5; } text { font-family: monospace; font-size: 12px; }</style>',
         f'  <text x="10" y="25" font-size="14" font-weight="bold" fill="#333">Frame Layout: {spec.metadata.name} {cmd.name if cmd else ""}</text>',
     ]
 
@@ -79,7 +79,7 @@ def render_html_visualizer(spec: ProtocolSpec) -> str:
 </head>
 <body>
     <h1>Protocol Visualizer: {html.escape(spec.metadata.name)} (v{html.escape(spec.metadata.version)})</h1>
-    
+
     <div class="card">
         <h2>Frame Structure Breakdown</h2>
         {svg_code}

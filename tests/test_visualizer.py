@@ -1,6 +1,5 @@
-import pytest
 from omniuart.core.catalog import CatalogManager
-from omniuart.visualizer import visualize_protocol, render_mermaid_diagram, render_svg_frame, render_html_visualizer
+from omniuart.visualizer import visualize_protocol
 
 def test_protocol_visualizer_formats():
     catalog = CatalogManager()

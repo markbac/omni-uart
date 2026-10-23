@@ -1,6 +1,6 @@
 """Unit tests for telemetry metrics collector and performance profiling (#223)."""
 
-from omniuart.core.telemetry import MetricsCollector, PerformanceMetrics
+from omniuart.core.telemetry import MetricsCollector
 
 
 def test_metrics_collector_initialization():

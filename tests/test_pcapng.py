@@ -46,6 +46,7 @@ def test_pcapng_golden_vector_structure(tmp_path: Path) -> None:
 
     target = tmp_path / "golden_capture.pcapng"
     res_path = recorder.export_pcapng(target)
+    assert res_path == target
 
     pcap_data = target.read_bytes()
     blocks = parse_pcapng_blocks(pcap_data)

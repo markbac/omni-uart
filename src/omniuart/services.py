@@ -1,4 +1,4 @@
-"""Application Services Layer for OmniUART.
+"""Application Services Layer for OmniUART (#208, #314, #315).
 
 Decouples core business logic, catalog queries, session execution, simulation,
 fuzzing, replay, documentation and artefact generation from CLI and UI presentation layers.
@@ -8,15 +8,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.codec import FrameCodec, validate_fields
+from omniuart.core.codec import FrameCodec
 from omniuart.core.fuzzer import ProtocolFuzzer
-from omniuart.core.models import ProtocolSpec, load_protocol, load_script
+from omniuart.core.models import ProtocolSpec
+from omniuart.core.recorder import SessionRecorder
 from omniuart.core.replayer import SessionReplayer
-from omniuart.core.runner import ScriptRunner
-from omniuart.core.session import DeviceSession, Exchange, create_transport
+from omniuart.core.runner import ScriptRunner, StepStatus
+from omniuart.core.session import DeviceSession, create_transport
+from omniuart.core.transport import AsyncTransport
 from omniuart.docs_generator import generate_html_docs
 from omniuart.generators import (
     generate_c_header,
@@ -34,7 +36,7 @@ class CatalogService:
 
     def list_catalog(self) -> Dict[str, Any]:
         """Return dict listing all discovered protocols and scripts."""
-        protocols = []
+        protocols: List[Dict[str, Any]] = []
         for pf in self.catalog.list_protocol_files():
             try:
                 p = self.catalog._load_protocol_cached(pf)
@@ -47,21 +49,19 @@ class CatalogService:
             except Exception:
                 pass
 
-        scripts = []
+        scripts: List[Dict[str, Any]] = []
         for sf in self.catalog.list_script_files():
             try:
                 s = self.catalog._load_script_cached(sf)
                 scripts.append({
-                    "name": s.name,
+                    "name": s.meta.name if s.meta else sf.stem,
                     "filename": sf.name,
-                    "protocol": s.protocol,
+                    "protocol": s.meta.protocol if s.meta else "",
                 })
             except Exception:
                 pass
 
         return {"protocols": protocols, "scripts": scripts}
-
-
 
     def get_protocol(self, query: str) -> ProtocolSpec:
         """Resolve a protocol by name or file path."""
@@ -136,27 +136,35 @@ class AutomationService:
         if script is None:
             raise ValueError(f"Script '{script_query}' not found.")
 
-        protocol = cat.get_protocol(script.protocol)
+        protocol_name = script.meta.protocol if script.meta else ""
+        protocol = cat.resolve_script_protocol(script) if script else None
         if protocol is None:
-            raise ValueError(f"Protocol '{script.protocol}' declared by script not found.")
+            raise ValueError(f"Protocol '{protocol_name}' declared by script not found.")
 
         transport = create_transport(protocol, port=port, baudrate=baudrate, virtual=virtual)
-        runner = ScriptRunner(script, protocol, transport, read_only=read_only, record_file=record_file)
-        results = await runner.run()
+        recorder = SessionRecorder(protocol_name=protocol.metadata.name) if record_file else None
 
-        summary = {
-            "script": script.name,
-            "total_steps": len(results),
-            "passed": sum(1 for r in results if r.ok),
-            "failed": sum(1 for r in results if not r.ok),
+        async with DeviceSession(protocol, transport, recorder=recorder, read_only=read_only) as session:
+            runner = ScriptRunner(script, session)
+            result = await runner.run()
+
+        if recorder and record_file:
+            recorder.export_jsonl(record_file)
+        passed = sum(1 for r in result.steps if r.status == StepStatus.PASSED)
+        failed = sum(1 for r in result.steps if r.status != StepStatus.PASSED)
+        summary: Dict[str, Any] = {
+            "script": script.meta.name if script.meta else script_query,
+            "total_steps": len(result.steps),
+            "passed": passed,
+            "failed": failed,
             "results": [
                 {
-                    "step": r.step_index,
-                    "command": r.command_name,
-                    "ok": r.ok,
-                    "error": r.error,
+                    "step": r.index,
+                    "command": r.name,
+                    "ok": r.status == StepStatus.PASSED,
+                    "error": r.message if r.status != StepStatus.PASSED else None,
                 }
-                for r in results
+                for r in result.steps
             ],
         }
 
@@ -181,9 +189,14 @@ class DocumentationService:
         out_path.mkdir(parents=True, exist_ok=True)
 
         if all_protocols:
-            for spec in cat.protocols.values():
-                html = generate_html_docs(spec)
-                (out_path / f"{spec.metadata.name}.html").write_text(html, encoding="utf-8")
+            for pf in cat.list_protocol_files():
+                try:
+                    p_spec = cat._load_protocol_cached(pf)
+                    if p_spec is not None:
+                        html = generate_html_docs(p_spec)
+                        (out_path / f"{p_spec.metadata.name}.html").write_text(html, encoding="utf-8")
+                except Exception:
+                    pass
             return out_path
         elif protocol:
             spec = cat.get_protocol(protocol)
@@ -213,13 +226,13 @@ class FuzzingService:
             raise ValueError(f"Protocol '{protocol_query}' not found.")
 
         fuzzer = ProtocolFuzzer(spec, seed=seed)
-        report = await fuzzer.run_campaign(num_vectors=num_vectors)
+        report = await fuzzer.run_campaign(max_vectors=num_vectors)
         return {
             "protocol": spec.metadata.name,
             "seed": fuzzer.seed,
             "vectors": num_vectors,
-            "passed": report.get("passed", 0),
-            "failed": report.get("failed", 0),
+            "passed": report.outcomes.get("ok", 0),
+            "failed": report.outcomes.get("error", 0) + report.outcomes.get("hang", 0) + report.outcomes.get("malformed", 0),
         }
 
 
@@ -234,9 +247,20 @@ class ReplayService:
         virtual: bool = False,
         speed: float = 1.0,
     ) -> Dict[str, Any]:
-        replayer = SessionReplayer(session_file, speed_multiplier=speed)
-        count = await replayer.replay(port=port, baudrate=baudrate, virtual=virtual)
-        return {"session_file": session_file, "events_replayed": count}
+        from omniuart.core.transport import HardwareSerialTransport, VirtualTransport
+        replay_transport: AsyncTransport
+        if port and not virtual:
+            replay_transport = HardwareSerialTransport(port=port, baudrate=baudrate or 115200)
+        else:
+            replay_transport = VirtualTransport(latency_ms=1.0)
+        transport = replay_transport
+        await transport.open()
+        try:
+            replayer = SessionReplayer(transport=transport, speed_multiplier=speed)
+            count = await replayer.replay_file(session_file)
+            return {"session_file": session_file, "events_replayed": count}
+        finally:
+            await transport.close()
 
 
 class GeneratorService:

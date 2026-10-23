@@ -7,10 +7,11 @@ that generate spec-compliant responses, error frames, and telemetry over virtual
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
 import logging
 import random
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec, validate_fields
 from omniuart.core.crc import calculate_crc
@@ -18,10 +19,6 @@ from omniuart.core.models import CommandSpec, FramingConfig, FramingType, Protoc
 from omniuart.core.transport import AsyncTransport, VirtualTransport
 
 logger = logging.getLogger(__name__)
-
-
-import re
-from dataclasses import dataclass, field
 
 
 @dataclass
@@ -265,7 +262,7 @@ class ATModemSimulator(BaseDeviceSimulator):
 
     @property
     def signal_quality(self) -> int:
-        return self._state.get("signal_quality", 24)
+        return int(self._state.get("signal_quality", 24))
 
     @signal_quality.setter
     def signal_quality(self, val: int) -> None:
@@ -273,7 +270,7 @@ class ATModemSimulator(BaseDeviceSimulator):
 
     @property
     def battery_mv(self) -> int:
-        return self._state.get("battery_mv", 3850)
+        return int(self._state.get("battery_mv", 3850))
 
     @battery_mv.setter
     def battery_mv(self, val: int) -> None:
@@ -281,7 +278,7 @@ class ATModemSimulator(BaseDeviceSimulator):
 
     @property
     def creg_status(self) -> int:
-        return self._state.get("creg_status", 1)
+        return int(self._state.get("creg_status", 1))
 
     @creg_status.setter
     def creg_status(self, val: int) -> None:

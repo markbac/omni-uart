@@ -7,11 +7,10 @@ session replay, and transport overhead tied to current system runtime environmen
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
 import time
-from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from dataclasses import dataclass
+from typing import Any, Dict
 
 from omniuart.core.codec import FrameCodec
 from omniuart.core.models import load_protocol

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import logging
 
 logger = logging.getLogger(__name__)
@@ -20,7 +19,8 @@ def tkinter_available() -> bool:
     if sys.modules.get("tkinter") is None:
         return False
     try:
-        import tkinter
+        import importlib
+        importlib.import_module("tkinter")
         return True
     except (ImportError, ValueError, AttributeError, Exception):
         return False

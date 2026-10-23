@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, List, Optional
 from omniuart.core.limits import get_limits
 from omniuart.core.codec import CodecError
 from omniuart.core.models import ScriptSpec, ScriptStep, StepAssertion
-from omniuart.core.session import CommandBlockedError, DeviceSession, Exchange, ExchangeStatus
+from omniuart.core.session import CommandBlockedError, SerialSession, Exchange, ExchangeStatus
 
 _VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_.]*)\}")
 
@@ -180,7 +180,7 @@ class ScriptRunner:
     def __init__(
         self,
         script: ScriptSpec,
-        session: DeviceSession,
+        session: SerialSession,
         variables: Optional[Dict[str, Any]] = None,
         on_step: Optional[Callable[[StepResult], None]] = None,
         on_log: Optional[Callable[[str], None]] = None,

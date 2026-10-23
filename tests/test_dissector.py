@@ -1,7 +1,6 @@
-import pytest
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.codec import FrameCodec
-from omniuart.core.dissector import dissect_frame, DissectedFrame, FieldSlice
+from omniuart.core.dissector import dissect_frame
 
 def test_dissect_frame():
     catalog = CatalogManager()

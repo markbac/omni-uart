@@ -445,16 +445,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     elif args.subcommand == "replay":
         import asyncio
         from omniuart.core.replayer import SessionReplayer
-        from omniuart.core.transport import HardwareSerialTransport, VirtualTransport
+        from omniuart.core.transport import AsyncTransport, HardwareSerialTransport, VirtualTransport
 
+        replay_transport: AsyncTransport
         if getattr(args, "port", None) and not getattr(args, "virtual", False):
-            transport = HardwareSerialTransport(port=args.port, baudrate=args.baudrate)
+            replay_transport = HardwareSerialTransport(port=args.port, baudrate=args.baudrate)
         else:
-            transport = VirtualTransport(latency_ms=1.0)
+            replay_transport = VirtualTransport(latency_ms=1.0)
 
         speed_str = "max" if args.speed == 0 else f"{args.speed}x"
         print(f"Replaying session file: {args.session_file} (speed: {speed_str})...")
-        replayer = SessionReplayer(transport, speed_multiplier=args.speed)
+        replayer = SessionReplayer(replay_transport, speed_multiplier=args.speed)
         try:
             count = asyncio.run(replayer.replay_file(args.session_file))
             print(f"Successfully replayed {count} frame(s).")

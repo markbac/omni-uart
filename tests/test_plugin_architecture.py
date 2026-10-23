@@ -1,4 +1,3 @@
-import pytest
 from omniuart.core.plugin import plugin_registry, ProtocolPlugin
 from omniuart.core.crc import calculate_crc
 from omniuart.core.codec import encode_value, decode_value

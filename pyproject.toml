@@ -53,6 +53,7 @@ dev = [
     "pyinstaller>=6.7.0",
     "types-pyyaml>=6.0",
     "types-pyserial>=3.5",
+    "types-Markdown>=3.0",
     "mkdocs>=1.6.0",
     "mkdocs-material>=9.5.0",
 ]

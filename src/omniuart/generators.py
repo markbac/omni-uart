@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict
 from omniuart.core.models import FieldType, ProtocolSpec
 
 
@@ -68,7 +67,7 @@ def generate_wireshark_dissector(spec: ProtocolSpec) -> str:
         f'    pinfo.cols.protocol = "{spec.metadata.name}"',
         f'    local subtree = tree:add(p_{name_clean}, buffer(), "{spec.metadata.name} Frame")',
         "    if buffer:len() > 0 then",
-        f"        subtree:add(f_cmd_id, buffer(0, 1))",
+        "        subtree:add(f_cmd_id, buffer(0, 1))",
         "    end",
         "end",
         "",
@@ -109,7 +108,7 @@ def generate_c_header(spec: ProtocolSpec) -> str:
 
     for cmd in spec.commands:
         struct_name = f"{_c_ident(cmd.name).lower()}_req_t"
-        lines.append(f"typedef struct __attribute__((packed)) {{")
+        lines.append("typedef struct __attribute__((packed)) {")
         lines.append("    uint8_t command_id;")
         if cmd.parameters:
             for p in cmd.parameters:

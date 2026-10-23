@@ -580,7 +580,7 @@ class PtyTransport(AsyncTransport):
         if self._is_open:
             return
         if self._path is not None:
-            self._fd = os.open(self._path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+            self._fd = os.open(self._path, os.O_RDWR | getattr(os, "O_NOCTTY", 0) | getattr(os, "O_NONBLOCK", 0))
         assert self._fd is not None
         self._make_raw(self._fd)
         os.set_blocking(self._fd, False)
@@ -592,12 +592,13 @@ class PtyTransport(AsyncTransport):
 
     @staticmethod
     def _make_raw(fd: int) -> None:
-        import termios
         import tty
 
+
         try:
-            tty.setraw(fd)
-        except termios.error:  # not a terminal, or the platform refuses: carry on with the descriptor as is
+            if hasattr(tty, "setraw"):
+                tty.setraw(fd)
+        except Exception:  # not a terminal, or the platform refuses: carry on with the descriptor as is
             pass
 
     def _on_readable(self) -> None:
@@ -694,8 +695,8 @@ class PtySerialPair:
 
         import pty
 
-        self.master_fd, self.slave_fd = pty.openpty()
-        self.slave_pts_path = os.ttyname(self.slave_fd)
+        self.master_fd, self.slave_fd = pty.openpty()  # type: ignore[attr-defined]
+        self.slave_pts_path = os.ttyname(self.slave_fd)  # type: ignore[attr-defined]
         self.host = PtyTransport(fd=self.master_fd, port_name="PTY_MASTER", owns_fd=False)
         self.device = PtyTransport(fd=self.slave_fd, port_name=self.slave_pts_path, owns_fd=False)
         self._closed = False

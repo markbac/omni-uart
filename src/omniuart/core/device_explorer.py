@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.device_ui import DeviceUISpec, infer_device_ui_from_spec
+from omniuart.core.device_ui import DeviceUISpec
 from omniuart.core.models import CommandSafety, ProtocolSpec
 
 

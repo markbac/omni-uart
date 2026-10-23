@@ -1,6 +1,6 @@
 import pytest
 from omniuart.core.models import FieldSpec, FieldType
-from omniuart.core.codec import encode_fields, decode_fields, encode_value, decode_value
+from omniuart.core.codec import decode_fields, encode_value, decode_value
 
 def test_scaling_and_offset():
     spec = FieldSpec(name="temp", type=FieldType.INT16, scale=0.1, offset_val=-40.0)
@@ -21,7 +21,7 @@ def test_bit_width_validation():
     # max value for 4 bits is 15
     encoded = encode_value(spec, 15)
     assert encoded == b"\x0f"
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         encode_value(spec, 16)
 
 def test_length_ref_and_count_ref():

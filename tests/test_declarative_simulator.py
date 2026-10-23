@@ -1,8 +1,6 @@
 import pytest
-import asyncio
 from omniuart.core.simulator import BaseDeviceSimulator, DeclarativeBehavior, SimulatorRule
 from omniuart.core.models import ProtocolSpec, FramingConfig, FramingType, SerialConfig, ProtocolMeta
-from omniuart.core.transport import VirtualTransport
 
 @pytest.fixture
 def ascii_spec():

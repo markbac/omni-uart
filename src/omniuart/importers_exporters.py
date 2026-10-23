@@ -8,11 +8,8 @@ from __future__ import annotations
 
 import csv
 import io
-import json
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple
 
-import yaml
 
 from omniuart.core.models import (
     CommandSafety,
@@ -23,7 +20,6 @@ from omniuart.core.models import (
     FramingType,
     ProtocolMeta,
     ProtocolSpec,
-    ResponseSpec,
     SerialConfig,
 )
 

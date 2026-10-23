@@ -10,8 +10,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
 from omniuart.core.codec import FrameCodec, field_size
-from omniuart.core.crc import calculate_crc, parse_crc_bytes
-from omniuart.core.models import CommandSpec, FieldSpec, ProtocolSpec
+from omniuart.core.models import ProtocolSpec
 
 
 @dataclass

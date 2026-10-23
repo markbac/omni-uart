@@ -1,6 +1,5 @@
 """Unit test for OmniUART performance benchmarking suite (#224)."""
 
-import pytest
 from omniuart.benchmarks import PerformanceBenchmarkSuite, BenchmarkMetric
 
 

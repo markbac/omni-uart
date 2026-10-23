@@ -1,6 +1,5 @@
 """Unit test verifying CLI examples documented in docs/cli-guide.md (#227)."""
 
-import json
 from omniuart.cli import main
 
 

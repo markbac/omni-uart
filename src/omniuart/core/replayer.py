@@ -6,6 +6,7 @@ Replays recorded JSON Lines (.jsonl) session packets onto physical or virtual se
 from __future__ import annotations
 
 import asyncio
+from enum import Enum
 import json
 import logging
 from pathlib import Path
@@ -16,9 +17,6 @@ from omniuart.core.recorder import PacketEvent
 from omniuart.core.transport import AsyncTransport
 
 logger = logging.getLogger(__name__)
-
-
-from enum import Enum
 
 
 class ReplayTimingMode(str, Enum):
