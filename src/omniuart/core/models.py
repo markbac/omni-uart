@@ -93,6 +93,9 @@ class FieldSpec(BaseModel):
     encoding: Optional[str] = None
     offset_val: Optional[float] = None
     expression: Optional[str] = None
+    # A constant: always sent with this value and never supplied by the caller. Leading fixed
+    # parameters tell apart commands that share a command id (for example a data item id).
+    fixed: Optional[Any] = None
 
     @field_validator("endian")
     @classmethod
@@ -177,6 +180,16 @@ class TelemetrySpec(BaseModel):
     fields: List[FieldSpec] = Field(default_factory=list)
 
 
+class ErrorReplySpec(BaseModel):
+    """A reply id the device sends instead of a response when it refuses or fails a command (a NAK)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: Union[int, str]
+    name: str
+    description: Optional[str] = None
+
+
 class LengthSpec(BaseModel):
     """Dynamic frame length field configuration."""
 
@@ -184,7 +197,17 @@ class LengthSpec(BaseModel):
 
     type: str = "uint16"
     endian: str = "little"
+    # What the length value counts: payload_only, payload_and_cmd (command id + payload),
+    # full_frame (header to footer), or length_to_end (from the length field itself to the end of the frame).
     includes: str = "payload_only"
+
+    @field_validator("includes")
+    @classmethod
+    def validate_includes(cls, v: str) -> str:
+        allowed = ("payload_only", "payload_and_cmd", "full_frame", "length_to_end")
+        if v not in allowed:
+            raise ValueError(f"length.includes must be one of {', '.join(allowed)}")
+        return v
 
 
 class CommandIdSpec(BaseModel):
@@ -337,6 +360,8 @@ class ProtocolSpec(BaseModel):
     framing: FramingConfig
     commands: List[CommandSpec] = Field(default_factory=list)
     telemetry: List[TelemetrySpec] = Field(default_factory=list)
+    # Replies that report a failure instead of answering: an exchange that gets one ends as ``device_error``.
+    error_replies: List[ErrorReplySpec] = Field(default_factory=list)
     # Default ``correlate`` for every command that has all of these as both a parameter and a response field.
     correlate: List[str] = Field(default_factory=list)
 

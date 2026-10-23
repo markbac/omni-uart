@@ -101,7 +101,7 @@ def dissect_frame(spec: ProtocolSpec, frame_bytes: bytes, direction: str = "requ
     dissected.valid = frame.ok
     dissected.error = frame.error
 
-    found = codec._lookup(frame.message_id, direction) if frame.message_id is not None else None
+    found = codec._lookup(frame.message_id, direction, frame.payload) if frame.message_id is not None else None
     specs = found[1] if found else []
 
     # Binary frames: header | length | command_id | payload | integrity | footer (see codec.py)

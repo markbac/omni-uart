@@ -423,6 +423,10 @@ def encode_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> byte
             # Derived fields are computed, never carried on the wire (decode_fields does the same).
             values_copy[spec.name] = _eval_expression(spec.expression, values_copy)
             continue
+        if spec.fixed is not None:
+            if spec.name in values_copy and values_copy[spec.name] != spec.fixed:
+                raise CodecError(f"Parameter '{spec.name}' is fixed at {spec.fixed!r} and cannot be set")
+            values_copy[spec.name] = spec.fixed
         if spec.name in values_copy:
             value = values_copy[spec.name]
         elif spec.default is not None:
@@ -664,6 +668,8 @@ class FrameCodec:
                 value = (
                     len(self._header) + size + len(id_bytes) + len(payload) + self._integrity_width + len(self._footer)
                 )
+            elif length_spec.includes == "length_to_end":
+                value = size + len(id_bytes) + len(payload) + self._integrity_width + len(self._footer)
             else:
                 value = len(payload)
             if value >= 1 << (8 * size):
@@ -702,11 +708,15 @@ class FrameCodec:
             return DecodedFrame(raw=bytes(data), error="input is not exactly one complete frame")
         return frames[0]
 
-    def extract_frames(self, data: Union[bytes, bytearray], direction: str = "any") -> Tuple[List[DecodedFrame], bytes]:
+    def extract_frames(
+        self, data: Union[bytes, bytearray], direction: str = "any", expect: Optional[CommandSpec] = None
+    ) -> Tuple[List[DecodedFrame], bytes]:
         """Pull every complete frame out of ``data`` and return ``(frames, unconsumed_bytes)``.
 
         Bytes before a header are discarded (resynchronisation). Frames whose envelope is intact
         but whose content is invalid are returned with ``error`` set instead of being dropped.
+        ``expect`` is the command whose response is awaited: a frame with its response id is decoded
+        as that command's response, which matters when several commands share a response id.
         """
         if not self.is_binary:
             return self._extract_delimited(bytes(data), direction)
@@ -725,7 +735,7 @@ class FrameCodec:
                 buf = buf[1:]
                 continue
             raw, buf = buf[:total], buf[total:]
-            frames.append(self._decode_frame(raw, direction))
+            frames.append(self._decode_frame(raw, direction, expect))
 
     def _partial_header_len(self, buf: bytes) -> int:
         for size in range(min(len(self._header) - 1, len(buf)), 0, -1):
@@ -755,6 +765,10 @@ class FrameCodec:
             elif includes == "payload_and_cmd":
                 total = head + length_size + value + trailer
                 if value < id_size:
+                    return -1
+            elif includes == "length_to_end":
+                total = head + value
+                if value < length_size + id_size + trailer:
                     return -1
             else:
                 total = head + length_size + id_size + value + trailer
@@ -794,13 +808,24 @@ class FrameCodec:
             total += size
         return total
 
-    def _lookup(self, message_id: Union[int, str], direction: str) -> Optional[Tuple[Tuple[str, str], List[FieldSpec]]]:
-        """Return ``((kind, name), fields)`` for a message id."""
+    def _lookup(
+        self, message_id: Union[int, str], direction: str, payload: Optional[bytes] = None
+    ) -> Optional[Tuple[Tuple[str, str], List[FieldSpec]]]:
+        """Return ``((kind, name), fields)`` for a message id.
+
+        Commands that share an id are told apart by their leading ``fixed`` parameters, checked
+        against ``payload``. Kind ``error`` is a declared error reply, which has no fields.
+        """
         if direction in ("request", "any"):
-            for cmd in self.spec.commands:
-                if self._same_id(cmd.id, message_id):
-                    return ("command", cmd.name), cmd.parameters
+            matches = [cmd for cmd in self.spec.commands if self._same_id(cmd.id, message_id)]
+            if len(matches) > 1 and payload is not None:
+                matches = [cmd for cmd in matches if payload.startswith(self._fixed_prefix(cmd))] or matches[:0]
+            if matches:
+                return ("command", matches[0].name), matches[0].parameters
         if direction in ("response", "any"):
+            for reply in self.spec.error_replies:
+                if self._same_id(reply.id, message_id):
+                    return ("error", reply.name), []
             for cmd in self.spec.commands:
                 if cmd.response is not None and cmd.response.id is not None and self._same_id(cmd.response.id, message_id):
                     return ("response", cmd.name), cmd.response.fields
@@ -814,6 +839,15 @@ class FrameCodec:
                         return ("response", cmd.name), cmd.response.fields
         return None
 
+    def _fixed_prefix(self, cmd: CommandSpec) -> bytes:
+        """The encoded leading ``fixed`` parameters of ``cmd`` (empty when it has none)."""
+        out = bytearray()
+        for spec in cmd.parameters:
+            if spec.fixed is None:
+                break
+            out.extend(encode_value(spec, spec.fixed))
+        return bytes(out)
+
     @staticmethod
     def _same_id(declared: Union[int, str], actual: Union[int, str]) -> bool:
         try:
@@ -821,7 +855,7 @@ class FrameCodec:
         except CodecError:
             return str(declared) == str(actual)
 
-    def _decode_frame(self, raw: bytes, direction: str) -> DecodedFrame:
+    def _decode_frame(self, raw: bytes, direction: str, expect: Optional[CommandSpec] = None) -> DecodedFrame:
         head, length_size, id_size = self._layout()
         trailer_crc = self._integrity_width
         footer_len = len(self._footer)
@@ -850,7 +884,15 @@ class FrameCodec:
                 frame.error = f"integrity mismatch: received {received:#x}, expected {expected:#x}"
                 return frame
 
-        found = self._lookup(message_id, direction)
+        found = self._lookup(message_id, direction, payload)
+        if (
+            expect is not None
+            and expect.response is not None
+            and direction in ("response", "any")
+            and (found is None or found[0][0] != "error")
+            and self._same_id(expect.response.id if expect.response.id is not None else expect.id, message_id)
+        ):
+            found = ("response", expect.name), expect.response.fields
         if found is None:
             frame.error = f"unknown message id {message_id:#x}"
             return frame

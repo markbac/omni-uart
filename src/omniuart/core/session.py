@@ -43,6 +43,7 @@ class ExchangeStatus(str, Enum):
     TIMEOUT = "timeout"  # a response was expected but nothing arrived in time
     INVALID_RESPONSE = "invalid_response"  # bytes arrived but are not a valid response to this command
     TRANSPORT_ERROR = "transport_error"  # the transport failed while writing or reading
+    DEVICE_ERROR = "device_error"  # the device answered with a declared error reply (a NAK)
 
 
 @dataclass
@@ -327,9 +328,15 @@ class SerialSession:
             if not chunk:
                 break
             exchange.response_bytes += chunk
-            frames, buf = self.codec.extract_frames(buf + chunk, direction="response")
+            frames, buf = self.codec.extract_frames(buf + chunk, direction="response", expect=cmd)
             for frame in frames:
                 exchange.frames.append(frame)
+                if frame.ok and frame.kind == "error":
+                    reply = next((r for r in self.spec.error_replies if r.name == frame.name), None)
+                    detail = f": {reply.description}" if reply and reply.description else ""
+                    exchange.status, exchange.response = ExchangeStatus.DEVICE_ERROR, frame
+                    exchange.error = f"device refused '{cmd.name}' with {frame.name}{detail}"
+                    return
                 if not frame.ok:
                     exchange.status, exchange.error, exchange.response = ExchangeStatus.INVALID_RESPONSE, f"invalid response: {frame.error}", frame
                     return

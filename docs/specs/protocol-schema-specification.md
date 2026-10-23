@@ -317,14 +317,24 @@ For a delimited text protocol, a `response` can declare how to tell success from
 
 Nothing is assumed when neither is declared: a reply containing the word "error" can be ordinary data, such as SCPI's `0,"No error"`. Scripts can check text replies with the `contains`, `startswith`, `endswith` and `matches` assertion operators.
 
-### 5.3 UI Tags & Dashboard Generation
+### 5.3 Register-Style Protocols
+
+Some devices have one read command and one write command, and address every value with a data item id that follows the command id. Three settings describe them:
+
+- A parameter with `fixed: <value>` is always sent with that value and cannot be set by the caller. Commands that share a command id are told apart by their leading `fixed` parameters, so `read_contrast` and `read_serial` can both use id `0x03` with different data item ids.
+- A reply that carries only the command id (for example an ACK `0x03` followed by data) is decoded as the answer to the request that was sent, using that command's response fields.
+- `error_replies` lists reply ids the device sends instead of an answer (NAKs). An exchange that gets one ends with status `device_error` and the reply's name and description, not with a timeout.
+
+`length.includes: length_to_end` covers length fields that count from the length field itself to the end of the frame.
+
+### 5.4 UI Tags & Dashboard Generation
 Commands can include semantic tags to drive auto-generated Win32 and web dashboards:
 - `tab:<name>`: Organizes commands into dedicated tabbed panels (e.g. `tab:display`, `tab:voss`).
 - `fieldset:<name>`: Groups related registers within a panel into titled group boxes.
 - `action:get` / `action:set`: Marks paired register access, rendering compact adjacent `[Get]` and `[Set]` buttons.
 - `widget:lcd_matrix`: Signals a segmented 16x2 green matrix character display widget for visual previewing.
 
-### 5.4 Centralized Enumerations via YAML Anchors
+### 5.5 Centralized Enumerations via YAML Anchors
 Protocols with shared data item registers can define the register mapping once using a standard YAML anchor (`&DataItemId`) on `options:`. Subsequent commands then alias it with `options: *DataItemId`. This eliminates dictionary duplication, enforces consistent integer typing for AsyncAPI 2.6.0 export, and complies with Pydantic's strict root schema validation.
 
 ```yaml

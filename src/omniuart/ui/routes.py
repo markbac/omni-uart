@@ -196,6 +196,7 @@ _FAILURE_CODES = {
     ExchangeStatus.TIMEOUT: 504,
     ExchangeStatus.INVALID_RESPONSE: 502,
     ExchangeStatus.TRANSPORT_ERROR: 502,
+    ExchangeStatus.DEVICE_ERROR: 502,
 }
 
 

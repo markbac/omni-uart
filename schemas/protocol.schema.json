@@ -117,6 +117,45 @@
       "title": "CommandSpec",
       "type": "object"
     },
+    "ErrorReplySpec": {
+      "additionalProperties": false,
+      "description": "A reply id the device sends instead of a response when it refuses or fails a command (a NAK).",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Id"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "ErrorReplySpec",
+      "type": "object"
+    },
     "FieldSpec": {
       "additionalProperties": false,
       "description": "Specification for an individual payload or response field.",
@@ -360,6 +399,16 @@
           ],
           "default": null,
           "title": "Expression"
+        },
+        "fixed": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fixed"
         }
       },
       "required": [
@@ -897,6 +946,13 @@
         "$ref": "#/$defs/TelemetrySpec"
       },
       "title": "Telemetry",
+      "type": "array"
+    },
+    "error_replies": {
+      "items": {
+        "$ref": "#/$defs/ErrorReplySpec"
+      },
+      "title": "Error Replies",
       "type": "array"
     },
     "correlate": {
