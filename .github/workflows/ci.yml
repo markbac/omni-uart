@@ -107,6 +107,59 @@ jobs:
                   print(f'Validated script: {s.name}')
           "
 
+      - name: Validate AsyncAPI Specifications (#337)
+        run: |
+          python -c "
+          from pathlib import Path
+          from omniuart.core.catalog import CatalogManager
+          from omniuart.core.asyncapi_exporter import export_asyncapi_dict
+          catalog = CatalogManager()
+          sample_protocols = ['binary_sensor_node.yaml', 'simple_iot_telemetry.yaml', 'custom_crc_device.yaml']
+          for p_name in sample_protocols:
+              spec = catalog.get_protocol(p_name, first=True)
+              assert spec is not None, f'Protocol {p_name} not found'
+              doc = export_asyncapi_dict(spec)
+              assert doc['asyncapi'] == '2.6.0'
+              assert 'info' in doc and 'channels' in doc and 'components' in doc
+              print(f'Validated AsyncAPI export for: {p_name}')
+          "
+
+      - name: Check Optional tshark PCAPNG Dissector (#212, #337)
+        continue-on-error: true
+        run: |
+          if command -v tshark >/dev/null 2>&1; then
+            echo "tshark is available"
+            tshark -v
+          else
+            echo "tshark not installed in runner (optional PCAPNG validation skipped)"
+          fi
+
+  benchmarks:
+    name: Performance Benchmarks & Targets (#224, #340)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run Benchmark Suite & Compare Targets
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m omniuart.benchmarks --compare-baseline
+
   docs-lint:
     name: Docs Lint (py-doc)
     runs-on: ubuntu-latest

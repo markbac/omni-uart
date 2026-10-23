@@ -401,7 +401,7 @@ class SlidingWindowController:
         return True
 
     def mark_timeout(self, sequence_number: int) -> Tuple[bool, Optional[TransferChunk]]:
-        """Mark chunk timed out and eligible for retransmission if under max retries."""
+        """Mark chunk timed out and eligible for retransmission if under max retries (#245, #252)."""
         if sequence_number < 0 or sequence_number >= len(self.chunks):
             return False, None
         chunk = self.chunks[sequence_number]
@@ -409,6 +409,9 @@ class SlidingWindowController:
         self.inflight_times.pop(sequence_number, None)
         if chunk.retries > self.max_retries:
             return False, chunk  # Exceeded retries limit
+        # Rewind next_seq so that this timed-out chunk is retransmitted on next window pull
+        if self.next_seq > sequence_number:
+            self.next_seq = sequence_number
         return True, chunk
 
     def is_all_acknowledged(self) -> bool:
@@ -1045,3 +1048,134 @@ class ConfigurationWorkflow:
                 await res
 
         return True, None
+
+@dataclass
+class TransferSimulationConfig:
+    """Configuration for simulating device and transport transfer behaviour (#252)."""
+
+    ack_delay_ms: float = 0.0
+    drop_chunks: Set[int] = field(default_factory=set)          # Chunks that are dropped (simulate loss/timeout)
+    corrupt_chunks: Set[int] = field(default_factory=set)       # Chunks corrupted in transit (CRC failure)
+    duplicate_chunks: Set[int] = field(default_factory=set)     # Chunks sent multiple times to device
+    interrupt_after_chunk: Optional[int] = None                 # Interrupt connection after chunk N
+    fail_verification: bool = False                             # Device reports checksum mismatch
+    reject_commit: bool = False                                 # Device rejects commit operation
+    max_retries_per_chunk: int = 3
+
+
+class TransferSimulator:
+    """Simulator simulating device-side transfer handling and fault injection (#252).
+
+    Simulates:
+    - Successful transfers
+    - Delayed acknowledgements
+    - Lost / dropped chunks (triggers sender timeout and retransmission)
+    - Corrupted chunks (CRC verification failure on device)
+    - Duplicated chunks (device reassembler duplicate detection)
+    - Out-of-order chunks (reassembly window testing)
+    - Interrupted connections (simulated disconnect/abort for checkpoint resumption)
+    - Failed verification (hash mismatch on reassembled payload)
+    - Rejected commits (e.g. firmware flash write error or signature rejection)
+    """
+
+    def __init__(
+        self,
+        total_size: int = 0,
+        expected_chunks: Optional[int] = None,
+        config: Optional[TransferSimulationConfig] = None,
+    ) -> None:
+        self.config: TransferSimulationConfig = config or TransferSimulationConfig()
+        self.reassembler: TransferReassembler = TransferReassembler(total_size=total_size, expected_chunks=expected_chunks)
+        self.received_chunks: List[TransferChunk] = []
+        self.dropped_attempts: Dict[int, int] = {}
+        self.corrupt_attempts: Dict[int, int] = {}
+        self.interrupted: bool = False
+        self.committed: bool = False
+
+    async def handle_chunk(self, chunk: TransferChunk) -> bool:
+        """Process incoming chunk according to simulation configuration."""
+        seq = chunk.sequence_number
+
+        # Auto-update reassembler total size on last chunk if not preset
+        if self.reassembler.total_size == 0 and chunk.is_last:
+            self.reassembler.total_size = chunk.offset + chunk.size
+
+        # 1. Connection interruption check
+        if self.config.interrupt_after_chunk is not None and seq >= self.config.interrupt_after_chunk:
+            self.interrupted = True
+            return False
+
+        # 2. Simulated packet drop (lost chunk)
+        if seq in self.config.drop_chunks:
+            attempts = self.dropped_attempts.get(seq, 0)
+            if attempts < self.config.max_retries_per_chunk:
+                self.dropped_attempts[seq] = attempts + 1
+                return False
+
+        # 3. Simulated ACK delay
+        if self.config.ack_delay_ms > 0:
+            await asyncio.sleep(self.config.ack_delay_ms / 1000.0)
+
+        # 4. Simulated corruption
+        data_to_store = chunk.data
+        if seq in self.config.corrupt_chunks:
+            c_attempts = self.corrupt_attempts.get(seq, 0)
+            if c_attempts < self.config.max_retries_per_chunk:
+                self.corrupt_attempts[seq] = c_attempts + 1
+                corrupt_bytes = bytearray(chunk.data)
+                if corrupt_bytes:
+                    corrupt_bytes[0] ^= 0xFF
+                data_to_store = bytes(corrupt_bytes)
+
+        # Reassemble chunk
+        chunk_to_add = TransferChunk(
+            sequence_number=chunk.sequence_number,
+            offset=chunk.offset,
+            size=len(data_to_store),
+            data=data_to_store,
+            crc32=chunk.crc32,
+            sha256=chunk.sha256,
+            is_last=chunk.is_last,
+        )
+
+        # If chunk is corrupted, device CRC check fails
+        if not chunk_to_add.verify_chunk_crc():
+            return False
+
+        self.reassembler.add_chunk(chunk_to_add)
+        self.received_chunks.append(chunk_to_add)
+
+        # 5. Simulated duplication
+        if seq in self.config.duplicate_chunks:
+            self.reassembler.add_chunk(chunk_to_add)
+            self.received_chunks.append(chunk_to_add)
+
+        return True
+
+    def verify(self, expected_checksum: str, algorithm: ChecksumAlgorithm = ChecksumAlgorithm.SHA256) -> bool:
+        """Verify reassembled payload against expected checksum."""
+        if self.config.fail_verification:
+            return False
+        if not self.reassembler.is_complete():
+            return False
+        data = self.reassembler.reassemble()
+        if algorithm == ChecksumAlgorithm.CRC32:
+            calc = f"{zlib.crc32(data):08X}"
+        elif algorithm == ChecksumAlgorithm.MD5:
+            calc = hashlib.md5(data).hexdigest()
+        else:
+            calc = hashlib.sha256(data).hexdigest()
+        return calc.lower() == expected_checksum.lower()
+
+    def commit(self, policy: CommitPolicy = CommitPolicy.EXPLICIT_VERIFIED) -> CommitResult:
+        """Simulate device commit."""
+        if self.config.reject_commit:
+            return CommitResult(success=False, error="Simulated flash write error / signature rejected", rolled_back=True)
+        self.committed = True
+        return CommitResult(success=True, committed_version="1.0.0", checksum_verified=True)
+
+    def get_reassembled_data(self) -> bytes:
+        if self.reassembler.is_complete():
+            return self.reassembler.reassemble()
+        sorted_chunks = sorted(self.reassembler.received_chunks.values(), key=lambda c: c.sequence_number)
+        return b"".join(c.data for c in sorted_chunks)

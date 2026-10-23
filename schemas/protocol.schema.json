@@ -72,6 +72,18 @@
           "$ref": "#/$defs/CommandSafety",
           "default": "mutating"
         },
+        "safety_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Safety Reason"
+        },
         "parameters": {
           "items": {
             "$ref": "#/$defs/FieldSpec"

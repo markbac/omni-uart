@@ -15,7 +15,8 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec
 from omniuart.core.models import CommandSafety, CommandSpec, ProtocolSpec
-from omniuart.core.recorder import SessionRecorder
+import time
+from omniuart.core.recorder import PacketEvent, SessionRecorder, Transaction
 from omniuart.core.transport import AsyncTransport, HardwareSerialTransport, VirtualTransport
 
 
@@ -207,13 +208,25 @@ class SerialSession:
         exchange = Exchange(command=cmd.name, request=request)
         loop = asyncio.get_running_loop()
         start = loop.time()
+        tx_event: Optional[PacketEvent] = None
         if self.recorder:
-            self.recorder.record("tx", request, command_name=cmd.name, command_id=cmd.id, decoded_fields=dict(params or {}))
+            tx_event = self.recorder.record("tx", request, command_name=cmd.name, command_id=cmd.id, decoded_fields=dict(params or {}))
         try:
             await self.transport.write(request)
             if cmd.response is None:
                 exchange.latency_ms = (loop.time() - start) * 1000.0
                 self._update_stats(exchange, len(request), 0)
+                if self.recorder:
+                    transaction = Transaction(
+                        transaction_id=f"tx_{int(time.time()*1000)}_{cmd.name}",
+                        command_name=cmd.name,
+                        command_id=cmd.id,
+                        tx_event=tx_event,
+                        rx_events=[],
+                        latency_ms=exchange.latency_ms,
+                        status="ok" if exchange.ok else "error",
+                    )
+                    self.recorder.add_transaction(transaction)
                 return exchange
             wait_ms = timeout_ms if timeout_ms is not None else cmd.response.timeout_ms
             await self._await_response(cmd, exchange, wait_ms, self._request_values(cmd, params), matcher or self.matcher)
@@ -222,8 +235,9 @@ class SerialSession:
             exchange.error = f"{type(exc).__name__}: {exc}"
         exchange.latency_ms = (loop.time() - start) * 1000.0
         self._update_stats(exchange, len(request), len(exchange.response_bytes))
+        rx_event: Optional[PacketEvent] = None
         if self.recorder and exchange.response_bytes:
-            self.recorder.record(
+            rx_event = self.recorder.record(
                 "rx",
                 exchange.response_bytes,
                 command_name=cmd.name,
@@ -232,6 +246,18 @@ class SerialSession:
                 crc_valid=None if exchange.response is None else exchange.response.ok,
                 latency_ms=exchange.latency_ms,
             )
+        if self.recorder:
+            rx_events = [rx_event] if rx_event is not None else []
+            transaction = Transaction(
+                transaction_id=f"tx_{int(time.time()*1000)}_{cmd.name}",
+                command_name=cmd.name,
+                command_id=cmd.id,
+                tx_event=tx_event,
+                rx_events=rx_events,
+                latency_ms=exchange.latency_ms,
+                status="ok" if exchange.ok else "error",
+            )
+            self.recorder.add_transaction(transaction)
         return exchange
 
     def _update_stats(self, exchange: Exchange, tx_len: int, rx_len: int) -> None:

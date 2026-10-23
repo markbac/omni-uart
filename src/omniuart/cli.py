@@ -201,6 +201,8 @@ def format_protocol_help(spec: ProtocolSpec) -> str:
         for cmd in cmds:
             desc = f" - {cmd.description}" if cmd.description else ""
             lines.append(f"    • {cmd.name} (ID: {cmd.id}){desc}")
+            safety_reason_str = f" [{cmd.safety_reason}]" if cmd.safety_reason else ""
+            lines.append(f"      Safety: {cmd.safety.value}{safety_reason_str}")
             if cmd.parameters:
                 lines.append("      Parameters:")
                 for p in cmd.parameters:
@@ -385,14 +387,26 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"\nDiscovered Protocols ({summary['protocols_found']}):")
             for p in summary["protocols"]:
                 print(f"  - {p['filename']} : {p['name']} (v{p['version']}, {p['commands_count']} cmds)")
+            if summary.get("errors"):
+                print(f"\nFailed to Load ({len(summary['errors'])}):")
+                for err in summary["errors"]:
+                    print(f"  - {err['filename']}: {err['error']}")
             print(f"\nDiscovered Scripts ({summary['scripts_found']}):")
             for s in summary["scripts"]:
                 print(f"  - {s['filename']} : {s['name']} (Target: {s['protocol']})")
         return 0
 
     elif args.subcommand == "info":
-        spec = catalog.get_protocol(args.protocol)
+        try:
+            spec = catalog.get_protocol(args.protocol)
+        except Exception as exc:
+            print(f"Error loading protocol '{args.protocol}': {exc}", file=sys.stderr)
+            return 1
         if not spec:
+            err = catalog.get_load_error(args.protocol)
+            if err:
+                print(f"Error loading protocol '{args.protocol}': {err}", file=sys.stderr)
+                return 1
             print(f"Error: Protocol '{args.protocol}' not found in catalog.", file=sys.stderr)
             return 1
         print(format_protocol_help(spec))
@@ -424,7 +438,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     elif args.subcommand == "docs":
         from omniuart.docs_generator import build_site_documentation, generate_html_docs, generate_markdown_docs
         out_dir = Path(args.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
         if args.all or not args.protocol:
+            if getattr(args, "format", "html") == "markdown":
+                proto_files = catalog.list_protocol_files()
+                count = 0
+                for pf in proto_files:
+                    try:
+                        spec = catalog.get_protocol(pf.name)
+                        if spec:
+                            doc_str = generate_markdown_docs(spec)
+                            target_file = out_dir / f"{spec.metadata.name.lower().replace(' ', '_')}.md"
+                            target_file.write_text(doc_str, encoding="utf-8")
+                            count += 1
+                    except Exception:
+                        continue
+                print(f"Generated Markdown protocol docs for {count} protocols: {out_dir.resolve()}")
+                return 0
             site_path = build_site_documentation(out_dir)
             print(f"Built complete protocol documentation site at: {site_path.resolve()}")
             return 0
@@ -544,8 +574,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Replaying session file: {args.session_file} (speed: {speed_str})...")
         replayer = SessionReplayer(replay_transport, speed_multiplier=args.speed)
         try:
-            count = asyncio.run(replayer.replay_file(args.session_file))
-            print(f"Successfully replayed {count} frame(s).")
+            replay_result = asyncio.run(replayer.replay_file(args.session_file))
+            print(f"Successfully replayed {replay_result.frames_sent} frame(s).")
             return 0
         except (FileNotFoundError, ValueError) as exc:
             print(f"Replay error: {exc}", file=sys.stderr)
@@ -751,9 +781,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         from omniuart.benchmarks import PerformanceBenchmarkSuite
         proto_name = getattr(args, "protocol", None) or "sample"
         suite = PerformanceBenchmarkSuite()
-        res = suite.run_suite()
+        bench_res = suite.run_suite()
         print(f"Benchmark Performance Suite Results ({proto_name}):")
-        for b_name, b_metrics in res.get("benchmarks", {}).items():
+        for b_name, b_metrics in bench_res.get("benchmarks", {}).items():
             print(f"  - {b_name:<20} : {b_metrics.get('ops_per_sec', 0):,.0f} ops/sec ({b_metrics.get('avg_latency_us', 0):.2f} us/op)")
         return 0
 

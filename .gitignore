@@ -76,3 +76,4 @@ _site/
 site/
 docs/schemas/
 RELEASE_NOTES.md
+uv.lock

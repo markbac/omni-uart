@@ -135,6 +135,7 @@ class CommandSpec(BaseModel):
     description: Optional[str] = None
     tags: List[str] = Field(default_factory=list)
     safety: CommandSafety = CommandSafety.MUTATING
+    safety_reason: Optional[str] = None
     parameters: List[FieldSpec] = Field(default_factory=list)
     response: Optional[ResponseSpec] = None
     # Request parameters whose values must equal the same-named fields of the response (a transaction id,
