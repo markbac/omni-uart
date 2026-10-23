@@ -46,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     send_parser = subparsers.add_parser("send", help="Format and send a protocol command")
     send_parser.add_argument("protocol", help="Protocol name or filename")
     send_parser.add_argument("command", help="Command name or ID")
-    send_parser.add_argument("--params", "-p", nargs="*", help="Key=value parameters (e.g. channel=1 speed=50)")
+    send_parser.add_argument("--params", "-p", "--param", nargs="*", help="Key=value parameters (e.g. channel=1 speed=50)")
     send_parser.add_argument("--port", "-P", help="Serial port to transmit on (e.g. COM3, /dev/ttyUSB0, or a PySerial URL such as loop://)")
     send_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate override (default: from the protocol)")
     send_parser.add_argument("--virtual", action="store_true", help="Transmit to the built-in simulated device instead of a serial port")
@@ -54,6 +54,7 @@ def build_parser() -> argparse.ArgumentParser:
     send_parser.add_argument("--dry-run", action="store_true", help="Only build and print the frame; transmit nothing")
     send_parser.add_argument("--read-only", action="store_true", help="Refuse any command not marked safety: read_only")
     send_parser.add_argument("--yes", "-y", action="store_true", help="Confirm sending a destructive command")
+    send_parser.add_argument("--record", help="Write every transmitted and received frame to this .jsonl file")
 
     # 4. run (Run Automation Script)
     run_parser = subparsers.add_parser("run", help="Execute an automated sequence test script")
@@ -88,6 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
     fuzz_parser.add_argument("protocol", help="Protocol name or filename to fuzz")
     fuzz_parser.add_argument("--vectors", "-n", type=int, default=20, help="Number of fuzz test vectors to run")
     fuzz_parser.add_argument("--seed", type=int, default=None, help="Seed for reproducible random mutations (printed in the summary)")
+    fuzz_parser.add_argument("--port", "-P", help="Serial port to target (e.g. COM3, /dev/ttyUSB0, loop://)")
+    fuzz_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate override (default: from the protocol)")
+    fuzz_parser.add_argument("--virtual", action="store_true", help="Target virtual simulator instead of physical serial port")
+    fuzz_parser.add_argument("--read-only", action="store_true", help="Only fuzz read_only commands")
+    fuzz_parser.add_argument("--yes", "-y", action="store_true", help="Confirm sending destructive commands to real hardware")
 
     # 9. replay (Session Replay Engine)
     replay_parser = subparsers.add_parser("replay", help="Replay recorded session transactions onto a serial transport")
@@ -106,9 +112,60 @@ def build_parser() -> argparse.ArgumentParser:
 
     # 11. generate (Artefact Generator)
     gen_parser = subparsers.add_parser("generate", help="Generate Wireshark dissector, C header, Python dataclasses, or JSON Schema")
-    gen_parser.add_argument("target", choices=["wireshark", "c", "python", "schema"], help="Generation target: wireshark, c, python, or schema")
+    gen_parser.add_argument("target", choices=["wireshark", "c", "python", "schema", "asyncapi"], help="Generation target: wireshark, c, python, schema, or asyncapi")
     gen_parser.add_argument("protocol", nargs="?", help="Protocol name or file (required except for schema target)")
     gen_parser.add_argument("--output", "-o", help="Target output file path")
+
+    # 12. ports (List Host Serial Ports & Active Virtual Pairs)
+    ports_parser = subparsers.add_parser("ports", help="List detected physical serial ports and active virtual ports")
+    ports_parser.add_argument("--json", action="store_true", help="Output in JSON format")
+
+    # 13. monitor (Live Packet Monitoring)
+    monitor_parser = subparsers.add_parser("monitor", help="Live monitor and decode UART packet stream")
+    monitor_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    monitor_parser.add_argument("--port", "-P", help="Serial port to monitor")
+    monitor_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate (default: from protocol)")
+    monitor_parser.add_argument("--virtual", action="store_true", help="Monitor virtual transport")
+    monitor_parser.add_argument("--duration", type=float, default=None, help="Monitoring duration in seconds (default: indefinite)")
+    monitor_parser.add_argument("--jsonl", help="Path to write captured packets as JSON Lines")
+
+    # 14. dissect (Frame Dissector & Diagnostic Inspector)
+    dissect_parser = subparsers.add_parser("dissect", help="Dissect raw UART frame bytes and show diagnostic breakdown")
+    dissect_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    dissect_parser.add_argument("frame_hex", help="Hex string of raw frame bytes")
+    dissect_parser.add_argument("--direction", choices=["request", "response", "any"], default="request", help="Frame direction")
+
+    # 15. visualize (Protocol Topology & Frame Visualizer)
+    visualize_parser = subparsers.add_parser("visualize", help="Visualize protocol frame structures and command topologies")
+    visualize_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    visualize_parser.add_argument("--format", choices=["mermaid", "svg", "html"], default="mermaid", help="Visualization format")
+    visualize_parser.add_argument("--output", "-o", help="Output file path")
+
+    # 16. hil (Hardware-In-The-Loop Runner)
+    hil_parser = subparsers.add_parser("hil", help="Run Hardware-In-The-Loop test suite against target")
+    hil_parser.add_argument("script", help="Test script file or catalog name")
+    hil_parser.add_argument("--port", "-P", help="Serial port to target")
+    hil_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate override")
+    hil_parser.add_argument("--virtual", action="store_true", help="Use virtual simulator target")
+    hil_parser.add_argument("--pulse-reset", action="store_true", help="Opt-in power/reset pulse")
+    hil_parser.add_argument("--artifacts", help="Directory to export PCAPNG and session logs")
+    hil_parser.add_argument("--read-only", action="store_true", help="Run in read-only mode")
+
+    # 17. benchmark (Performance Benchmark)
+    benchmark_parser = subparsers.add_parser("benchmark", help="Run protocol encoding/decoding performance benchmarks")
+    benchmark_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    benchmark_parser.add_argument("--iterations", "-n", type=int, default=5000, help="Number of benchmark iterations")
+
+    # 18. export (Export Protocol)
+    export_parser = subparsers.add_parser("export", help="Export protocol to CSV, JSON Schema, or Wireshark format")
+    export_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    export_parser.add_argument("--format", choices=["csv", "json", "c", "wireshark", "python"], default="csv", help="Export format")
+    export_parser.add_argument("--output", "-o", help="Output file path")
+
+    # 19. import (Import Protocol)
+    import_parser = subparsers.add_parser("import", help="Import protocol from CSV tabular format")
+    import_parser.add_argument("file", help="Path to input CSV file")
+    import_parser.add_argument("--output", "-o", help="Output file path (.yaml or .json)")
 
     return parser
 
@@ -205,12 +262,17 @@ def _send_command(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any], 
         print(f"Error: {exc}. Use --port <port>, --virtual, or --dry-run.", file=sys.stderr)
         return 2
 
+    from omniuart.core.recorder import SessionRecorder
+    recorder = SessionRecorder(protocol_name=spec.metadata.name) if getattr(args, "record", None) else None
+
     async def _run() -> Any:
-        async with DeviceSession(spec, transport, read_only=args.read_only) as session:
+        async with DeviceSession(spec, transport, recorder=recorder, read_only=args.read_only) as session:
             return await session.send(cmd, params, timeout_ms=args.timeout)
 
     try:
         exchange = asyncio.run(_run())
+        if recorder and getattr(args, "record", None):
+            recorder.export_jsonl(args.record)
     except Exception as exc:  # noqa: BLE001 - opening the port failed
         print(f"Error: cannot use transport: {exc}", file=sys.stderr)
         return 3
@@ -419,20 +481,45 @@ def main(argv: Optional[List[str]] = None) -> int:
         import asyncio
         from omniuart.core.codec import CodecError
         from omniuart.core.fuzzer import ProtocolFuzzer
-        from omniuart.core.transport import VirtualTransport
+        from omniuart.core.transport import AsyncTransport, HardwareSerialTransport, VirtualTransport
         spec = catalog.get_protocol(args.protocol)
         if not spec:
             print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
-            return 1
-        print(f"Starting Fuzzing Campaign for '{spec.metadata.name}' ({args.vectors} vectors)...")
+            return 2
+
+        if getattr(args, "read_only", False):
+            spec.commands = [c for c in spec.commands if c.is_read_only]
+            if not spec.commands:
+                print(f"Error: Protocol '{spec.metadata.name}' has no read-only commands to fuzz.", file=sys.stderr)
+                return 2
+
+        has_destructive = any(c.safety == CommandSafety.DESTRUCTIVE for c in spec.commands)
+        if has_destructive and not getattr(args, "virtual", False) and not getattr(args, "yes", False) and getattr(args, "port", None):
+            print("Error: protocol contains destructive commands. Confirm with --yes or use --read-only.", file=sys.stderr)
+            return 2
+
+        transport: AsyncTransport
+        target_name = "virtual simulator"
+        if getattr(args, "port", None) and not getattr(args, "virtual", False):
+            baud = args.baudrate or spec.serial_config.baudrate
+            target_name = f"{args.port} ({baud} bps)"
+            transport = HardwareSerialTransport(port=args.port, baudrate=baud)
+        else:
+            transport = VirtualTransport(spec, latency_ms=1.0)
+
+        print(f"Starting Fuzzing Campaign for '{spec.metadata.name}' on {target_name} ({args.vectors} vectors)...")
         try:
             fuzzer = ProtocolFuzzer(spec, seed=args.seed)
-            transport = VirtualTransport(spec, latency_ms=1.0)
             report = asyncio.run(fuzzer.run_campaign(transport, max_vectors=args.vectors))
         except CodecError as exc:
             print(f"Error: cannot fuzz '{spec.metadata.name}': {exc}", file=sys.stderr)
-            return 1
+            return 2
+        except Exception as exc:
+            print(f"Transport link error during fuzzing: {exc}", file=sys.stderr)
+            return 3
+
         print("Campaign Completed:")
+        print(f"  Target                 : {target_name}")
         print(f"  Seed                   : {report.seed if report.seed is not None else 'random'}")
         print(f"  Total Vectors Executed : {report.total_vectors}")
         print(f"  Handled correctly      : {report.handled_count}")
@@ -488,6 +575,33 @@ def main(argv: Optional[List[str]] = None) -> int:
                 out_str = generate_c_header(spec)
             elif args.target == "python":
                 out_str = generate_python_dataclasses(spec)
+            elif args.target == "asyncapi":
+                # AsyncAPI 2.6 / 3.0 representation of protocol commands & events
+                asyncapi_dict = {
+                    "asyncapi": "2.6.0",
+                    "info": {
+                        "title": spec.metadata.name,
+                        "version": spec.metadata.version,
+                        "description": spec.metadata.description or "OmniUART Protocol Specification",
+                    },
+                    "channels": {
+                        f"commands/{cmd.name}": {
+                            "publish": {
+                                "operationId": cmd.name,
+                                "description": cmd.description or f"Send {cmd.name} command",
+                                "message": {
+                                    "name": f"{cmd.name}Message",
+                                    "payload": {
+                                        "type": "object",
+                                        "properties": {p.name: {"type": p.type.value} for p in cmd.parameters},
+                                    },
+                                },
+                            }
+                        }
+                        for cmd in spec.commands
+                    },
+                }
+                out_str = json.dumps(asyncapi_dict, indent=2)
             else:
                 out_str = generate_json_schema()
 
@@ -497,6 +611,201 @@ def main(argv: Optional[List[str]] = None) -> int:
         else:
             print(out_str)
         return 0
+    elif args.subcommand == "ports":
+        from omniuart.core.transport import list_available_ports
+        ports = list_available_ports()
+        if getattr(args, "json", False):
+            print(json.dumps(ports, indent=2))
+        else:
+            if not ports:
+                print("No serial ports detected.")
+            else:
+                print(f"{'PORT':<16} {'DESCRIPTION':<32} HARDWARE ID")
+                print("-" * 68)
+                for p in ports:
+                    print(f"{p['device']:<16} {p['description']:<32} {p['hwid']}")
+        return 0
+
+    elif args.subcommand == "monitor":
+        import asyncio
+        from omniuart.core.codec import FrameCodec
+        from omniuart.core.recorder import SessionRecorder
+        from omniuart.core.session import create_transport
+        spec = catalog.get_protocol(args.protocol)
+        if not spec:
+            print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
+            return 1
+
+        try:
+            transport = create_transport(spec, port=args.port, baudrate=args.baudrate, virtual=args.virtual)
+        except Exception as exc:
+            print(f"Error initializing transport: {exc}", file=sys.stderr)
+            return 3
+
+        print(f"Monitoring '{spec.metadata.name}' on {args.port or 'virtual transport'}...")
+        recorder = SessionRecorder(protocol_name=spec.metadata.name) if getattr(args, "jsonl", None) else None
+
+        async def _monitor() -> None:
+            assert spec is not None
+            codec = FrameCodec(spec)
+            if not transport.is_open:
+                await transport.open()
+            loop = asyncio.get_running_loop()
+            start_ts = loop.time()
+            buf = b""
+            try:
+                while True:
+                    if args.duration and (loop.time() - start_ts) >= args.duration:
+                        break
+                    chunk = await transport.read(size=256, timeout_ms=100)
+                    if not chunk:
+                        continue
+                    buf += chunk
+                    frames, buf = codec.extract_frames(buf, direction="any")
+                    for fr in frames:
+                        status = "VALID" if fr.ok else f"INVALID ({fr.error})"
+                        print(f"[{loop.time() - start_ts:.3f}s] Frame '{fr.name or 'unknown'}' ({len(fr.raw)} B) Status: {status}")
+                        if fr.fields:
+                            for fn, fv in fr.fields.items():
+                                print(f"    {fn} = {fv}")
+                        if recorder:
+                            recorder.record("rx", fr.raw, command_name=fr.name, command_id=fr.message_id, decoded_fields=fr.fields)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                if transport.is_open:
+                    await transport.close()
+                if recorder and getattr(args, "jsonl", None):
+                    recorder.export_jsonl(args.jsonl)
+
+        try:
+            asyncio.run(_monitor())
+            return 0
+        except KeyboardInterrupt:
+            print("\nMonitoring stopped by user.")
+            if recorder and getattr(args, "jsonl", None):
+                recorder.export_jsonl(args.jsonl)
+            return 0
+
+    elif args.subcommand == "dissect":
+        from omniuart.core.dissector import dissect_frame
+        spec = catalog.get_protocol(args.protocol)
+        if not spec:
+            print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
+            return 1
+        clean_hex = args.frame_hex.replace(" ", "").replace("0x", "")
+        try:
+            frame_bytes = bytes.fromhex(clean_hex)
+        except ValueError:
+            print(f"Error: Invalid hex string '{args.frame_hex}'", file=sys.stderr)
+            return 2
+        dissected = dissect_frame(spec, frame_bytes, direction=args.direction)
+        print(dissected.format_diagnostic_text())
+        return 0 if dissected.valid else 1
+
+    elif args.subcommand == "visualize":
+        from omniuart.visualizer import visualize_protocol
+        spec = catalog.get_protocol(args.protocol)
+        if not spec:
+            print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
+            return 1
+        chart_str = visualize_protocol(spec, format=args.format)
+        if args.output:
+            Path(args.output).write_text(chart_str, encoding="utf-8")
+            print(f"Saved visualization to {args.output}")
+        else:
+            print(chart_str)
+        return 0
+
+    elif args.subcommand == "hil":
+        import asyncio
+        from omniuart.hil import HILConfig, HILOrchestrator
+        config = HILConfig(
+            port=args.port,
+            baudrate=args.baudrate,
+            virtual=args.virtual,
+            pulse_reset=args.pulse_reset,
+            artifacts_dir=args.artifacts,
+        )
+        orchestrator = HILOrchestrator(config, catalog=catalog)
+        try:
+            result = asyncio.run(orchestrator.run_hil_test(args.script, read_only=args.read_only))
+            print(f"HIL Test Campaign: {'PASSED' if result.success else 'FAILED'}")
+            print(f"  Total Steps : {result.total_steps}")
+            print(f"  Passed      : {result.passed_steps}")
+            print(f"  Failed      : {result.failed_steps}")
+            print(f"  Skipped     : {result.skipped_steps}")
+            print(f"  Duration    : {result.duration_ms:.1f} ms")
+            if result.error_summary:
+                print(f"  Error       : {result.error_summary}")
+            if result.artifacts:
+                print("  Artifacts   :")
+                for art in result.artifacts:
+                    print(f"    - {art}")
+            return result.exit_code
+        except Exception as exc:
+            print(f"HIL execution error: {exc}", file=sys.stderr)
+            return 2
+
+    elif args.subcommand == "benchmark":
+        from omniuart.benchmarks import PerformanceBenchmarkSuite
+        proto_name = getattr(args, "protocol", None) or "sample"
+        suite = PerformanceBenchmarkSuite()
+        res = suite.run_suite()
+        print(f"Benchmark Performance Suite Results ({proto_name}):")
+        for b_name, b_metrics in res.get("benchmarks", {}).items():
+            print(f"  - {b_name:<20} : {b_metrics.get('ops_per_sec', 0):,.0f} ops/sec ({b_metrics.get('avg_latency_us', 0):.2f} us/op)")
+        return 0
+
+    elif args.subcommand == "export":
+        from omniuart.importers_exporters import export_csv_protocol
+        spec = catalog.get_protocol(args.protocol)
+        if not spec:
+            print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
+            return 1
+        fmt = args.format.lower()
+        if fmt == "csv":
+            out_str = export_csv_protocol(spec)
+        elif fmt == "json":
+            out_str = json.dumps(spec.model_dump(mode="json"), indent=2)
+        elif fmt == "c":
+            from omniuart.generators import generate_c_header
+            out_str = generate_c_header(spec)
+        elif fmt == "python":
+            from omniuart.generators import generate_python_dataclasses
+            out_str = generate_python_dataclasses(spec)
+        elif fmt == "wireshark":
+            from omniuart.generators import generate_wireshark_dissector
+            out_str = generate_wireshark_dissector(spec)
+        else:
+            print(f"Export format '{fmt}' not supported.", file=sys.stderr)
+            return 1
+        if args.output:
+            Path(args.output).write_text(out_str, encoding="utf-8")
+            print(f"Exported protocol to {args.output}")
+        else:
+            print(out_str)
+        return 0
+
+    elif args.subcommand == "import":
+        from omniuart.importers_exporters import import_csv_protocol
+        in_file = Path(args.file)
+        if not in_file.exists():
+            print(f"Error: File '{args.file}' not found.", file=sys.stderr)
+            return 1
+        text = in_file.read_text(encoding="utf-8")
+        spec, losses = import_csv_protocol(text)
+        print(f"Imported protocol '{spec.metadata.name}' ({len(spec.commands)} commands)")
+        if losses:
+            print("Losses / Defaults during import:")
+            for loss_line in losses:
+                print(f"  • {loss_line}")
+        if args.output:
+            out_p = Path(args.output)
+            out_p.write_text(json.dumps(spec.model_dump(mode="json"), indent=2), encoding="utf-8")
+            print(f"Saved imported protocol to {args.output}")
+        return 0
+
     elif args.subcommand == "ui":
         return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode)
 

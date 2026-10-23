@@ -60,6 +60,7 @@ dev = [
 
 [project.scripts]
 omni-uart = "omniuart.cli:main"
+omniuart = "omniuart.cli:main"
 
 [tool.hatch.metadata]
 # Needed for the ctxlogkit Git dependency.
