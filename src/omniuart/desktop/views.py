@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-import sys
 import time
+from concurrent.futures import Future
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
+
 try:
     import tkinter as tk
     from tkinter import filedialog, messagebox, ttk
     HAS_TKINTER = True
 except (ImportError, ValueError, AttributeError, Exception):
     HAS_TKINTER = False
-    tk = type("tk", (), {"Misc": object, "StringVar": object, "BooleanVar": object, "IntVar": object, "DoubleVar": object})
-    filedialog = None
-    messagebox = None
-    ttk = type("ttk", (), {"Frame": object, "LabelFrame": object, "Notebook": object, "Treeview": object})
-from concurrent.futures import Future
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple
+    tk = type("tk", (), {"Misc": object, "StringVar": object, "BooleanVar": object, "IntVar": object, "DoubleVar": object})  # type: ignore[assignment]
+    filedialog = None  # type: ignore[assignment]
+    messagebox = None  # type: ignore[assignment]
+    ttk = type("ttk", (), {"Frame": object, "LabelFrame": object, "Notebook": object, "Treeview": object})  # type: ignore[assignment]
 
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.background import VIRTUAL_PORT, is_safe_poll_command

@@ -9,9 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
-from omniuart.core.codec import FrameCodec, field_size
-from omniuart.core.crc import calculate_crc, parse_crc_bytes
-from omniuart.core.models import CommandSpec, FieldSpec, ProtocolSpec
+from omniuart.core.codec import CodecError, FrameCodec, decode_fields_with_layout
+from omniuart.core.models import ProtocolSpec
 
 
 @dataclass
@@ -68,10 +67,12 @@ class DissectedFrame:
             lines.append(f"{off_str:<8} {s.length_bytes:<4} {s.field_name:<18} {s.field_type:<10} {s.hex_str:<14} {val_str}")
 
         if self.crc_info:
+            bits = self.crc_info.get("bits", 16)
+            hex_width = max(2, (bits + 3) // 4)
             lines.append("-" * 72)
             lines.append(f" Integrity Check : {self.crc_info.get('algorithm', 'CRC')}")
-            lines.append(f"   Calculated    : 0x{self.crc_info.get('calculated', 0):04X}")
-            lines.append(f"   Received      : 0x{self.crc_info.get('received', 0):04X}")
+            lines.append(f"   Calculated    : 0x{self.crc_info.get('calculated', 0):0{hex_width}X}")
+            lines.append(f"   Received      : 0x{self.crc_info.get('received', 0):0{hex_width}X}")
             lines.append(f"   CRC Valid     : {self.crc_info.get('valid', False)}")
 
         lines.append("=" * 72)
@@ -100,43 +101,49 @@ def dissect_frame(spec: ProtocolSpec, frame_bytes: bytes, direction: str = "requ
     dissected.valid = frame.ok
     dissected.error = frame.error
 
-    cmd = spec.get_command(frame.name or "") if frame.name else None
-    specs = cmd.parameters if cmd and direction == "request" else (cmd.response.fields if cmd and cmd.response else [])
+    found = codec._lookup(frame.message_id, direction, frame.payload) if frame.message_id is not None else None
+    specs = found[1] if found else []
 
-    pos = 0
-    # Add framing slice header if binary header declared
-    if spec.framing and spec.framing.header:
-        hdr_val = spec.framing.header
-        hdr = bytes(hdr_val) if isinstance(hdr_val, list) else (hdr_val if isinstance(hdr_val, bytes) else str(hdr_val).encode("utf-8"))
-        if frame_bytes.startswith(hdr):
-            dissected.field_slices.append(
-                FieldSlice("header", 0, len(hdr), hdr, hdr.hex(" ").upper(), "header")
-            )
-            pos += len(hdr)
+    # Binary frames: header | length | command_id | payload | integrity | footer (see codec.py)
+    payload_start = 0
+    if codec.is_binary:
+        head, length_size, id_size = codec._layout()
+        trailer = codec.integrity_size + len(codec.footer_bytes)
+        parts = [("header", 0, head), ("length", head, head + length_size), ("command_id", head + length_size, head + length_size + id_size)]
+        if len(frame.raw) >= head + length_size + id_size + trailer:
+            parts += [
+                ("integrity", len(frame.raw) - trailer, len(frame.raw) - len(codec.footer_bytes)),
+                ("footer", len(frame.raw) - len(codec.footer_bytes), len(frame.raw)),
+            ]
+        for name, start, end in parts:
+            if end > start:
+                chunk = frame.raw[start:end]
+                dissected.field_slices.append(FieldSlice(name, start, end, chunk, chunk.hex(" ").upper(), "framing"))
+        payload_start = head + length_size + id_size
 
-
-    # Payload field slices
+    # Payload field slices, laid out exactly as the codec decodes them (offsets and bit groups included)
     payload = frame.payload
-    payload_pos = 0
-    for s in specs:
-        sz = field_size(s) or (len(payload) - payload_pos)
-        if payload_pos + sz <= len(payload):
-            slice_bytes = payload[payload_pos : payload_pos + sz]
-            decoded = frame.fields.get(s.name, slice_bytes.hex())
-            dissected.field_slices.append(
-                FieldSlice(s.name, pos + payload_pos, pos + payload_pos + sz, slice_bytes, decoded, str(s.type.value))
-            )
-            payload_pos += sz
+    try:
+        _, layout = decode_fields_with_layout(specs, payload)
+    except CodecError:
+        layout = []
+    for field_spec, start, end in layout:
+        slice_bytes = payload[start:end]
+        decoded = frame.fields.get(field_spec.name, slice_bytes.hex())
+        dissected.field_slices.append(
+            FieldSlice(field_spec.name, payload_start + start, payload_start + end, slice_bytes, decoded, str(field_spec.type.value))
+        )
+    dissected.field_slices.sort(key=lambda sl: sl.start_offset)
 
-    # CRC info if integrity model present
-    if spec.framing and spec.framing.integrity:
+    # Integrity values come from the codec's own check, so coverage and width rules match decoding (#329)
+    if frame.integrity_calculated is not None and frame.integrity_received is not None:
+        assert spec.framing.integrity is not None
         dissected.crc_info = {
             "algorithm": spec.framing.integrity.algorithm,
-            "valid": frame.ok,
-            "calculated": 0,
-            "received": 0,
+            "valid": frame.integrity_calculated == frame.integrity_received,
+            "calculated": frame.integrity_calculated,
+            "received": frame.integrity_received,
+            "bits": codec._crc_bits,
         }
-
-
 
     return dissected

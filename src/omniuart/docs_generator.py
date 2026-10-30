@@ -154,9 +154,18 @@ def _generate_asyncapi_fallback_html(spec: ProtocolSpec, yaml_content: str) -> s
 </html>"""
 
 
-def _compile_asyncapi_html(yaml_path: Path, html_path: Path, root_dir: Path, asyncapi_docs_dir: Path, safe_stem: str, spec: ProtocolSpec, yaml_content: str) -> None:
+def _compile_asyncapi_html(
+    yaml_path: Path,
+    html_path: Path,
+    root_dir: Path,
+    asyncapi_docs_dir: Path,
+    safe_stem: str,
+    spec: ProtocolSpec,
+    yaml_content: str,
+    use_external_tools: bool = False,
+) -> None:
     """Helper to compile standalone AsyncAPI HTML page via @asyncapi/cli with automatic fallback."""
-    if not os.environ.get("PYTEST_CURRENT_TEST"):
+    if use_external_tools:
         npx_bin = shutil.which("npx.cmd") if os.name == "nt" else shutil.which("npx")
         if npx_bin:
             try:
@@ -182,204 +191,226 @@ def _compile_asyncapi_html(yaml_path: Path, html_path: Path, root_dir: Path, asy
         html_path.write_text(_generate_asyncapi_fallback_html(spec, yaml_content), encoding="utf-8")
 
 
-def build_site_documentation(output_dir: Union[str, Path]) -> Path:
+def build_site_documentation(output_dir: Union[str, Path], use_external_tools: bool = False) -> Path:
     """Build static documentation site for all discovered protocols, AsyncAPI specs, schemas, and manuals."""
+    import tempfile
     from concurrent.futures import ThreadPoolExecutor
+    from omniuart.utils.resources import get_resource_path
 
     out = Path(output_dir).resolve()
     out.mkdir(parents=True, exist_ok=True)
 
-    root_dir = Path(__file__).resolve().parent.parent.parent
-    docs_dir = root_dir / "docs"
-    protocols_docs_dir = docs_dir / "protocols"
-    asyncapi_docs_dir = protocols_docs_dir / "asyncapi"
-    schemas_docs_dir = docs_dir / "schemas"
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        staging_dir = Path(tmp_dir)
+        docs_staging = staging_dir / "docs"
+        docs_staging.mkdir(parents=True, exist_ok=True)
 
-    protocols_docs_dir.mkdir(parents=True, exist_ok=True)
-    asyncapi_docs_dir.mkdir(parents=True, exist_ok=True)
-    schemas_docs_dir.mkdir(parents=True, exist_ok=True)
+        # Copy existing base documentation without mutating source files
+        base_docs = get_resource_path("docs")
+        if base_docs.exists() and base_docs.is_dir():
+            for item in base_docs.iterdir():
+                if item.name in ("protocols", "schemas", "__pycache__"):
+                    continue
+                dst = docs_staging / item.name
+                if item.is_dir():
+                    shutil.copytree(item, dst, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(item, dst)
 
-    # Copy raw schema JSON files into docs/schemas
-    root_schemas_dir = root_dir / "schemas"
-    if root_schemas_dir.exists():
-        for schema_file in root_schemas_dir.glob("*.json"):
-            shutil.copy2(schema_file, schemas_docs_dir / schema_file.name)
+        protocols_docs_dir = docs_staging / "protocols"
+        asyncapi_docs_dir = protocols_docs_dir / "asyncapi"
+        schemas_docs_dir = docs_staging / "schemas"
 
-    (schemas_docs_dir / "index.md").write_text(
-        "# OmniUART Declarative JSON Schemas\n\n"
-        "Official JSON Schema specifications for hardware UART protocol definitions and automated test scripts:\n\n"
-        "- ⚙️ **[Protocol JSON Schema](protocol.schema.json)**: Core protocol definition schema.\n"
-        "- ⚙️ **[UART Interface Schema Kit](uart-interface.schema.json)**: Standard AsyncAPI hardware interface schema.\n"
-        "- 📜 **[Automation Script JSON Schema](script.schema.json)**: Sequence runner script schema.\n",
-        encoding="utf-8",
-    )
+        protocols_docs_dir.mkdir(parents=True, exist_ok=True)
+        asyncapi_docs_dir.mkdir(parents=True, exist_ok=True)
+        schemas_docs_dir.mkdir(parents=True, exist_ok=True)
 
-    catalog = CatalogManager()
-    summary = catalog.catalog_summary()
+        # Copy raw schema JSON files into staging schemas
+        root_schemas_dir = get_resource_path("schemas")
+        if root_schemas_dir.exists() and root_schemas_dir.is_dir():
+            for schema_file in root_schemas_dir.glob("*.json"):
+                shutil.copy2(schema_file, schemas_docs_dir / schema_file.name)
 
-    protocol_nav_index = [
-        "# Discovered Hardware Protocols & AsyncAPI Specifications\n",
-        "Below is the complete catalog of auto-discovered hardware UART protocols with detailed parameters, command signatures, and formal AsyncAPI 2.6.0 specifications.\n",
-    ]
-
-    html_tasks = []
-
-    for p in summary["protocols"]:
-        spec = catalog.get_protocol(p["filename"])
-        if not spec:
-            continue
-        safe_stem = Path(p["filename"]).stem
-        md_path = protocols_docs_dir / f"{safe_stem}.md"
-        yaml_path = asyncapi_docs_dir / f"{safe_stem}.yaml"
-        html_path = asyncapi_docs_dir / f"{safe_stem}.html"
-
-        # Write Markdown & AsyncAPI YAML specs
-        yaml_content = export_asyncapi_yaml(spec)
-        yaml_path.write_text(yaml_content, encoding="utf-8")
-        md_path.write_text(generate_markdown_docs(spec, safe_stem=safe_stem), encoding="utf-8")
-
-        html_tasks.append((yaml_path, html_path, root_dir, asyncapi_docs_dir, safe_stem, spec, yaml_content))
-
-        protocol_nav_index.append(
-            f"### [{spec.metadata.name}]({safe_stem}.md) (v{spec.metadata.version})\n"
-            f"- **Description**: {spec.metadata.description or 'N/A'}\n"
-            f"- **Framing**: `{spec.framing.type.value.upper()}` | **Baudrate**: `{spec.serial_config.baudrate} bps` | **Commands**: `{len(spec.commands)}`\n"
-            f"- **AsyncAPI**: [YAML Spec](asyncapi/{safe_stem}.yaml) | [Interactive HTML Viewer](asyncapi/{safe_stem}.html)\n"
+        (schemas_docs_dir / "index.md").write_text(
+            "# OmniUART Declarative JSON Schemas\n\n"
+            "Official JSON Schema specifications for hardware UART protocol definitions and automated test scripts:\n\n"
+            "- ⚙️ **[Protocol JSON Schema](protocol.schema.json)**: Core protocol definition schema.\n"
+            "- ⚙️ **[UART Interface Schema Kit](uart-interface.schema.json)**: Standard AsyncAPI hardware interface schema.\n"
+            "- 📜 **[Automation Script JSON Schema](script.schema.json)**: Sequence runner script schema.\n",
+            encoding="utf-8",
         )
 
-    # Parallelize AsyncAPI HTML compilation across worker threads
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        futures = [executor.submit(_compile_asyncapi_html, *task) for task in html_tasks]
-        for f in futures:
-            f.result()
+        catalog = CatalogManager()
+        summary = catalog.catalog_summary()
 
-    (protocols_docs_dir / "index.md").write_text("\n".join(protocol_nav_index), encoding="utf-8")
+        protocol_nav_index = [
+            "# Discovered Hardware Protocols & AsyncAPI Specifications\n",
+            "Below is the complete catalog of auto-discovered hardware UART protocols with detailed parameters, command signatures, and formal AsyncAPI 2.6.0 specifications.\n",
+        ]
 
-    # Compile AsyncAPI HTML for Protocol Schema Specification
-    specs_asyncapi_dir = docs_dir / "specs" / "asyncapi"
-    specs_asyncapi_dir.mkdir(parents=True, exist_ok=True)
-    spec_schema_yaml = specs_asyncapi_dir / "omniuart-protocol-schema.yaml"
-    spec_schema_html = specs_asyncapi_dir / "omniuart-protocol-schema.html"
-    if spec_schema_yaml.exists():
-        yaml_str = spec_schema_yaml.read_text(encoding="utf-8")
-        sample_spec = catalog.get_protocol("binary_sensor_node")
-        if sample_spec:
-            _compile_asyncapi_html(spec_schema_yaml, spec_schema_html, root_dir, specs_asyncapi_dir, "omniuart-protocol-schema", sample_spec, yaml_str)
+        html_tasks = []
 
+        for p in summary["protocols"]:
+            spec = catalog.get_protocol(p["filename"])
+            if not spec:
+                continue
+            safe_stem = Path(p["filename"]).stem
+            md_path = protocols_docs_dir / f"{safe_stem}.md"
+            yaml_path = asyncapi_docs_dir / f"{safe_stem}.yaml"
+            html_path = asyncapi_docs_dir / f"{safe_stem}.html"
 
-    # Try building with MkDocs if mkdocs is available
-    mkdocs_yml = root_dir / "mkdocs.yml"
-    if mkdocs_yml.exists() and not os.environ.get("PYTEST_CURRENT_TEST"):
-        try:
-            res = subprocess.run(
-                ["mkdocs", "build", "-d", str(out)],
-                cwd=str(root_dir),
-                capture_output=True,
-                text=True,
-                timeout=30,
+            # Write Markdown & AsyncAPI YAML specs into staging
+            yaml_content = export_asyncapi_yaml(spec)
+            yaml_path.write_text(yaml_content, encoding="utf-8")
+            md_path.write_text(generate_markdown_docs(spec, safe_stem=safe_stem), encoding="utf-8")
+
+            html_tasks.append((yaml_path, html_path, staging_dir, asyncapi_docs_dir, safe_stem, spec, yaml_content, use_external_tools))
+
+            protocol_nav_index.append(
+                f"### [{spec.metadata.name}]({safe_stem}.md) (v{spec.metadata.version})\n"
+                f"- **Description**: {spec.metadata.description or 'N/A'}\n"
+                f"- **Framing**: `{spec.framing.type.value.upper()}` | **Baudrate**: `{spec.serial_config.baudrate} bps` | **Commands**: `{len(spec.commands)}`\n"
+                f"- **AsyncAPI**: [YAML Spec](asyncapi/{safe_stem}.yaml) | [Interactive HTML Viewer](asyncapi/{safe_stem}.html)\n"
             )
-            if res.returncode == 0:
-                return out
-        except Exception:
-            pass
 
-    # Fallback HTML index generator for About OmniUART landing page
-    index_lines = [
-        "<!DOCTYPE html>",
-        "<html lang='en'>",
-        "<head>",
-        "  <meta charset='UTF-8'>",
-        "  <title>About OmniUART - Universal Hardware Protocol Workbench</title>",
-        "  <style>",
-        "    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; background: #0f172a; color: #fff; padding: 0 1rem; line-height: 1.5; }",
-        "    h1, h2 { color: #38bdf8; }",
-        "    .card { background: #1e293b; padding: 1rem 1.5rem; margin: 1rem 0; border-radius: 8px; border: 1px solid #334155; }",
-        "    .tag-badge { background: #0284c7; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-right: 5px; }",
-        "    a { color: #34d399; text-decoration: none; font-weight: bold; }",
-        "    a:hover { text-decoration: underline; }",
-        "    .nav-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; background: #1e293b; padding: 1rem; border-radius: 8px; border: 1px solid #334155; margin-bottom: 2rem; }",
-        "    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }",
-        "  </style>",
-        "</head>",
-        "<body>",
-        "  <h1>⚡ About OmniUART</h1>",
-        "  <p><strong>Universal schema-driven hardware protocol workbench and telemetry tool for embedded systems, IoT devices, and hardware test engineering.</strong></p>",
-        "  <div class='nav-bar'>",
-        "    <a href='release/guidance.html'>📖 User Manual</a>",
-        "    <a href='architecture/system-architecture.html'>🏛️ Architecture</a>",
-        "    <a href='specs/protocol-schema-specification.html'>⚙️ Protocol Spec</a>",
-        "    <a href='schemas/index.html'>⚙️ JSON Schemas</a>",
-        "    <a href='protocols/index.html'>📚 Hardware Protocols & AsyncAPI Catalog</a>",
-        "    <a href='testing/test-strategy.html'>🧪 Test Strategy</a>",
-        "  </div>",
-        "  <h2>💡 Key Capabilities</h2>",
-        "  <div class='grid'>",
-        "    <div class='card'>",
-        "      <h3>📖 System Documentation</h3>",
-        "      <p>Guides for CLI, Desktop GUI, Web UI, framing engine, and automated sequence runner.</p>",
-        "      <p><a href='release/guidance.html'>View User Manual & Guides →</a></p>",
-        "    </div>",
-        "    <div class='card'>",
-        "      <h3>📚 AsyncAPI Protocol Specs</h3>",
-        "      <p>32+ auto-discovered UART hardware protocols with formal AsyncAPI 2.6.0 YAML and HTML specs.</p>",
-        "      <p><a href='protocols/index.html'>Explore Protocol Catalog →</a></p>",
-        "    </div>",
-        "    <div class='card'>",
-        "      <h3>⚙️ Declarative JSON Schemas</h3>",
-        "      <p>JSON Schema files for protocol definitions, AsyncAPI interface kits, and test scripts.</p>",
-        "      <p><a href='schemas/index.html'>Inspect Schemas →</a></p>",
-        "    </div>",
-        "  </div>",
-        "</body>",
-        "</html>",
-    ]
+        # Parallelize AsyncAPI HTML compilation across worker threads
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(_compile_asyncapi_html, *task) for task in html_tasks]
+            for f in futures:
+                f.result()
 
-    (out / "index.html").write_text("\n".join(index_lines), encoding="utf-8")
+        (protocols_docs_dir / "index.md").write_text("\n".join(protocol_nav_index), encoding="utf-8")
 
-    # Generate protocols/index.html for discovered hardware protocols catalog
-    protocols_out_dir = out / "protocols"
-    protocols_out_dir.mkdir(parents=True, exist_ok=True)
-    proto_index_lines = [
-        "<!DOCTYPE html>",
-        "<html lang='en'>",
-        "<head>",
-        "  <meta charset='UTF-8'>",
-        "  <title>Hardware Protocols & AsyncAPI Catalog - OmniUART</title>",
-        "  <style>",
-        "    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; background: #0f172a; color: #fff; padding: 0 1rem; line-height: 1.5; }",
-        "    h1, h2 { color: #38bdf8; }",
-        "    .card { background: #1e293b; padding: 1rem 1.5rem; margin: 1rem 0; border-radius: 8px; border: 1px solid #334155; }",
-        "    .tag-badge { background: #0284c7; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-right: 5px; }",
-        "    a { color: #34d399; text-decoration: none; font-weight: bold; }",
-        "    a:hover { text-decoration: underline; }",
-        "  </style>",
-        "</head>",
-        "<body>",
-        "  <p><a href='../index.html'>← Back to About OmniUART</a></p>",
-        "  <h1>⚡ Discovered Hardware Protocols & AsyncAPI Specifications</h1>",
-    ]
+        # Compile AsyncAPI HTML for Protocol Schema Specification
+        specs_asyncapi_dir = docs_staging / "specs" / "asyncapi"
+        specs_asyncapi_dir.mkdir(parents=True, exist_ok=True)
+        spec_schema_yaml = specs_asyncapi_dir / "omniuart-protocol-schema.yaml"
+        spec_schema_html = specs_asyncapi_dir / "omniuart-protocol-schema.html"
+        if spec_schema_yaml.exists():
+            yaml_str = spec_schema_yaml.read_text(encoding="utf-8")
+            sample_spec = catalog.get_protocol("binary_sensor_node")
+            if sample_spec:
+                _compile_asyncapi_html(spec_schema_yaml, spec_schema_html, staging_dir, specs_asyncapi_dir, "omniuart-protocol-schema", sample_spec, yaml_str, use_external_tools)
 
-    for p in summary["protocols"]:
-        spec = catalog.get_protocol(p["filename"])
-        if not spec:
-            continue
-        safe_stem = Path(p["filename"]).stem
-        html_filename = f"{safe_stem}.html"
-        md_filename = f"{safe_stem}.md"
+        # Copy the staged documentation tree to output directory
+        shutil.copytree(docs_staging, out, dirs_exist_ok=True)
 
-        (out / html_filename).write_text(generate_html_docs(spec), encoding="utf-8")
-        (out / md_filename).write_text(generate_markdown_docs(spec, safe_stem=safe_stem), encoding="utf-8")
+        # Try building with MkDocs if requested
+        if use_external_tools:
+            mkdocs_yml = staging_dir / "mkdocs.yml"
+            dev_mkdocs = Path(__file__).resolve().parent.parent.parent / "mkdocs.yml"
+            if not mkdocs_yml.exists() and dev_mkdocs.exists():
+                shutil.copy2(dev_mkdocs, mkdocs_yml)
+            if mkdocs_yml.exists():
+                try:
+                    res = subprocess.run(
+                        ["mkdocs", "build", "-d", str(out)],
+                        cwd=str(staging_dir),
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    if res.returncode == 0:
+                        return out
+                except Exception:
+                    pass
 
-        proto_index_lines.append(
-            f"  <div class='card'>"
-            f"    <h3><span class='tag-badge'>{html.escape(spec.framing.type.value.upper())}</span> {html.escape(spec.metadata.name)} (v{spec.metadata.version})</h3>"
-            f"    <p>{html.escape(spec.metadata.description or '')}</p>"
-            f"    <p>Baudrate: {spec.serial_config.baudrate} bps | Commands: {len(spec.commands)}</p>"
-            f"    <p><a href='../{html_filename}'>📄 View HTML Specs</a> | <a href='../{md_filename}'>📝 View Markdown</a></p>"
-            f"  </div>"
-        )
+        # Standalone HTML site generation
+        index_lines = [
+            "<!DOCTYPE html>",
+            "<html lang='en'>",
+            "<head>",
+            "  <meta charset='UTF-8'>",
+            "  <title>About OmniUART - Universal Hardware Protocol Workbench</title>",
+            "  <style>",
+            "    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; background: #0f172a; color: #fff; padding: 0 1rem; line-height: 1.5; }",
+            "    h1, h2 { color: #38bdf8; }",
+            "    .card { background: #1e293b; padding: 1rem 1.5rem; margin: 1rem 0; border-radius: 8px; border: 1px solid #334155; }",
+            "    .tag-badge { background: #0284c7; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-right: 5px; }",
+            "    a { color: #34d399; text-decoration: none; font-weight: bold; }",
+            "    a:hover { text-decoration: underline; }",
+            "    .nav-bar { display: flex; flex-wrap: wrap; gap: 0.75rem; background: #1e293b; padding: 1rem; border-radius: 8px; border: 1px solid #334155; margin-bottom: 2rem; }",
+            "    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }",
+            "  </style>",
+            "</head>",
+            "<body>",
+            "  <h1>⚡ About OmniUART</h1>",
+            "  <p><strong>Universal schema-driven hardware protocol workbench and telemetry tool for embedded systems, IoT devices, and hardware test engineering.</strong></p>",
+            "  <div class='nav-bar'>",
+            "    <a href='release/guidance.html'>📖 User Manual</a>",
+            "    <a href='architecture/system-architecture.html'>🏛️ Architecture</a>",
+            "    <a href='specs/protocol-schema-specification.html'>⚙️ Protocol Spec</a>",
+            "    <a href='schemas/index.html'>⚙️ JSON Schemas</a>",
+            "    <a href='protocols/index.html'>📚 Hardware Protocols & AsyncAPI Catalog</a>",
+            "    <a href='testing/test-strategy.html'>🧪 Test Strategy</a>",
+            "  </div>",
+            "  <h2>💡 Key Capabilities</h2>",
+            "  <div class='grid'>",
+            "    <div class='card'>",
+            "      <h3>📖 System Documentation</h3>",
+            "      <p>Guides for CLI, Desktop GUI, Web UI, framing engine, and automated sequence runner.</p>",
+            "      <p><a href='release/guidance.html'>View User Manual & Guides →</a></p>",
+            "    </div>",
+            "    <div class='card'>",
+            "      <h3>📚 AsyncAPI Protocol Specs</h3>",
+            "      <p>32+ auto-discovered UART hardware protocols with formal AsyncAPI 2.6.0 YAML and HTML specs.</p>",
+            "      <p><a href='protocols/index.html'>Explore Protocol Catalog →</a></p>",
+            "    </div>",
+            "    <div class='card'>",
+            "      <h3>⚙️ Declarative JSON Schemas</h3>",
+            "      <p>JSON Schema files for protocol definitions, AsyncAPI interface kits, and test scripts.</p>",
+            "      <p><a href='schemas/index.html'>Inspect Schemas →</a></p>",
+            "    </div>",
+            "  </div>",
+            "</body>",
+            "</html>",
+        ]
 
-    proto_index_lines.extend(["</body>", "</html>"])
-    (protocols_out_dir / "index.html").write_text("\n".join(proto_index_lines), encoding="utf-8")
+        (out / "index.html").write_text("\n".join(index_lines), encoding="utf-8")
 
-    return out
+        protocols_out_dir = out / "protocols"
+        protocols_out_dir.mkdir(parents=True, exist_ok=True)
+        proto_index_lines = [
+            "<!DOCTYPE html>",
+            "<html lang='en'>",
+            "<head>",
+            "  <meta charset='UTF-8'>",
+            "  <title>Hardware Protocols & AsyncAPI Catalog - OmniUART</title>",
+            "  <style>",
+            "    body { font-family: system-ui, sans-serif; max-width: 1000px; margin: 2rem auto; background: #0f172a; color: #fff; padding: 0 1rem; line-height: 1.5; }",
+            "    h1, h2 { color: #38bdf8; }",
+            "    .card { background: #1e293b; padding: 1rem 1.5rem; margin: 1rem 0; border-radius: 8px; border: 1px solid #334155; }",
+            "    .tag-badge { background: #0284c7; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-weight: bold; margin-right: 5px; }",
+            "    a { color: #34d399; text-decoration: none; font-weight: bold; }",
+            "    a:hover { text-decoration: underline; }",
+            "  </style>",
+            "</head>",
+            "<body>",
+            "  <p><a href='../index.html'>← Back to About OmniUART</a></p>",
+            "  <h1>⚡ Discovered Hardware Protocols & AsyncAPI Specifications</h1>",
+        ]
+
+        for p in summary["protocols"]:
+            spec = catalog.get_protocol(p["filename"])
+            if not spec:
+                continue
+            safe_stem = Path(p["filename"]).stem
+            html_filename = f"{safe_stem}.html"
+            md_filename = f"{safe_stem}.md"
+
+            (out / html_filename).write_text(generate_html_docs(spec), encoding="utf-8")
+            (out / md_filename).write_text(generate_markdown_docs(spec, safe_stem=safe_stem), encoding="utf-8")
+
+            proto_index_lines.append(
+                f"  <div class='card'>"
+                f"    <h3><span class='tag-badge'>{html.escape(spec.framing.type.value.upper())}</span> {html.escape(spec.metadata.name)} (v{spec.metadata.version})</h3>"
+                f"    <p>{html.escape(spec.metadata.description or '')}</p>"
+                f"    <p>Baudrate: {spec.serial_config.baudrate} bps | Commands: {len(spec.commands)}</p>"
+                f"    <p><a href='../{html_filename}'>📄 View HTML Specs</a> | <a href='../{md_filename}'>📝 View Markdown</a></p>"
+                f"  </div>"
+            )
+
+        proto_index_lines.extend(["</body>", "</html>"])
+        (protocols_out_dir / "index.html").write_text("\n".join(proto_index_lines), encoding="utf-8")
+
+        return out

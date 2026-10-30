@@ -7,15 +7,20 @@ decoded answer, so the CLI, script runner, web API and desktop GUI all behave id
 from __future__ import annotations
 
 import asyncio
+import itertools
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 
 from omniuart.core.codec import CodecError, DecodedFrame, FrameCodec
-from omniuart.core.models import CommandSpec, ProtocolSpec
-from omniuart.core.recorder import SessionRecorder
+from omniuart.core.models import CommandSafety, CommandSpec, ProtocolSpec
+from omniuart.core.recorder import PacketEvent, SessionRecorder, Transaction
 from omniuart.core.transport import AsyncTransport, HardwareSerialTransport, VirtualTransport
 
+
+# Transaction ids are unique within the process, so sessions sharing a recorder never collide.
+_TRANSACTION_IDS = itertools.count(1)
 
 # Decides whether a received frame answers a request: (command, request values, frame) -> bool.
 ResponseMatcher = Callable[[CommandSpec, Mapping[str, Any], DecodedFrame], bool]
@@ -38,6 +43,7 @@ class ExchangeStatus(str, Enum):
     TIMEOUT = "timeout"  # a response was expected but nothing arrived in time
     INVALID_RESPONSE = "invalid_response"  # bytes arrived but are not a valid response to this command
     TRANSPORT_ERROR = "transport_error"  # the transport failed while writing or reading
+    DEVICE_ERROR = "device_error"  # the device answered with a declared error reply (a NAK)
 
 
 @dataclass
@@ -170,13 +176,17 @@ class SerialSession:
         timeout_ms: Optional[int] = None,
         retries: int = 0,
         matcher: Optional[ResponseMatcher] = None,
+        force_retry: bool = False,
     ) -> Exchange:
         """Transmit ``command`` and wait for its response, optionally retrying on failure.
 
         Invalid parameters raise :class:`CodecError`, and a non-``read_only`` command in a read-only session raises :class:`CommandBlockedError`, before anything is written. Failures on the
         link or in the response are reported through the returned :class:`Exchange` instead.
         """
-        attempts = max(1, retries + 1)
+        cmd = self.resolve(command)
+        is_safe_to_retry = force_retry or cmd.is_read_only or (cmd.safety == CommandSafety.IDEMPOTENT)
+        effective_retries = retries if is_safe_to_retry else 0
+        attempts = max(1, effective_retries + 1)
         last_exchange: Optional[Exchange] = None
         for _ in range(attempts):
             exchange = await self._send_once(command, params=params, timeout_ms=timeout_ms, matcher=matcher)
@@ -201,13 +211,15 @@ class SerialSession:
         exchange = Exchange(command=cmd.name, request=request)
         loop = asyncio.get_running_loop()
         start = loop.time()
+        tx_event: Optional[PacketEvent] = None
         if self.recorder:
-            self.recorder.record("tx", request, command_name=cmd.name, command_id=cmd.id, decoded_fields=dict(params or {}))
+            tx_event = self.recorder.record("tx", request, command_name=cmd.name, command_id=cmd.id, decoded_fields=dict(params or {}))
         try:
             await self.transport.write(request)
             if cmd.response is None:
                 exchange.latency_ms = (loop.time() - start) * 1000.0
                 self._update_stats(exchange, len(request), 0)
+                self._record_transaction(cmd, exchange, tx_event, None)
                 return exchange
             wait_ms = timeout_ms if timeout_ms is not None else cmd.response.timeout_ms
             await self._await_response(cmd, exchange, wait_ms, self._request_values(cmd, params), matcher or self.matcher)
@@ -216,8 +228,9 @@ class SerialSession:
             exchange.error = f"{type(exc).__name__}: {exc}"
         exchange.latency_ms = (loop.time() - start) * 1000.0
         self._update_stats(exchange, len(request), len(exchange.response_bytes))
+        rx_event: Optional[PacketEvent] = None
         if self.recorder and exchange.response_bytes:
-            self.recorder.record(
+            rx_event = self.recorder.record(
                 "rx",
                 exchange.response_bytes,
                 command_name=cmd.name,
@@ -226,7 +239,26 @@ class SerialSession:
                 crc_valid=None if exchange.response is None else exchange.response.ok,
                 latency_ms=exchange.latency_ms,
             )
+        self._record_transaction(cmd, exchange, tx_event, rx_event)
         return exchange
+
+    def _record_transaction(
+        self, cmd: CommandSpec, exchange: Exchange, tx_event: Optional[PacketEvent], rx_event: Optional[PacketEvent]
+    ) -> None:
+        """Record the request and its response (if any) as one transaction (#333)."""
+        if not self.recorder:
+            return
+        self.recorder.add_transaction(
+            Transaction(
+                transaction_id=f"tx{next(_TRANSACTION_IDS)}",
+                command_name=cmd.name,
+                command_id=cmd.id,
+                tx_event=tx_event,
+                rx_events=[rx_event] if rx_event is not None else [],
+                latency_ms=exchange.latency_ms,
+                status=exchange.status.value,
+            )
+        )
 
     def _update_stats(self, exchange: Exchange, tx_len: int, rx_len: int) -> None:
         self.stats.total_requests += 1
@@ -272,6 +304,18 @@ class SerialSession:
                 return
             text = data.decode("utf-8", errors="replace").strip()
             exchange.response = DecodedFrame(raw=data, kind="response", name=cmd.name, payload=data, fields={"text": text})
+
+            # Only patterns the protocol declares decide failure: "ERROR" can be ordinary reply text
+            # (SCPI answers SYST:ERR? with 0,"No error"), so nothing is assumed.
+            for pat in cmd.response.error_patterns if cmd.response else []:
+                if re.search(pat, text, re.MULTILINE):
+                    exchange.status = ExchangeStatus.INVALID_RESPONSE
+                    exchange.error = f"'{cmd.name}' returned an error response: {text}"
+                    return
+            success = cmd.response.success_pattern if cmd.response else None
+            if success and not re.search(success, text, re.MULTILINE):
+                exchange.status = ExchangeStatus.INVALID_RESPONSE
+                exchange.error = f"response '{text}' did not match success pattern '{success}'"
             return
 
         deadline = loop.time() + timeout_ms / 1000.0
@@ -284,9 +328,15 @@ class SerialSession:
             if not chunk:
                 break
             exchange.response_bytes += chunk
-            frames, buf = self.codec.extract_frames(buf + chunk, direction="response")
+            frames, buf = self.codec.extract_frames(buf + chunk, direction="response", expect=cmd)
             for frame in frames:
                 exchange.frames.append(frame)
+                if frame.ok and frame.kind == "error":
+                    reply = next((r for r in self.spec.error_replies if r.name == frame.name), None)
+                    detail = f": {reply.description}" if reply and reply.description else ""
+                    exchange.status, exchange.response = ExchangeStatus.DEVICE_ERROR, frame
+                    exchange.error = f"device refused '{cmd.name}' with {frame.name}{detail}"
+                    return
                 if not frame.ok:
                     exchange.status, exchange.error, exchange.response = ExchangeStatus.INVALID_RESPONSE, f"invalid response: {frame.error}", frame
                     return

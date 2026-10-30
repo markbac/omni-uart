@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import logging
 import os
+import queue
 import sys
+from concurrent.futures import Future
+from typing import Any, Callable, Dict, List, Optional, Union
+
 try:
     import tkinter as tk
     from tkinter import messagebox, ttk
     HAS_TKINTER = True
 except (ImportError, ValueError, AttributeError, Exception):
     HAS_TKINTER = False
-    tk = type("tk", (), {"Tk": object})
-    messagebox = None
-    ttk = type("ttk", (), {})
-import queue
-from concurrent.futures import Future
-from typing import Any, Callable, Dict, List, Optional, Union
+    tk = type("tk", (), {"Tk": object})  # type: ignore[assignment]
+    messagebox = None  # type: ignore[assignment]
+    ttk = type("ttk", (), {})  # type: ignore[assignment]
 
 from omniuart.core.background import VIRTUAL_PORT, BackgroundDevice
 from omniuart.core.catalog import CatalogManager

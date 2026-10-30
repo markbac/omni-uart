@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from omniuart.core.models import ProtocolSpec, ScriptSpec, load_protocol, load_script
 
@@ -16,7 +16,11 @@ logger = logging.getLogger(__name__)
 
 PROTOCOL_PATH_ENV = "OMNIUART_PROTOCOL_PATH"
 SCRIPT_PATH_ENV = "OMNIUART_SCRIPT_PATH"
-DEFAULT_IGNORED_PATTERNS = ["g460", "schema.json"]
+DEFAULT_IGNORED_PATTERNS = ["*g460*", "*schema.json"]
+
+
+class CatalogError(ValueError):
+    """A catalog lookup that cannot give an answer: the identifier is ambiguous or its file fails to load."""
 
 
 def _env_dirs(name: str) -> List[Path]:
@@ -56,17 +60,51 @@ class CatalogManager:
         self.protocol_dirs: List[Path] = []
         self.script_dirs: List[Path] = []
         self.collisions: List[Dict[str, Any]] = []
+        self.load_errors: Dict[Path, str] = {}
         self.ignored_patterns: List[str] = ignored_patterns if ignored_patterns is not None else list(DEFAULT_IGNORED_PATTERNS)
 
         self._proto_cache: Dict[Path, Tuple[float, ProtocolSpec]] = {}
         self._script_cache: Dict[Path, Tuple[float, ScriptSpec]] = {}
 
-        # Resolve binary directory if running as standalone frozen binary or script
-        exe_dir = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path.cwd()
-        bases = [exe_dir] if exe_dir == Path.cwd() else [exe_dir, Path.cwd()]
+        # Deterministic search directory resolution precedence (#339):
+        # 1. Explicit protocol_dirs / script_dirs (passed in constructor)
+        # 2. OMNIUART_PROTOCOL_PATH / OMNIUART_SCRIPT_PATH environment variables
+        # 3. Project root (discovered via pyproject.toml or .git upwards from cwd)
+        # 4. User configuration directory (~/.config/omniuart/protocols or ~/.omniuart/protocols)
+        # 5. Packaged resources (omniuart/protocols, omniuart/schemas)
+        # 6. Current working directory or frozen executable directory
+        project_root: Optional[Path] = None
+        curr = Path.cwd().resolve()
+        for p in [curr, *curr.parents]:
+            if (p / "pyproject.toml").is_file() or (p / ".git").is_dir():
+                project_root = p
+                break
 
-        default_proto_dirs = [b / sub for b in bases for sub in ("schemas", "examples/protocols", "protocols")]
-        default_script_dirs = [b / sub for b in bases for sub in ("examples/scripts", "scripts")]
+        bases: List[Path] = []
+        if getattr(sys, "frozen", False):
+            bases.append(Path(sys.executable).parent)
+        if project_root and project_root not in bases:
+            bases.append(project_root)
+        user_config = Path.home() / ".config" / "omniuart"
+        user_home = Path.home() / ".omniuart"
+        for u in (user_config, user_home):
+            if u.is_dir() and u not in bases:
+                bases.append(u)
+        if Path.cwd() not in bases:
+            bases.append(Path.cwd())
+
+        default_proto_dirs = [b / sub for b in bases for sub in ("protocols", "schemas", "examples/protocols")]
+        default_script_dirs = [b / sub for b in bases for sub in ("scripts", "examples/scripts")]
+
+        from omniuart.utils.resources import get_resource_path
+        for sub in ("examples/protocols", "protocols", "schemas"):
+            pkg_path = get_resource_path(sub)
+            if pkg_path.is_dir() and pkg_path not in default_proto_dirs:
+                default_proto_dirs.append(pkg_path)
+        for sub in ("examples/scripts", "scripts"):
+            pkg_path = get_resource_path(sub)
+            if pkg_path.is_dir() and pkg_path not in default_script_dirs:
+                default_script_dirs.append(pkg_path)
 
         for pd in protocol_dirs or _env_dirs(PROTOCOL_PATH_ENV) or default_proto_dirs:
             if protocol_dirs or Path(pd).is_dir():
@@ -87,9 +125,14 @@ class CatalogManager:
             if cached_mtime == mtime:
                 return cached_spec
 
-        spec = load_protocol(path)
-        self._proto_cache[path] = (mtime, spec)
-        return spec
+        try:
+            spec = load_protocol(path)
+            self._proto_cache[path] = (mtime, spec)
+            self.load_errors.pop(path, None)
+            return spec
+        except Exception as exc:
+            self.load_errors[path] = str(exc)
+            raise
 
     def _load_script_cached(self, path: Path) -> ScriptSpec:
         """Load script with mtime-based in-memory caching."""
@@ -103,9 +146,14 @@ class CatalogManager:
             if cached_mtime == mtime:
                 return cached_spec
 
-        script = load_script(path)
-        self._script_cache[path] = (mtime, script)
-        return script
+        try:
+            script = load_script(path)
+            self._script_cache[path] = (mtime, script)
+            self.load_errors.pop(path, None)
+            return script
+        except Exception as exc:
+            self.load_errors[path] = str(exc)
+            raise
 
     def add_protocol_dir(self, directory: Union[str, Path]) -> None:
         """Register a directory to scan for protocol definitions."""
@@ -120,11 +168,21 @@ class CatalogManager:
             self.script_dirs.append(s)
 
     def _is_ignored(self, path: Path) -> bool:
+        import fnmatch
         name_lower = path.name.lower()
+        stem_lower = path.stem.lower()
+        parts_lower = [p.lower() for p in path.parts]
+
         for pat in self.ignored_patterns:
-            if pat.lower() in name_lower:
-                logger.debug("Skipping file '%s' matching ignored pattern '%s'", path.name, pat)
-                return True
+            pat_lower = pat.lower()
+            if "*" in pat or "?" in pat:
+                if fnmatch.fnmatch(name_lower, pat_lower) or fnmatch.fnmatch(str(path).lower(), pat_lower):
+                    logger.debug("Skipping file '%s' matching ignored glob '%s'", path.name, pat)
+                    return True
+            else:
+                if pat_lower in (name_lower, stem_lower) or pat_lower in parts_lower:
+                    logger.debug("Skipping file '%s' matching ignored pattern '%s'", path.name, pat)
+                    return True
         return False
 
     def _scan(self, directories: List[Path], kind: str) -> List[Path]:
@@ -180,10 +238,20 @@ class CatalogManager:
             if len(files) > 1
         ]
 
+    def get_load_error(self, identifier: str) -> Optional[str]:
+        """Return the load error for a protocol matching identifier if one occurred."""
+        if not identifier or not identifier.strip():
+            return None
+        ident = identifier.strip().lower()
+        for path, err in self.load_errors.items():
+            if path.name.lower() == ident or path.stem.lower() == ident or ident in path.name.lower():
+                return err
+        return None
+
     def get_protocol(self, identifier: str, first: bool = False) -> Optional[ProtocolSpec]:
         """Lookup and parse a protocol definition by filename, protocol name, or partial match.
 
-        Raises ValueError if identifier is ambiguous (matches multiple files) unless first=True.
+        Raises :class:`CatalogError` if identifier is ambiguous or if the matching protocol file fails to load.
         """
         if not identifier or not identifier.strip():
             return None
@@ -198,7 +266,7 @@ class CatalogManager:
                     return self._load_protocol_cached(f)
                 except Exception as exc:
                     logger.warning("Failed loading protocol file %s: %s", f, exc)
-                    return None
+                    raise CatalogError(f"Protocol file '{f.name}' failed to load: {exc}") from exc
 
         # 2. Match by protocol title/name
         title_matches: List[Tuple[Path, ProtocolSpec]] = []
@@ -218,10 +286,11 @@ class CatalogManager:
             if first:
                 logger.warning("Ambiguous protocol title '%s' matched %s; selecting first", identifier, matching_names)
                 return title_matches[0][1]
-            raise ValueError(f"Ambiguous protocol title '{identifier}' matches multiple files: {matching_names}. Specify exact filename or use --first.")
+            raise CatalogError(f"Ambiguous protocol title '{identifier}' matches multiple files: {matching_names}. Specify exact filename or use --first.")
 
         # 3. Partial substring match
         partial_matches: List[Tuple[Path, ProtocolSpec]] = []
+        partial_failures: List[Tuple[Path, Exception]] = []
         for f in files:
             if ident in f.name.lower():
                 try:
@@ -229,7 +298,7 @@ class CatalogManager:
                     partial_matches.append((f, spec))
                 except Exception as exc:
                     logger.warning("Could not parse protocol %s during partial lookup: %s", f, exc)
-                    continue
+                    partial_failures.append((f, exc))
 
         if len(partial_matches) == 1:
             return partial_matches[0][1]
@@ -238,7 +307,10 @@ class CatalogManager:
             if first:
                 logger.warning("Ambiguous partial match '%s' matched %s; selecting first", identifier, matching_names)
                 return partial_matches[0][1]
-            raise ValueError(f"Ambiguous identifier '{identifier}' matches multiple protocol files: {matching_names}. Specify exact filename or use --first.")
+            raise CatalogError(f"Ambiguous identifier '{identifier}' matches multiple protocol files: {matching_names}. Specify exact filename or use --first.")
+        if len(partial_failures) == 1:
+            failed_file, error = partial_failures[0]
+            raise CatalogError(f"Protocol file '{failed_file.name}' failed to load: {error}") from error
 
         return None
 
@@ -299,7 +371,7 @@ class CatalogManager:
             if first:
                 logger.warning("Ambiguous script name '%s' matched %s; selecting first", identifier, matching_names)
                 return name_matches[0][1]
-            raise ValueError(f"Ambiguous script name '{identifier}' matches multiple files: {matching_names}. Specify exact filename or use --first.")
+            raise CatalogError(f"Ambiguous script name '{identifier}' matches multiple files: {matching_names}. Specify exact filename or use --first.")
 
         # 3. Partial substring match
         partial_matches: List[Tuple[Path, ScriptSpec]] = []
@@ -319,7 +391,7 @@ class CatalogManager:
             if first:
                 logger.warning("Ambiguous partial match '%s' matched %s; selecting first", identifier, matching_names)
                 return partial_matches[0][1]
-            raise ValueError(f"Ambiguous identifier '{identifier}' matches multiple script files: {matching_names}. Specify exact filename or use --first.")
+            raise CatalogError(f"Ambiguous identifier '{identifier}' matches multiple script files: {matching_names}. Specify exact filename or use --first.")
 
         return None
 
@@ -354,6 +426,10 @@ class CatalogManager:
             except Exception as e:
                 logger.warning(f"Could not load script file {sf}: {e}")
 
+        errors = [
+            {"filename": pf.name, "path": str(pf), "error": err}
+            for pf, err in self.load_errors.items()
+        ]
         return {
             "protocol_directories": [str(d) for d in self.protocol_dirs],
             "script_directories": [str(d) for d in self.script_dirs],
@@ -361,5 +437,6 @@ class CatalogManager:
             "scripts_found": len(scripts),
             "protocols": protos,
             "scripts": scripts,
+            "errors": errors,
             "collisions": self.collisions + self.name_collisions(),
         }

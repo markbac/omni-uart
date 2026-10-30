@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 from omniuart.core.catalog import CatalogManager
-from omniuart.core.device_ui import DeviceUISpec, infer_device_ui_from_spec
+from omniuart.core.device_ui import DeviceUISpec
 from omniuart.core.models import CommandSafety, ProtocolSpec
 
 
@@ -178,3 +178,64 @@ class DeviceExplorer:
         )
         self.active_devices[device_id] = node
         return node
+
+
+    def get_active_device(self, device_id: str) -> Optional[DeviceNode]:
+        """Get an active registered device by id (#239)."""
+        return self.active_devices.get(device_id)
+
+    def list_active_devices(self) -> List[DeviceNode]:
+        """List all actively tracked devices (#239)."""
+        return list(self.active_devices.values())
+
+    def remove_active_device(self, device_id: str) -> bool:
+        """Remove an active device from tracking (#239)."""
+        if device_id in self.active_devices:
+            del self.active_devices[device_id]
+            return True
+        return False
+
+    def compare_devices(self, id_a: str, id_b: str) -> Dict[str, Any]:
+        """Generate comparison view between two active devices (#240)."""
+        dev_a = self.get_active_device(id_a)
+        dev_b = self.get_active_device(id_b)
+
+        if not dev_a or not dev_b:
+            missing = id_a if not dev_a else id_b
+            return {"error": f"Device '{missing}' not found for comparison"}
+
+        cmds_a = set()
+        telemetry_a = set()
+        for node in dev_a.navigation_tree:
+            cmds_a.update(node.commands)
+            telemetry_a.update(node.telemetry)
+
+        cmds_b = set()
+        telemetry_b = set()
+        for node in dev_b.navigation_tree:
+            cmds_b.update(node.commands)
+            telemetry_b.update(node.telemetry)
+
+        common_commands = sorted(cmds_a.intersection(cmds_b))
+        unique_to_a = sorted(cmds_a - cmds_b)
+        unique_to_b = sorted(cmds_b - cmds_a)
+
+        return {
+            "device_a": dev_a.to_dict(),
+            "device_b": dev_b.to_dict(),
+            "same_protocol": dev_a.protocol_name == dev_b.protocol_name,
+            "commands_comparison": {
+                "common_count": len(common_commands),
+                "common": common_commands,
+                "unique_a_count": len(unique_to_a),
+                "unique_a": unique_to_a,
+                "unique_b_count": len(unique_to_b),
+                "unique_b": unique_to_b,
+            },
+            "telemetry_comparison": {
+                "common_count": len(telemetry_a.intersection(telemetry_b)),
+                "common": sorted(telemetry_a.intersection(telemetry_b)),
+            },
+            "connection_status_a": dev_a.connection_state,
+            "connection_status_b": dev_b.connection_state,
+        }

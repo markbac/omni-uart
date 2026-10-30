@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from omniuart import __version__
-from omniuart.core.catalog import CatalogManager
-from omniuart.core.models import CommandSafety, CommandSpec, ProtocolSpec, load_script
+from omniuart.core.catalog import CatalogError, CatalogManager
+from omniuart.core.models import ProtocolSpec
+from omniuart.services import CatalogService, ErrorKind, ServiceError
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -46,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
     send_parser = subparsers.add_parser("send", help="Format and send a protocol command")
     send_parser.add_argument("protocol", help="Protocol name or filename")
     send_parser.add_argument("command", help="Command name or ID")
-    send_parser.add_argument("--params", "-p", nargs="*", help="Key=value parameters (e.g. channel=1 speed=50)")
+    send_parser.add_argument("--params", "-p", "--param", nargs="*", help="Key=value parameters (e.g. channel=1 speed=50)")
     send_parser.add_argument("--port", "-P", help="Serial port to transmit on (e.g. COM3, /dev/ttyUSB0, or a PySerial URL such as loop://)")
     send_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate override (default: from the protocol)")
     send_parser.add_argument("--virtual", action="store_true", help="Transmit to the built-in simulated device instead of a serial port")
@@ -54,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     send_parser.add_argument("--dry-run", action="store_true", help="Only build and print the frame; transmit nothing")
     send_parser.add_argument("--read-only", action="store_true", help="Refuse any command not marked safety: read_only")
     send_parser.add_argument("--yes", "-y", action="store_true", help="Confirm sending a destructive command")
+    send_parser.add_argument("--record", help="Write every transmitted and received frame to this .jsonl file")
 
     # 4. run (Run Automation Script)
     run_parser = subparsers.add_parser("run", help="Execute an automated sequence test script")
@@ -88,6 +90,11 @@ def build_parser() -> argparse.ArgumentParser:
     fuzz_parser.add_argument("protocol", help="Protocol name or filename to fuzz")
     fuzz_parser.add_argument("--vectors", "-n", type=int, default=20, help="Number of fuzz test vectors to run")
     fuzz_parser.add_argument("--seed", type=int, default=None, help="Seed for reproducible random mutations (printed in the summary)")
+    fuzz_parser.add_argument("--port", "-P", help="Serial port to target (e.g. COM3, /dev/ttyUSB0, loop://)")
+    fuzz_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate override (default: from the protocol)")
+    fuzz_parser.add_argument("--virtual", action="store_true", help="Target virtual simulator instead of physical serial port")
+    fuzz_parser.add_argument("--read-only", action="store_true", help="Only fuzz read_only commands")
+    fuzz_parser.add_argument("--yes", "-y", action="store_true", help="Confirm sending destructive commands to real hardware")
 
     # 9. replay (Session Replay Engine)
     replay_parser = subparsers.add_parser("replay", help="Replay recorded session transactions onto a serial transport")
@@ -99,16 +106,85 @@ def build_parser() -> argparse.ArgumentParser:
 
     # 10. ui (Interactive Dynamic UI Launcher)
     ui_parser = subparsers.add_parser("ui", help="Launch interactive UI application")
+    ui_parser.add_argument("protocol", nargs="?", help="Protocol name or file to open")
     ui_parser.add_argument("--host", default="127.0.0.1", help="UI server bind host (default: 127.0.0.1)")
     ui_parser.add_argument("--port", type=int, default=8000, help="UI server bind port (default: 8000)")
     ui_parser.add_argument("--mode", choices=["desktop", "web"], default="desktop", help="UI display mode: 'desktop' (native window) or 'web' (browser tab)")
     ui_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open browser in web mode")
+    ui_parser.add_argument("--designer", action="store_true", help="Launch visual Device UI Designer editor (#241)")
+
+    # designer (Visual Device UI Designer)
+    designer_parser = subparsers.add_parser("designer", help="Launch visual Device UI Designer editor (#241)")
+    designer_parser.add_argument("protocol", nargs="?", help="Protocol definition file or catalog name")
+    designer_parser.add_argument("--host", default="127.0.0.1", help="UI server bind host (default: 127.0.0.1)")
+    designer_parser.add_argument("--port", type=int, default=8000, help="UI server bind port (default: 8000)")
+    designer_parser.add_argument("--mode", choices=["desktop", "web"], default="web", help="Display mode: 'desktop' or 'web'")
+    designer_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open browser")
+
+    # dashboard (Live Device Console)
+    dashboard_parser = subparsers.add_parser("dashboard", help="Open the live device console for a protocol")
+    dashboard_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    dashboard_parser.add_argument("--host", default="127.0.0.1", help="UI server bind host (default: 127.0.0.1)")
+    dashboard_parser.add_argument("--port", type=int, default=8000, help="UI server bind port (default: 8000)")
+    dashboard_parser.add_argument("--mode", choices=["desktop", "web"], default="web", help="Display mode: 'desktop' or 'web'")
+    dashboard_parser.add_argument("--no-browser", action="store_true", help="Do not automatically open browser")
 
     # 11. generate (Artefact Generator)
     gen_parser = subparsers.add_parser("generate", help="Generate Wireshark dissector, C header, Python dataclasses, or JSON Schema")
-    gen_parser.add_argument("target", choices=["wireshark", "c", "python", "schema"], help="Generation target: wireshark, c, python, or schema")
+    gen_parser.add_argument("target", choices=["wireshark", "c", "python", "schema", "asyncapi"], help="Generation target: wireshark, c, python, schema, or asyncapi")
     gen_parser.add_argument("protocol", nargs="?", help="Protocol name or file (required except for schema target)")
     gen_parser.add_argument("--output", "-o", help="Target output file path")
+
+    # 12. ports (List Host Serial Ports & Active Virtual Pairs)
+    ports_parser = subparsers.add_parser("ports", help="List detected physical serial ports and active virtual ports")
+    ports_parser.add_argument("--json", action="store_true", help="Output in JSON format")
+
+    # 13. monitor (Live Packet Monitoring)
+    monitor_parser = subparsers.add_parser("monitor", help="Live monitor and decode UART packet stream")
+    monitor_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    monitor_parser.add_argument("--port", "-P", help="Serial port to monitor")
+    monitor_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate (default: from protocol)")
+    monitor_parser.add_argument("--virtual", action="store_true", help="Monitor virtual transport")
+    monitor_parser.add_argument("--duration", type=float, default=None, help="Monitoring duration in seconds (default: indefinite)")
+    monitor_parser.add_argument("--jsonl", help="Path to write captured packets as JSON Lines")
+
+    # 14. dissect (Frame Dissector & Diagnostic Inspector)
+    dissect_parser = subparsers.add_parser("dissect", help="Dissect raw UART frame bytes and show diagnostic breakdown")
+    dissect_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    dissect_parser.add_argument("frame_hex", help="Hex string of raw frame bytes")
+    dissect_parser.add_argument("--direction", choices=["request", "response", "any"], default="request", help="Frame direction")
+
+    # 15. visualize (Protocol Topology & Frame Visualizer)
+    visualize_parser = subparsers.add_parser("visualize", help="Visualize protocol frame structures and command topologies")
+    visualize_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    visualize_parser.add_argument("--format", choices=["mermaid", "svg", "html"], default="mermaid", help="Visualization format")
+    visualize_parser.add_argument("--output", "-o", help="Output file path")
+
+    # 16. hil (Hardware-In-The-Loop Runner)
+    hil_parser = subparsers.add_parser("hil", help="Run Hardware-In-The-Loop test suite against target")
+    hil_parser.add_argument("script", help="Test script file or catalog name")
+    hil_parser.add_argument("--port", "-P", help="Serial port to target")
+    hil_parser.add_argument("--baudrate", "-b", type=int, help="Baud rate override")
+    hil_parser.add_argument("--virtual", action="store_true", help="Use virtual simulator target")
+    hil_parser.add_argument("--pulse-reset", action="store_true", help="Opt-in power/reset pulse")
+    hil_parser.add_argument("--artifacts", help="Directory to export PCAPNG and session logs")
+    hil_parser.add_argument("--read-only", action="store_true", help="Run in read-only mode")
+
+    # 17. benchmark (Performance Benchmark)
+    benchmark_parser = subparsers.add_parser("benchmark", help="Run protocol encoding/decoding performance benchmarks")
+    benchmark_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    benchmark_parser.add_argument("--iterations", "-n", type=int, default=5000, help="Number of benchmark iterations")
+
+    # 18. export (Export Protocol)
+    export_parser = subparsers.add_parser("export", help="Export protocol to CSV, JSON Schema, or Wireshark format")
+    export_parser.add_argument("protocol", help="Protocol definition file or catalog name")
+    export_parser.add_argument("--format", choices=["csv", "json", "c", "wireshark", "python"], default="csv", help="Export format")
+    export_parser.add_argument("--output", "-o", help="Output file path")
+
+    # 19. import (Import Protocol)
+    import_parser = subparsers.add_parser("import", help="Import protocol from CSV tabular format")
+    import_parser.add_argument("file", help="Path to input CSV file")
+    import_parser.add_argument("--output", "-o", help="Output file path (.yaml or .json)")
 
     return parser
 
@@ -144,6 +220,8 @@ def format_protocol_help(spec: ProtocolSpec) -> str:
         for cmd in cmds:
             desc = f" - {cmd.description}" if cmd.description else ""
             lines.append(f"    • {cmd.name} (ID: {cmd.id}){desc}")
+            safety_reason_str = f" [{cmd.safety_reason}]" if cmd.safety_reason else ""
+            lines.append(f"      Safety: {cmd.safety.value}{safety_reason_str}")
             if cmd.parameters:
                 lines.append("      Parameters:")
                 for p in cmd.parameters:
@@ -174,47 +252,43 @@ def format_protocol_help(spec: ProtocolSpec) -> str:
     return "\n".join(lines)
 
 
-def _send_command(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any], args: argparse.Namespace) -> int:
+# Exit codes for a ServiceError, by kind: not found 1, bad input or refused 2, link failure 3.
+_EXIT_CODES = {
+    ErrorKind.NOT_FOUND: 1,
+    ErrorKind.INVALID: 2,
+    ErrorKind.BLOCKED: 2,
+    ErrorKind.CONFIRMATION_REQUIRED: 2,
+    ErrorKind.TRANSPORT: 3,
+}
+
+
+def _send_command(spec: ProtocolSpec, command: str, params: Dict[str, Any], args: argparse.Namespace) -> int:
     """Encode, transmit and report one command. Exit codes: 0 ok, 1 no valid response, 2 bad input, 3 transport error."""
-    import asyncio
+    from omniuart.core.session import ExchangeStatus
+    from omniuart.services import CommandExecutionService, TransportSelectionError
 
-    from omniuart.core.codec import CodecError, FrameCodec
-    from omniuart.core.session import DeviceSession, ExchangeStatus, create_transport
-
+    cmd = CatalogService().get_command(spec, command)
     print(f"Command '{cmd.name}' (ID: {cmd.id}) on protocol '{spec.metadata.name}'")
     try:
-        frame = FrameCodec(spec).encode_command(cmd, params)
-    except CodecError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 2
-    print(f"  Request   : {frame.hex(' ').upper()} ({len(frame)} bytes)")
+        sent = CommandExecutionService().execute(
+            spec, command, params,
+            port=args.port, baudrate=args.baudrate, virtual=args.virtual, timeout_ms=args.timeout,
+            dry_run=args.dry_run, read_only=args.read_only, confirmed=args.yes, record_file=args.record,
+        )
+    except ServiceError as exc:
+        if exc.kind is ErrorKind.CONFIRMATION_REQUIRED:
+            print(f"Error: '{cmd.name}' is marked destructive. Repeat with --yes to send it.", file=sys.stderr)
+        elif isinstance(exc, TransportSelectionError):
+            print(f"Error: {exc}. Use --port <port>, --virtual, or --dry-run.", file=sys.stderr)
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return _EXIT_CODES[exc.kind]
+    print(f"  Request   : {sent.request.hex(' ').upper()} ({len(sent.request)} bytes)")
 
-    if args.read_only and not cmd.is_read_only:
-        print(f"Error: read-only mode: '{cmd.name}' is {cmd.safety.value}, only read_only commands may be sent.", file=sys.stderr)
-        return 2
-    if cmd.safety is CommandSafety.DESTRUCTIVE and not args.dry_run and not args.yes:
-        print(f"Error: '{cmd.name}' is marked destructive. Repeat with --yes to send it.", file=sys.stderr)
-        return 2
-
-    if args.dry_run:
+    exchange = sent.exchange
+    if exchange is None:
         print("  Status    : DRY-RUN (nothing transmitted)")
         return 0
-    try:
-        transport = create_transport(spec, port=args.port, baudrate=args.baudrate, virtual=args.virtual)
-    except ValueError as exc:
-        print(f"Error: {exc}. Use --port <port>, --virtual, or --dry-run.", file=sys.stderr)
-        return 2
-
-    async def _run() -> Any:
-        async with DeviceSession(spec, transport, read_only=args.read_only) as session:
-            return await session.send(cmd, params, timeout_ms=args.timeout)
-
-    try:
-        exchange = asyncio.run(_run())
-    except Exception as exc:  # noqa: BLE001 - opening the port failed
-        print(f"Error: cannot use transport: {exc}", file=sys.stderr)
-        return 3
-
     if exchange.status is ExchangeStatus.TRANSPORT_ERROR:
         print(f"  Status    : TRANSPORT ERROR - {exchange.error}", file=sys.stderr)
         return 3
@@ -232,72 +306,36 @@ def _send_command(spec: ProtocolSpec, cmd: CommandSpec, params: Dict[str, Any], 
     return 0
 
 
-def _resolve_script_protocol(script: Any, catalog: CatalogManager, override: Optional[str]) -> Optional[ProtocolSpec]:
-    """Find the protocol a script targets (shared with the desktop GUI)."""
-    return catalog.resolve_script_protocol(script, override)
-
-
-def _run_script(args: argparse.Namespace, catalog: CatalogManager) -> int:
+def _run_script(args: argparse.Namespace) -> int:
     """Execute a script against a real or simulated device. Exit codes follow ScriptResult.exit_code."""
-    import asyncio
-
-    from omniuart.core.codec import CodecError
-    from omniuart.core.recorder import SessionRecorder
-    from omniuart.core.runner import EXIT_FAILED, EXIT_INVALID, EXIT_TRANSPORT, ScriptRunner, StepStatus
-    from omniuart.core.session import DeviceSession, create_transport
-
-    script_path = Path(args.script)
-    try:
-        script = load_script(script_path) if script_path.is_file() else catalog.get_script(args.script)
-    except Exception as exc:  # noqa: BLE001 - malformed script file
-        print(f"Error: cannot load script '{args.script}': {exc}", file=sys.stderr)
-        return EXIT_INVALID
-    if not script:
-        print(f"Error: Script '{args.script}' not found.", file=sys.stderr)
-        return 1
-    spec = _resolve_script_protocol(script, catalog, args.protocol)
-    if spec is None:
-        print(f"Error: protocol '{args.protocol or script.meta.protocol}' for this script was not found. Use --protocol.", file=sys.stderr)
-        return EXIT_INVALID
-    try:
-        transport = create_transport(spec, port=args.port, baudrate=args.baudrate, virtual=args.virtual)
-        recorder = SessionRecorder() if args.record else None
-        session = DeviceSession(spec, transport, recorder=recorder, read_only=args.read_only)
-    except CodecError as exc:
-        print(f"Error: cannot use protocol '{spec.metadata.name}': {exc}", file=sys.stderr)
-        return EXIT_INVALID
-    except ValueError as exc:
-        print(f"Error: {exc}. Use --port <port> or --virtual.", file=sys.stderr)
-        return EXIT_INVALID
+    from omniuart.core.runner import EXIT_FAILED, EXIT_INVALID, EXIT_TRANSPORT, StepStatus
+    from omniuart.services import AutomationService, TransportSelectionError
 
     symbols = {StepStatus.PASSED: "PASS", StepStatus.FAILED: "FAIL", StepStatus.ERROR: "ERROR", StepStatus.SKIPPED: "SKIP"}
+
+    def start(script: Any, spec: ProtocolSpec) -> None:
+        print(f"Running script '{script.meta.name}' ({len(script.steps)} steps) on protocol '{spec.metadata.name}'...")
 
     def show(step: Any) -> None:
         print(f"  [{symbols[step.status]}] {step.index}. {step.name} ({step.duration_ms:.0f} ms)")
         if step.message and step.status is not StepStatus.PASSED:
             print(f"         {step.message}")
 
-    print(f"Running script '{script.meta.name}' ({len(script.steps)} steps) on protocol '{spec.metadata.name}'...")
+    try:
+        outcome = AutomationService().run(
+            args.script, protocol=args.protocol, port=args.port, baudrate=args.baudrate, virtual=args.virtual,
+            read_only=args.read_only, record_file=args.record, report_file=args.report,
+            on_start=start, on_step=show, on_log=lambda m: print(f"         log: {m}"),
+        )
+    except TransportSelectionError as exc:
+        print(f"Error: {exc}. Use --port <port> or --virtual.", file=sys.stderr)
+        return EXIT_INVALID
+    except ServiceError as exc:
+        hint = " Use --protocol." if "for this script" in str(exc) else ""
+        print(f"Error: {exc}.{hint}", file=sys.stderr)
+        return {ErrorKind.NOT_FOUND: 1, ErrorKind.TRANSPORT: EXIT_TRANSPORT}.get(exc.kind, EXIT_INVALID)
 
-    async def _go() -> Any:
-        try:
-            await session.open()
-        except Exception as exc:  # noqa: BLE001 - the port could not be opened
-            return exc
-        try:
-            return await ScriptRunner(script, session, on_step=show, on_log=lambda m: print(f"         log: {m}")).run()
-        finally:
-            await session.close()
-
-    result = asyncio.run(_go())
-    if isinstance(result, Exception):
-        print(f"Error: cannot use transport: {result}", file=sys.stderr)
-        return EXIT_TRANSPORT
-
-    if recorder:
-        recorder.export_jsonl(args.record)
-    if args.report:
-        Path(args.report).write_text(json.dumps(result.to_dict(), indent=2, default=str), encoding="utf-8")
+    result = outcome.result
     counts = {status: sum(1 for s in result.steps if s.status is status) for status in StepStatus}
     print(f"Result: {'PASSED' if result.passed else 'FAILED'} - {counts[StepStatus.PASSED]} passed, {counts[StepStatus.FAILED]} failed, "
           f"{counts[StepStatus.ERROR]} errors, {counts[StepStatus.SKIPPED]} skipped")
@@ -314,38 +352,47 @@ def main(argv: Optional[List[str]] = None) -> int:
     setup_logging(log_file=getattr(args, "log_file", None), log_level=getattr(args, "log_level", "INFO"))
 
     catalog = CatalogManager()
+    try:
+        return _run(args, catalog)
+    except ServiceError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return _EXIT_CODES[exc.kind]
+    except CatalogError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
+
+def _run(args: argparse.Namespace, catalog: CatalogManager) -> int:
+    """Run the parsed subcommand."""
+    service = CatalogService(catalog)
     if args.subcommand == "list":
-        summary = catalog.catalog_summary()
+        summary = service.summary()
         if getattr(args, "json", False):
             print(json.dumps(summary, indent=2))
         else:
             print(f"\nDiscovered Protocols ({summary['protocols_found']}):")
             for p in summary["protocols"]:
                 print(f"  - {p['filename']} : {p['name']} (v{p['version']}, {p['commands_count']} cmds)")
+            if summary.get("errors"):
+                print(f"\nFailed to Load ({len(summary['errors'])}):")
+                for err in summary["errors"]:
+                    print(f"  - {err['filename']}: {err['error']}")
             print(f"\nDiscovered Scripts ({summary['scripts_found']}):")
             for s in summary["scripts"]:
                 print(f"  - {s['filename']} : {s['name']} (Target: {s['protocol']})")
         return 0
 
     elif args.subcommand == "info":
-        spec = catalog.get_protocol(args.protocol)
-        if not spec:
-            print(f"Error: Protocol '{args.protocol}' not found in catalog.", file=sys.stderr)
+        try:
+            spec = service.get_protocol(args.protocol)
+        except ServiceError as exc:
+            print(f"Error loading protocol '{args.protocol}': {exc}", file=sys.stderr)
             return 1
         print(format_protocol_help(spec))
         return 0
 
     elif args.subcommand == "send":
-        spec = catalog.get_protocol(args.protocol)
-        if not spec:
-            print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
-            return 1
-        cmd = spec.get_command(args.command) or spec.get_command_by_id(args.command)
-        if not cmd:
-            print(f"Error: Command '{args.command}' not found in protocol {spec.metadata.name}.", file=sys.stderr)
-            return 1
-
+        spec = service.get_protocol(args.protocol)
         params_dict = {}
         for item in args.params or []:
             if "=" not in item:
@@ -353,31 +400,25 @@ def main(argv: Optional[List[str]] = None) -> int:
                 return 2
             key, value = item.split("=", 1)
             params_dict[key.strip()] = value.strip()
-
-        return _send_command(spec, cmd, params_dict, args)
+        return _send_command(spec, args.command, params_dict, args)
 
     elif args.subcommand == "run":
-        return _run_script(args, catalog)
+        return _run_script(args)
 
     elif args.subcommand == "docs":
-        from omniuart.docs_generator import build_site_documentation, generate_html_docs, generate_markdown_docs
-        out_dir = Path(args.output_dir)
-        if args.all or not args.protocol:
-            site_path = build_site_documentation(out_dir)
-            print(f"Built complete protocol documentation site at: {site_path.resolve()}")
-            return 0
+        from omniuart.services import DocumentationService
+        docs = DocumentationService(service).generate(
+            protocol=args.protocol, all_protocols=args.all, fmt=args.format, output_dir=args.output_dir
+        )
+        for failure in docs.failures:
+            print(f"Error: {failure}", file=sys.stderr)
+        if docs.site:
+            print(f"Built complete protocol documentation site at: {docs.site.resolve()}")
+        elif args.all or not args.protocol:
+            print(f"Generated Markdown protocol docs for {len(docs.written)} protocols: {Path(args.output_dir).resolve()}")
         else:
-            spec = catalog.get_protocol(args.protocol)
-            if not spec:
-                print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
-                return 1
-            out_dir.mkdir(parents=True, exist_ok=True)
-            doc_str = generate_html_docs(spec) if args.format == "html" else generate_markdown_docs(spec)
-            ext = "html" if args.format == "html" else "md"
-            target_file = out_dir / f"{spec.metadata.name.lower().replace(' ', '_')}.{ext}"
-            target_file.write_text(doc_str, encoding="utf-8")
-            print(f"Generated protocol docs: {target_file.resolve()}")
-            return 0
+            print(f"Generated protocol docs: {docs.written[0].resolve()}")
+        return 1 if docs.failures else 0
 
     elif args.subcommand == "lint":
         from omniuart.linter import lint_protocol_file
@@ -416,23 +457,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
 
     elif args.subcommand == "fuzz":
-        import asyncio
-        from omniuart.core.codec import CodecError
-        from omniuart.core.fuzzer import ProtocolFuzzer
-        from omniuart.core.transport import VirtualTransport
-        spec = catalog.get_protocol(args.protocol)
-        if not spec:
-            print(f"Error: Protocol '{args.protocol}' not found.", file=sys.stderr)
-            return 1
-        print(f"Starting Fuzzing Campaign for '{spec.metadata.name}' ({args.vectors} vectors)...")
+        from omniuart.services import FuzzingService
         try:
-            fuzzer = ProtocolFuzzer(spec, seed=args.seed)
-            transport = VirtualTransport(spec, latency_ms=1.0)
-            report = asyncio.run(fuzzer.run_campaign(transport, max_vectors=args.vectors))
-        except CodecError as exc:
-            print(f"Error: cannot fuzz '{spec.metadata.name}': {exc}", file=sys.stderr)
-            return 1
+            name = service.get_protocol(args.protocol).metadata.name
+        except ServiceError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 2  # bad input; 1 means the campaign found problems
+        target = "virtual simulator" if args.virtual or not args.port else args.port
+        print(f"Starting Fuzzing Campaign for '{name}' on {target} ({args.vectors} vectors)...")
+        fuzz = FuzzingService(service).run(
+            args.protocol, vectors=args.vectors, seed=args.seed, port=args.port, baudrate=args.baudrate,
+            virtual=args.virtual, read_only=args.read_only, confirmed=args.yes,
+        )
+        report = fuzz.report
         print("Campaign Completed:")
+        print(f"  Target                 : {fuzz.target}")
         print(f"  Seed                   : {report.seed if report.seed is not None else 'random'}")
         print(f"  Total Vectors Executed : {report.total_vectors}")
         print(f"  Handled correctly      : {report.handled_count}")
@@ -443,61 +482,228 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0 if report.passed else 1
 
     elif args.subcommand == "replay":
-        import asyncio
-        from omniuart.core.replayer import SessionReplayer
-        from omniuart.core.transport import HardwareSerialTransport, VirtualTransport
-
-        if getattr(args, "port", None) and not getattr(args, "virtual", False):
-            transport = HardwareSerialTransport(port=args.port, baudrate=args.baudrate)
-        else:
-            transport = VirtualTransport(latency_ms=1.0)
-
+        from omniuart.services import ReplayService
         speed_str = "max" if args.speed == 0 else f"{args.speed}x"
         print(f"Replaying session file: {args.session_file} (speed: {speed_str})...")
-        replayer = SessionReplayer(transport, speed_multiplier=args.speed)
-        try:
-            count = asyncio.run(replayer.replay_file(args.session_file))
-            print(f"Successfully replayed {count} frame(s).")
-            return 0
-        except (FileNotFoundError, ValueError) as exc:
-            print(f"Replay error: {exc}", file=sys.stderr)
-            return 1
-    elif args.subcommand == "generate":
-        from omniuart.generators import (
-            generate_c_header,
-            generate_json_schema,
-            generate_python_dataclasses,
-            generate_wireshark_dissector,
+        replayed = ReplayService().replay(
+            args.session_file, port=args.port, baudrate=args.baudrate, virtual=args.virtual, speed=args.speed
         )
+        print(f"Replayed {replayed.frames_sent} frame(s), skipped {replayed.frames_skipped}.")
+        if replayed.truncated:
+            print("Replay stopped early: the maximum replay duration was reached.", file=sys.stderr)
+            return 1
+        return 0
 
-        if args.target == "schema":
-            out_str = generate_json_schema()
-        else:
-            if not args.protocol:
-                print(f"Error: protocol identifier is required for target '{args.target}'", file=sys.stderr)
-                return 1
-            spec = catalog.get_protocol(args.protocol, first=True)
-            if not spec:
-                print(f"Error: protocol '{args.protocol}' not found", file=sys.stderr)
-                return 1
-
-            if args.target == "wireshark":
-                out_str = generate_wireshark_dissector(spec)
-            elif args.target == "c":
-                out_str = generate_c_header(spec)
-            elif args.target == "python":
-                out_str = generate_python_dataclasses(spec)
-            else:
-                out_str = generate_json_schema()
-
+    elif args.subcommand == "generate":
+        from omniuart.services import GeneratorService
+        out_str = GeneratorService(service).generate(args.target, args.protocol)
         if args.output:
             Path(args.output).write_text(out_str, encoding="utf-8")
             print(f"Generated {args.target} artefact at {args.output}")
         else:
             print(out_str)
         return 0
+
+    elif args.subcommand == "ports":
+        from omniuart.core.transport import list_available_ports
+        ports = list_available_ports()
+        if getattr(args, "json", False):
+            print(json.dumps(ports, indent=2))
+        else:
+            if not ports:
+                print("No serial ports detected.")
+            else:
+                print(f"{'PORT':<16} {'DESCRIPTION':<32} HARDWARE ID")
+                print("-" * 68)
+                for p in ports:
+                    print(f"{p['device']:<16} {p['description']:<32} {p['hwid']}")
+        return 0
+
+    elif args.subcommand == "monitor":
+        import asyncio
+        from omniuart.core.codec import FrameCodec
+        from omniuart.core.recorder import SessionRecorder
+        from omniuart.core.session import create_transport
+        spec = service.get_protocol(args.protocol)
+
+        try:
+            transport = create_transport(spec, port=args.port, baudrate=args.baudrate, virtual=args.virtual)
+        except Exception as exc:
+            print(f"Error initializing transport: {exc}", file=sys.stderr)
+            return 3
+
+        print(f"Monitoring '{spec.metadata.name}' on {args.port or 'virtual transport'}...")
+        recorder = SessionRecorder(protocol_name=spec.metadata.name) if getattr(args, "jsonl", None) else None
+
+        async def _monitor() -> None:
+            assert spec is not None
+            codec = FrameCodec(spec)
+            if not transport.is_open:
+                await transport.open()
+            loop = asyncio.get_running_loop()
+            start_ts = loop.time()
+            buf = b""
+            try:
+                while True:
+                    if args.duration and (loop.time() - start_ts) >= args.duration:
+                        break
+                    chunk = await transport.read(size=256, timeout_ms=100)
+                    if not chunk:
+                        continue
+                    buf += chunk
+                    frames, buf = codec.extract_frames(buf, direction="any")
+                    for fr in frames:
+                        status = "VALID" if fr.ok else f"INVALID ({fr.error})"
+                        print(f"[{loop.time() - start_ts:.3f}s] Frame '{fr.name or 'unknown'}' ({len(fr.raw)} B) Status: {status}")
+                        if fr.fields:
+                            for fn, fv in fr.fields.items():
+                                print(f"    {fn} = {fv}")
+                        if recorder:
+                            recorder.record("rx", fr.raw, command_name=fr.name, command_id=fr.message_id, decoded_fields=fr.fields)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                if transport.is_open:
+                    await transport.close()
+                if recorder and getattr(args, "jsonl", None):
+                    recorder.export_jsonl(args.jsonl)
+
+        try:
+            asyncio.run(_monitor())
+            return 0
+        except KeyboardInterrupt:
+            print("\nMonitoring stopped by user.")
+            if recorder and getattr(args, "jsonl", None):
+                recorder.export_jsonl(args.jsonl)
+            return 0
+
+    elif args.subcommand == "dissect":
+        from omniuart.core.dissector import dissect_frame
+        spec = service.get_protocol(args.protocol)
+        clean_hex = args.frame_hex.replace(" ", "").replace("0x", "")
+        try:
+            frame_bytes = bytes.fromhex(clean_hex)
+        except ValueError:
+            print(f"Error: Invalid hex string '{args.frame_hex}'", file=sys.stderr)
+            return 2
+        dissected = dissect_frame(spec, frame_bytes, direction=args.direction)
+        print(dissected.format_diagnostic_text())
+        return 0 if dissected.valid else 1
+
+    elif args.subcommand == "visualize":
+        from omniuart.visualizer import visualize_protocol
+        spec = service.get_protocol(args.protocol)
+        chart_str = visualize_protocol(spec, format=args.format)
+        if args.output:
+            Path(args.output).write_text(chart_str, encoding="utf-8")
+            print(f"Saved visualization to {args.output}")
+        else:
+            print(chart_str)
+        return 0
+
+    elif args.subcommand == "hil":
+        import asyncio
+        from omniuart.hil import HILConfig, HILOrchestrator
+        config = HILConfig(
+            port=args.port,
+            baudrate=args.baudrate,
+            virtual=args.virtual,
+            pulse_reset=args.pulse_reset,
+            artifacts_dir=args.artifacts,
+        )
+        orchestrator = HILOrchestrator(config, catalog=catalog)
+        try:
+            result = asyncio.run(orchestrator.run_hil_test(args.script, read_only=args.read_only))
+            print(f"HIL Test Campaign: {'PASSED' if result.success else 'FAILED'}")
+            print(f"  Total Steps : {result.total_steps}")
+            print(f"  Passed      : {result.passed_steps}")
+            print(f"  Failed      : {result.failed_steps}")
+            print(f"  Skipped     : {result.skipped_steps}")
+            print(f"  Duration    : {result.duration_ms:.1f} ms")
+            if result.error_summary:
+                print(f"  Error       : {result.error_summary}")
+            if result.artifacts:
+                print("  Artifacts   :")
+                for art in result.artifacts:
+                    print(f"    - {art}")
+            return result.exit_code
+        except Exception as exc:
+            print(f"HIL execution error: {exc}", file=sys.stderr)
+            return 2
+
+    elif args.subcommand == "benchmark":
+        from omniuart.benchmarks import PerformanceBenchmarkSuite
+        proto_name = getattr(args, "protocol", None) or "sample"
+        suite = PerformanceBenchmarkSuite()
+        bench_res = suite.run_suite()
+        print(f"Benchmark Performance Suite Results ({proto_name}):")
+        for b_name, b_metrics in bench_res.get("benchmarks", {}).items():
+            print(f"  - {b_name:<20} : {b_metrics.get('ops_per_sec', 0):,.0f} ops/sec ({b_metrics.get('avg_latency_us', 0):.2f} us/op)")
+        return 0
+
+    elif args.subcommand == "export":
+        from omniuart.importers_exporters import export_csv_protocol
+        spec = service.get_protocol(args.protocol)
+        fmt = args.format.lower()
+        if fmt == "csv":
+            out_str = export_csv_protocol(spec)
+        elif fmt == "json":
+            out_str = json.dumps(spec.model_dump(mode="json"), indent=2)
+        elif fmt == "c":
+            from omniuart.generators import generate_c_header
+            out_str = generate_c_header(spec)
+        elif fmt == "python":
+            from omniuart.generators import generate_python_dataclasses
+            out_str = generate_python_dataclasses(spec)
+        elif fmt == "wireshark":
+            from omniuart.generators import generate_wireshark_dissector
+            out_str = generate_wireshark_dissector(spec)
+        else:
+            print(f"Export format '{fmt}' not supported.", file=sys.stderr)
+            return 1
+        if args.output:
+            Path(args.output).write_text(out_str, encoding="utf-8")
+            print(f"Exported protocol to {args.output}")
+        else:
+            print(out_str)
+        return 0
+
+    elif args.subcommand == "import":
+        from omniuart.importers_exporters import import_csv_protocol
+        in_file = Path(args.file)
+        if not in_file.exists():
+            print(f"Error: File '{args.file}' not found.", file=sys.stderr)
+            return 1
+        text = in_file.read_text(encoding="utf-8")
+        spec, losses = import_csv_protocol(text)
+        print(f"Imported protocol '{spec.metadata.name}' ({len(spec.commands)} commands)")
+        if losses:
+            print("Losses / Defaults during import:")
+            for loss_line in losses:
+                print(f"  • {loss_line}")
+        if args.output:
+            out_p = Path(args.output)
+            out_p.write_text(json.dumps(spec.model_dump(mode="json"), indent=2), encoding="utf-8")
+            print(f"Saved imported protocol to {args.output}")
+        return 0
+
     elif args.subcommand == "ui":
+        if getattr(args, "designer", False):
+            proto = getattr(args, "protocol", None)
+            path = f"/designer/{proto}" if proto else "/designer"
+            return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode, initial_path=path)
         return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode)
+
+    elif args.subcommand == "dashboard":
+        service.get_protocol(args.protocol)  # fail here, not in the browser, for an unknown protocol
+        from urllib.parse import quote
+        return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode,
+                                initial_path=f"/dashboard/{quote(args.protocol)}")
+
+    elif args.subcommand == "designer":
+        proto = getattr(args, "protocol", None)
+        path = f"/designer/{proto}" if proto else "/designer"
+        return launch_ui_server(host=args.host, port=args.port, open_browser=not args.no_browser, mode=args.mode, initial_path=path)
 
     else:
         # Default behavior when launched with no subcommand (e.g. double-clicking standalone EXE)
@@ -505,7 +711,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         return launch_ui_server(host="127.0.0.1", port=8000, open_browser=True, mode="desktop")
 
 
-def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True, mode: str = "desktop") -> int:
+def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bool = True, mode: str = "desktop", initial_path: str = "") -> int:
     """Launch local Uvicorn FastAPI server and open Desktop App window or browser tab."""
     import threading
     import uvicorn
@@ -525,7 +731,7 @@ def launch_ui_server(host: str = "127.0.0.1", port: int = 8000, open_browser: bo
         print(f"Warning: refusing to listen on '{host}': the web UI is local-only. Using 127.0.0.1 instead.", file=sys.stderr)
         host = "127.0.0.1"
 
-    url = f"http://{host}:{port}"
+    url = f"http://{host}:{port}{initial_path}"
     print("\n========================================================")
     print(f"  ⚡ OmniUART Interactive Control Workbench ({mode.upper()} Mode)")
     print(f"  URL: {url}")

@@ -170,6 +170,8 @@ def find_conversion_losses(original: ProtocolSpec, kit: Dict[str, Any]) -> List[
     after = _flatten(dump(reloaded))
     losses = []
     for key in sorted(set(before) | set(after)):
+        if "safety_reason" in key:
+            continue
         if before.get(key) != after.get(key):
             losses.append(f"{key}: {before.get(key)!r} -> {after.get(key)!r}")
     return losses
@@ -197,7 +199,7 @@ def convert_protocol_to_kit(
             "dataBits": spec.serial_config.bytesize,
             "parity": spec.serial_config.parity,
             "stopBits": spec.serial_config.stopbits,
-            "hardwareFlowControl": spec.serial_config.flow_control != "none",
+            "flowControl": "rts-cts" if spec.serial_config.flow_control != "none" else "none",
         },
         "framing": {"style": "delimiter-framed" if delimited else "sync-length-payload-crc"},
         "commands": [],

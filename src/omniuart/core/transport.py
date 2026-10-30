@@ -18,8 +18,29 @@ from omniuart.core.models import ProtocolSpec, SerialConfig
 logger = logging.getLogger(__name__)
 
 
-def list_available_ports() -> List[Dict[str, str]]:
-    """Return a list of detected physical hardware serial ports."""
+_ACTIVE_VIRTUAL_PORTS: List[Dict[str, str]] = []
+
+
+def register_virtual_port(device: str, description: str = "Virtual Serial Port", hwid: str = "VIRTUAL") -> None:
+    """Register an active virtual serial port so port enumerators see it."""
+    for p in _ACTIVE_VIRTUAL_PORTS:
+        if p["device"] == device:
+            return
+    _ACTIVE_VIRTUAL_PORTS.append({
+        "device": device,
+        "description": description,
+        "hwid": hwid,
+    })
+
+
+def unregister_virtual_port(device: str) -> None:
+    """Unregister an active virtual serial port."""
+    global _ACTIVE_VIRTUAL_PORTS
+    _ACTIVE_VIRTUAL_PORTS = [p for p in _ACTIVE_VIRTUAL_PORTS if p["device"] != device]
+
+
+def list_available_ports(include_virtual: bool = True) -> List[Dict[str, str]]:
+    """Return a list of detected physical hardware serial ports and active virtual ports."""
     ports_info = []
     for port in serial.tools.list_ports.comports():
         ports_info.append({
@@ -27,6 +48,9 @@ def list_available_ports() -> List[Dict[str, str]]:
             "description": port.description or "Serial Port",
             "hwid": port.hwid or "Unknown",
         })
+    if include_virtual:
+        for vp in _ACTIVE_VIRTUAL_PORTS:
+            ports_info.append(dict(vp))
     return ports_info
 
 
@@ -484,12 +508,16 @@ class VirtualSerialPair:
         self.device = PipeTransport(port_name=device_port)
         self.host.connect_peer(self.device)
         self.device.connect_peer(self.host)
+        register_virtual_port(host_port, "Virtual Serial Host Port", "VIRTUAL_HOST")
+        register_virtual_port(device_port, "Virtual Serial Device Port", "VIRTUAL_DEVICE")
 
     async def open(self) -> None:
         await self.host.open()
         await self.device.open()
 
     async def close(self) -> None:
+        unregister_virtual_port(self.host.port_name)
+        unregister_virtual_port(self.device.port_name)
         await self.host.close()
         await self.device.close()
 
@@ -580,7 +608,7 @@ class PtyTransport(AsyncTransport):
         if self._is_open:
             return
         if self._path is not None:
-            self._fd = os.open(self._path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+            self._fd = os.open(self._path, os.O_RDWR | getattr(os, "O_NOCTTY", 0) | getattr(os, "O_NONBLOCK", 0))
         assert self._fd is not None
         self._make_raw(self._fd)
         os.set_blocking(self._fd, False)
@@ -592,12 +620,13 @@ class PtyTransport(AsyncTransport):
 
     @staticmethod
     def _make_raw(fd: int) -> None:
-        import termios
         import tty
 
+
         try:
-            tty.setraw(fd)
-        except termios.error:  # not a terminal, or the platform refuses: carry on with the descriptor as is
+            if hasattr(tty, "setraw"):
+                tty.setraw(fd)
+        except Exception:  # not a terminal, or the platform refuses: carry on with the descriptor as is
             pass
 
     def _on_readable(self) -> None:

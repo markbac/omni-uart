@@ -30,7 +30,8 @@ def _map_field_schema(field: FieldSpec) -> Dict[str, Any]:
     elif val_lower in ("string", "str", "text", "ascii"):
         schema = {"type": "string"}
     elif val_lower in ("bytes", "hex", "raw", "binary"):
-        schema = {"type": "string", "contentEncoding": "base64"}
+        pattern = f"^[0-9a-fA-F]{{{field.length * 2}}}$" if field.length else "^[0-9a-fA-F]*$"
+        schema = {"type": "string", "pattern": pattern}
     elif val_lower == "enum":
         schema = {"type": "string"}
         if field.options:
@@ -39,7 +40,7 @@ def _map_field_schema(field: FieldSpec) -> Dict[str, Any]:
         schema = {"type": "integer"}
 
     if field.unit:
-        schema["unit"] = field.unit
+        schema["x-unit"] = field.unit
     if field.min is not None:
         schema["minimum"] = field.min
     if field.max is not None:
@@ -47,7 +48,7 @@ def _map_field_schema(field: FieldSpec) -> Dict[str, Any]:
     if field.default is not None:
         schema["default"] = field.default
     if field.scale is not None and field.scale != 1.0:
-        schema["multipleOf"] = field.scale
+        schema["x-scale"] = field.scale
     if field.options and "enum" not in schema:
         schema["enum"] = list(field.options.keys())
 

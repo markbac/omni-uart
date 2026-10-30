@@ -52,22 +52,28 @@ class ConnectionManager:
         }
 
     async def connect(self, port: str, baudrate: int, rts: bool, dtr: bool, read_only: bool = False) -> None:
-        """Open ``port`` (replacing any open link). Raises on failure and leaves the manager disconnected."""
-        await self.disconnect()
-        if port == VIRTUAL_PORT:
-            self.virtual = True
-        else:
-            transport = HardwareSerialTransport(port, baudrate=baudrate)
-            await transport.open()  # raises if the port does not exist or cannot be opened
-            try:
-                await transport.set_pin_state("rts", rts)
-                await transport.set_pin_state("dtr", dtr)
-            except Exception:  # noqa: BLE001 - not every port or URL handler supports modem lines
-                pass
-            self.transport = transport
-        self.port, self.baudrate, self.rts, self.dtr, self.read_only = port, baudrate, rts, dtr, read_only
+        """Open ``port`` (replacing any open link). Raises on failure and leaves the manager disconnected (#326)."""
+        async with self.lock:
+            await self._disconnect_unlocked()
+            if port == VIRTUAL_PORT:
+                self.virtual = True
+            else:
+                transport = HardwareSerialTransport(port, baudrate=baudrate)
+                await transport.open()  # raises if the port does not exist or cannot be opened
+                try:
+                    await transport.set_pin_state("rts", rts)
+                    await transport.set_pin_state("dtr", dtr)
+                except Exception:  # noqa: BLE001 - not every port or URL handler supports modem lines
+                    pass
+                self.transport = transport
+            self.port, self.baudrate, self.rts, self.dtr, self.read_only = port, baudrate, rts, dtr, read_only
 
     async def disconnect(self) -> None:
+        """Close the open link taking self.lock to avoid interrupting active requests (#326)."""
+        async with self.lock:
+            await self._disconnect_unlocked()
+
+    async def _disconnect_unlocked(self) -> None:
         if self.transport is not None:
             try:
                 await self.transport.close()

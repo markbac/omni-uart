@@ -107,6 +107,59 @@ jobs:
                   print(f'Validated script: {s.name}')
           "
 
+      - name: Validate AsyncAPI Specifications (#337)
+        run: |
+          python -c "
+          from pathlib import Path
+          from omniuart.core.catalog import CatalogManager
+          from omniuart.core.asyncapi_exporter import export_asyncapi_dict
+          catalog = CatalogManager()
+          sample_protocols = ['binary_sensor_node.yaml', 'ascii_device.yaml', 'custom_crc_device.yaml']
+          for p_name in sample_protocols:
+              spec = catalog.get_protocol(p_name, first=True)
+              assert spec is not None, f'Protocol {p_name} not found'
+              doc = export_asyncapi_dict(spec)
+              assert doc['asyncapi'] == '2.6.0'
+              assert 'info' in doc and 'channels' in doc and 'components' in doc
+              print(f'Validated AsyncAPI export for: {p_name}')
+          "
+
+      - name: Check Optional tshark PCAPNG Dissector (#212, #337)
+        continue-on-error: true
+        run: |
+          if command -v tshark >/dev/null 2>&1; then
+            echo "tshark is available"
+            tshark -v
+          else
+            echo "tshark not installed in runner (optional PCAPNG validation skipped)"
+          fi
+
+  benchmarks:
+    name: Performance Benchmarks & Targets (#224, #340)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run Benchmark Suite & Compare Targets
+        env:
+          PYTHONPATH: src
+        run: |
+          python -m omniuart.benchmarks --compare-baseline
+
   docs-lint:
     name: Docs Lint (py-doc)
     runs-on: ubuntu-latest
@@ -208,3 +261,46 @@ jobs:
           PYTHONPATH: src
         run: |
           python -m pytest tests/test_binary_smoke.py
+
+  verify-wheel-package:
+    name: Build & Verify Wheel Package (Clean venv)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Build wheel package
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+
+      - name: Install wheel in clean virtualenv and verify commands
+        run: |
+          python -m venv test_env
+          . test_env/bin/activate
+          pip install dist/*.whl
+          cd "$RUNNER_TEMP"
+          omniuart --help
+          omniuart list
+          omniuart docs --all --output-dir ./docs_site
+          test -f ./docs_site/index.html
+          test -f ./docs_site/protocols/index.html
+          python -c "
+          import omniuart
+          from omniuart.core.catalog import CatalogManager
+          from omniuart.linter import load_kit_schema, lint_protocol_file
+          catalog = CatalogManager()
+          protocols = catalog.list_protocol_files()
+          assert len(protocols) >= 30, f'Expected >= 30 protocols in wheel, got {len(protocols)}'
+          schema = load_kit_schema(False)
+          assert isinstance(schema, dict) and ('properties' in schema or 'title' in schema)
+          valid, errs = lint_protocol_file(protocols[0])
+          assert valid, f'Lint failed on bundled protocol: {errs}'
+          print('Wheel validation succeeded with', len(protocols), 'protocols')
+          "

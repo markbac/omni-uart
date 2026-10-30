@@ -11,7 +11,7 @@ import logging
 import time
 import urllib.request
 from urllib.parse import urlparse
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 from omniuart.core.limits import get_limits

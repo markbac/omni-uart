@@ -15,6 +15,7 @@ Delimited frame layout::
 
 from __future__ import annotations
 
+import ast
 import math
 import struct
 from dataclasses import dataclass, field
@@ -74,6 +75,8 @@ class DecodedFrame:
     payload: bytes = b""
     fields: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
+    integrity_received: Optional[int] = None
+    integrity_calculated: Optional[int] = None
 
     @property
     def ok(self) -> bool:
@@ -116,6 +119,56 @@ def field_size(spec: FieldSpec) -> Optional[int]:
         return 1
     return spec.length  # string / bytes: fixed only when ``length`` is declared
 
+
+
+def _eval_expression(expr: str, scope: Mapping[str, Any]) -> Any:
+    """Safely evaluate a mathematical expression against field scope."""
+    try:
+        parsed = ast.parse(expr, mode="eval")
+    except SyntaxError as e:
+        raise CodecError(f"Invalid field expression '{expr}': {e}") from e
+
+    def _eval_node(node: ast.AST) -> Any:
+        if isinstance(node, ast.Expression):
+            return _eval_node(node.body)
+        if isinstance(node, ast.Constant):
+            return node.value
+        if isinstance(node, ast.Name):
+            if node.id in scope:
+                return scope[node.id]
+            raise CodecError(f"Unknown variable '{node.id}' in expression '{expr}'")
+        if isinstance(node, ast.UnaryOp):
+            operand = _eval_node(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return +operand
+            if isinstance(node.op, ast.USub):
+                return -operand
+            if isinstance(node.op, ast.Not):
+                return not operand
+        if isinstance(node, ast.BinOp):
+            left = _eval_node(node.left)
+            right = _eval_node(node.right)
+            from typing import Callable
+            ops: Dict[Any, Callable[[Any, Any], Any]] = {
+                ast.Add: lambda a, b: a + b,
+                ast.Sub: lambda a, b: a - b,
+                ast.Mult: lambda a, b: a * b,
+                ast.Div: lambda a, b: a / b,
+                ast.FloorDiv: lambda a, b: a // b,
+                ast.Mod: lambda a, b: a % b,
+                ast.Pow: lambda a, b: a ** b,
+                ast.BitAnd: lambda a, b: int(a) & int(b),
+                ast.BitOr: lambda a, b: int(a) | int(b),
+                ast.BitXor: lambda a, b: int(a) ^ int(b),
+                ast.LShift: lambda a, b: int(a) << int(b),
+                ast.RShift: lambda a, b: int(a) >> int(b),
+            }
+            op_fn = ops.get(type(node.op))
+            if op_fn:
+                return op_fn(left, right)
+        raise CodecError(f"Unsupported expression element in '{expr}'")
+
+    return _eval_node(parsed)
 
 def _eval_condition(cond: str, env: Mapping[str, Any]) -> bool:
     try:
@@ -269,6 +322,85 @@ def decode_value(spec: FieldSpec, data: bytes) -> Any:
     return val
 
 
+_BIT_TYPES = set(_INT_FORMATS) | {FieldType.ENUM, FieldType.BOOL}
+
+
+def _units(specs: Sequence[FieldSpec]) -> List[Union[FieldSpec, List[FieldSpec]]]:
+    """Split ``specs`` into single fields and runs of consecutive ``bit_width`` fields packed together (#327).
+
+    A run is packed LSB-first (the first field in the lowest bits) into the fewest whole bytes, written in
+    the first field's byte order. Bit fields cannot be conditional, positioned by ``offset`` or derived.
+    """
+    units: List[Union[FieldSpec, List[FieldSpec]]] = []
+    for spec in specs:
+        if not spec.bit_width:
+            units.append(spec)
+            continue
+        if spec.type not in _BIT_TYPES:
+            raise CodecError(f"Field '{spec.name}': bit_width needs an integer, enum or bool type, not {spec.type.value}")
+        if spec.condition or spec.discriminator or spec.offset is not None or spec.expression:
+            raise CodecError(f"Bit field '{spec.name}' cannot use condition, discriminator, offset or expression")
+        if units and isinstance(units[-1], list):
+            units[-1].append(spec)
+        else:
+            units.append([spec])
+    return units
+
+
+def _bit_group_size(group: Sequence[FieldSpec]) -> int:
+    return (sum(s.bit_width or 0 for s in group) + 7) // 8
+
+
+def _bit_value(spec: FieldSpec, value: Any) -> int:
+    """Validate one bit-field value and return the raw integer stored in its bits."""
+    width = spec.bit_width or 0
+    if spec.type is FieldType.BOOL:
+        return 1 if encode_value(FieldSpec(name=spec.name, type=FieldType.BOOL), value) == b"\x01" else 0
+    if (spec.scale is not None or spec.offset_val is not None) and not isinstance(value, bool):
+        try:
+            value = round((float(value) - (spec.offset_val or 0.0)) / (spec.scale if spec.scale is not None else 1.0))
+        except (TypeError, ValueError):
+            raise CodecError(f"Parameter '{spec.name}' scaling error for {value!r}") from None
+    if isinstance(value, bool) or isinstance(value, float) and not value.is_integer():
+        raise CodecError(f"Parameter '{spec.name}' expects an integer, got {value!r}")
+    try:
+        number = _as_int(value, f"Parameter '{spec.name}'") if isinstance(value, str) else int(value)
+    except (TypeError, ValueError):
+        raise CodecError(f"Parameter '{spec.name}' expects an integer, got {value!r}") from None
+    if spec.min is not None and number < spec.min:
+        raise CodecError(f"Parameter '{spec.name}' value {number} is below the minimum {spec.min:g}")
+    if spec.max is not None and number > spec.max:
+        raise CodecError(f"Parameter '{spec.name}' value {number} is above the maximum {spec.max:g}")
+    if not 0 <= number < (1 << width):
+        raise CodecError(f"Parameter '{spec.name}' value {number} does not fit {width} bit(s) (0..{(1 << width) - 1})")
+    return number
+
+
+def _encode_bits(group: Sequence[FieldSpec], values: Mapping[str, Any]) -> bytes:
+    raw, shift = 0, 0
+    for spec in group:
+        value = values.get(spec.name, spec.default if spec.default is not None else 0)
+        raw |= _bit_value(spec, value) << shift
+        shift += spec.bit_width or 0
+    return raw.to_bytes(_bit_group_size(group), "big" if group[0].endian == "big" else "little")
+
+
+def _decode_bits(group: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
+    raw = int.from_bytes(data, "big" if group[0].endian == "big" else "little")
+    out: Dict[str, Any] = {}
+    for spec in group:
+        width = spec.bit_width or 0
+        number = raw & ((1 << width) - 1)
+        raw >>= width
+        if spec.type is FieldType.BOOL:
+            out[spec.name] = number != 0
+        elif spec.scale is not None or spec.offset_val is not None:
+            out[spec.name] = number * (spec.scale if spec.scale is not None else 1.0) + (spec.offset_val or 0.0)
+        else:
+            out[spec.name] = number
+    return out
+
+
 def encode_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> bytes:
     """Encode ``values`` in declaration order, applying declared defaults for omitted fields."""
     known = {s.name for s in specs}
@@ -276,33 +408,78 @@ def encode_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> byte
     if unknown:
         raise CodecError(f"Unknown parameter(s): {', '.join(unknown)}")
     out = bytearray()
-    for spec in specs:
-        if spec.condition and not _eval_condition(spec.condition, values):
+    values_copy = dict(values)
+    for unit in _units(specs):
+        if isinstance(unit, list):
+            out.extend(_encode_bits(unit, values_copy))
+            continue
+        spec = unit
+        if spec.condition and not _eval_condition(spec.condition, values_copy):
             continue
         if spec.discriminator is not None and spec.discriminator_value is not None:
-            if values.get(spec.discriminator) != spec.discriminator_value:
+            if values_copy.get(spec.discriminator) != spec.discriminator_value:
                 continue
-        if spec.name in values:
-            value = values[spec.name]
+        if spec.expression:
+            # Derived fields are computed, never carried on the wire (decode_fields does the same).
+            values_copy[spec.name] = _eval_expression(spec.expression, values_copy)
+            continue
+        if spec.fixed is not None:
+            if spec.name in values_copy and values_copy[spec.name] != spec.fixed:
+                raise CodecError(f"Parameter '{spec.name}' is fixed at {spec.fixed!r} and cannot be set")
+            values_copy[spec.name] = spec.fixed
+        if spec.name in values_copy:
+            value = values_copy[spec.name]
         elif spec.default is not None:
             value = spec.default
         else:
             continue
-        out.extend(encode_value(spec, value))
+        val_bytes = encode_value(spec, value)
+        if spec.offset is not None:
+            end_pos = spec.offset + len(val_bytes)
+            if end_pos > len(out):
+                out.extend(b"\x00" * (end_pos - len(out)))
+            out[spec.offset:end_pos] = val_bytes
+        else:
+            out.extend(val_bytes)
     return bytes(out)
 
 
 
 def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
     """Decode ``data`` as a sequence of fields. Trailing or missing bytes raise :class:`CodecError`."""
+    return decode_fields_with_layout(specs, data)[0]
+
+
+def decode_fields_with_layout(
+    specs: Sequence[FieldSpec], data: bytes
+) -> Tuple[Dict[str, Any], List[Tuple[FieldSpec, int, int]]]:
+    """Decode like :func:`decode_fields` and also return ``(spec, start, end)`` for every field on the wire.
+
+    Fields packed into one bit group share the group's byte range; derived fields have no range.
+    """
     out: Dict[str, Any] = {}
+    layout: List[Tuple[FieldSpec, int, int]] = []
     pos = 0
-    for index, spec in enumerate(specs):
+    units = _units(specs)
+    for index, unit in enumerate(units):
+        if isinstance(unit, list):
+            group_size = _bit_group_size(unit)
+            if pos + group_size > len(data):
+                raise CodecError(f"Payload too short for bit field '{unit[0].name}' ({len(data) - pos} of {group_size} bytes)")
+            out.update(_decode_bits(unit, data[pos : pos + group_size]))
+            layout.extend((spec, pos, pos + group_size) for spec in unit)
+            pos += group_size
+            continue
+        spec = unit
         if spec.condition and not _eval_condition(spec.condition, out):
             continue
         if spec.discriminator is not None and spec.discriminator_value is not None:
             if out.get(spec.discriminator) != spec.discriminator_value:
                 continue
+
+        if spec.expression is not None:
+            out[spec.name] = _eval_expression(spec.expression, out)
+            continue
 
         size = field_size(spec)
         if spec.length_ref and spec.length_ref in out:
@@ -312,18 +489,22 @@ def decode_fields(specs: Sequence[FieldSpec], data: bytes) -> Dict[str, Any]:
             item_sz = field_size(item_spec) or 1
             size = int(out[spec.count_ref]) * item_sz
         elif size is None:
-            if index != len(specs) - 1:
+            if index != len(units) - 1:
                 raise CodecError(f"Variable-length field '{spec.name}' must be the last field")
             size = len(data) - pos
 
-        if pos + size > len(data):
-            raise CodecError(f"Payload too short for field '{spec.name}' ({len(data) - pos} of {size} bytes)")
-        out[spec.name] = decode_value(spec, data[pos : pos + size])
-        pos += size
-    if pos != len(data):
+        cur_pos = spec.offset if spec.offset is not None else pos
+        if cur_pos + size > len(data):
+            raise CodecError(f"Payload too short for field '{spec.name}' ({len(data) - cur_pos} of {size} bytes)")
+        out[spec.name] = decode_value(spec, data[cur_pos : cur_pos + size])
+        layout.append((spec, cur_pos, cur_pos + size))
+        if spec.offset is None:
+            pos += size
+        else:
+            pos = max(pos, cur_pos + size)
+    if pos != len(data) and not any(s.offset is not None for s in specs):
         raise CodecError(f"{len(data) - pos} unexpected trailing payload byte(s)")
-    return out
-
+    return out, layout
 
 
 def validate_fields(specs: Sequence[FieldSpec], values: Mapping[str, Any]) -> Optional[str]:
@@ -487,6 +668,8 @@ class FrameCodec:
                 value = (
                     len(self._header) + size + len(id_bytes) + len(payload) + self._integrity_width + len(self._footer)
                 )
+            elif length_spec.includes == "length_to_end":
+                value = size + len(id_bytes) + len(payload) + self._integrity_width + len(self._footer)
             else:
                 value = len(payload)
             if value >= 1 << (8 * size):
@@ -525,11 +708,15 @@ class FrameCodec:
             return DecodedFrame(raw=bytes(data), error="input is not exactly one complete frame")
         return frames[0]
 
-    def extract_frames(self, data: Union[bytes, bytearray], direction: str = "any") -> Tuple[List[DecodedFrame], bytes]:
+    def extract_frames(
+        self, data: Union[bytes, bytearray], direction: str = "any", expect: Optional[CommandSpec] = None
+    ) -> Tuple[List[DecodedFrame], bytes]:
         """Pull every complete frame out of ``data`` and return ``(frames, unconsumed_bytes)``.
 
         Bytes before a header are discarded (resynchronisation). Frames whose envelope is intact
         but whose content is invalid are returned with ``error`` set instead of being dropped.
+        ``expect`` is the command whose response is awaited: a frame with its response id is decoded
+        as that command's response, which matters when several commands share a response id.
         """
         if not self.is_binary:
             return self._extract_delimited(bytes(data), direction)
@@ -548,7 +735,7 @@ class FrameCodec:
                 buf = buf[1:]
                 continue
             raw, buf = buf[:total], buf[total:]
-            frames.append(self._decode_frame(raw, direction))
+            frames.append(self._decode_frame(raw, direction, expect))
 
     def _partial_header_len(self, buf: bytes) -> int:
         for size in range(min(len(self._header) - 1, len(buf)), 0, -1):
@@ -579,6 +766,10 @@ class FrameCodec:
                 total = head + length_size + value + trailer
                 if value < id_size:
                     return -1
+            elif includes == "length_to_end":
+                total = head + value
+                if value < length_size + id_size + trailer:
+                    return -1
             else:
                 total = head + length_size + id_size + value + trailer
             if total > self._max_frame:
@@ -605,20 +796,36 @@ class FrameCodec:
         if fields is None:
             return None
         total = 0
-        for spec in fields:
-            size = field_size(spec)
+        for unit in _units(fields):
+            if isinstance(unit, list):
+                total += _bit_group_size(unit)
+                continue
+            if unit.expression:
+                continue
+            size = field_size(unit)
             if size is None:
                 return None
             total += size
         return total
 
-    def _lookup(self, message_id: Union[int, str], direction: str) -> Optional[Tuple[Tuple[str, str], List[FieldSpec]]]:
-        """Return ``((kind, name), fields)`` for a message id."""
+    def _lookup(
+        self, message_id: Union[int, str], direction: str, payload: Optional[bytes] = None
+    ) -> Optional[Tuple[Tuple[str, str], List[FieldSpec]]]:
+        """Return ``((kind, name), fields)`` for a message id.
+
+        Commands that share an id are told apart by their leading ``fixed`` parameters, checked
+        against ``payload``. Kind ``error`` is a declared error reply, which has no fields.
+        """
         if direction in ("request", "any"):
-            for cmd in self.spec.commands:
-                if self._same_id(cmd.id, message_id):
-                    return ("command", cmd.name), cmd.parameters
+            matches = [cmd for cmd in self.spec.commands if self._same_id(cmd.id, message_id)]
+            if len(matches) > 1 and payload is not None:
+                matches = [cmd for cmd in matches if payload.startswith(self._fixed_prefix(cmd))] or matches[:0]
+            if matches:
+                return ("command", matches[0].name), matches[0].parameters
         if direction in ("response", "any"):
+            for reply in self.spec.error_replies:
+                if self._same_id(reply.id, message_id):
+                    return ("error", reply.name), []
             for cmd in self.spec.commands:
                 if cmd.response is not None and cmd.response.id is not None and self._same_id(cmd.response.id, message_id):
                     return ("response", cmd.name), cmd.response.fields
@@ -632,6 +839,15 @@ class FrameCodec:
                         return ("response", cmd.name), cmd.response.fields
         return None
 
+    def _fixed_prefix(self, cmd: CommandSpec) -> bytes:
+        """The encoded leading ``fixed`` parameters of ``cmd`` (empty when it has none)."""
+        out = bytearray()
+        for spec in cmd.parameters:
+            if spec.fixed is None:
+                break
+            out.extend(encode_value(spec, spec.fixed))
+        return bytes(out)
+
     @staticmethod
     def _same_id(declared: Union[int, str], actual: Union[int, str]) -> bool:
         try:
@@ -639,7 +855,7 @@ class FrameCodec:
         except CodecError:
             return str(declared) == str(actual)
 
-    def _decode_frame(self, raw: bytes, direction: str) -> DecodedFrame:
+    def _decode_frame(self, raw: bytes, direction: str, expect: Optional[CommandSpec] = None) -> DecodedFrame:
         head, length_size, id_size = self._layout()
         trailer_crc = self._integrity_width
         footer_len = len(self._footer)
@@ -662,11 +878,21 @@ class FrameCodec:
                 self._crc_bits,
                 integrity.endian,
             )
+            frame.integrity_received = received
+            frame.integrity_calculated = expected
             if received != expected:
                 frame.error = f"integrity mismatch: received {received:#x}, expected {expected:#x}"
                 return frame
 
-        found = self._lookup(message_id, direction)
+        found = self._lookup(message_id, direction, payload)
+        if (
+            expect is not None
+            and expect.response is not None
+            and direction in ("response", "any")
+            and (found is None or found[0][0] != "error")
+            and self._same_id(expect.response.id if expect.response.id is not None else expect.id, message_id)
+        ):
+            found = ("response", expect.name), expect.response.fields
         if found is None:
             frame.error = f"unknown message id {message_id:#x}"
             return frame

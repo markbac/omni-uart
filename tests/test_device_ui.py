@@ -1,7 +1,6 @@
 """Unit tests for Declarative Device UI Schema subsystem (#229)."""
 
 from pathlib import Path
-import pytest
 
 from omniuart.core.device_ui import DeviceUISpec, load_device_ui, generate_device_ui_schema
 

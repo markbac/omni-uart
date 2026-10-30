@@ -97,8 +97,8 @@ flowchart TD
 
 ### 3.1 Catalogue Manager & Adapters (`omniuart.core.catalog`)
 - **Auto-Discovery**: Scans registered protocol and script directories dynamically. Automatically picks up newly added protocol definition files (`.json`, `.yaml`) or test sequences without code changes.
-- **Search order** (highest precedence first): directories passed to `CatalogManager(protocol_dirs=..., script_dirs=...)`, which are the only ones searched when given; then the `OMNIUART_PROTOCOL_PATH` and `OMNIUART_SCRIPT_PATH` environment variables (directories separated by the platform path separator); then the existing default directories `examples/protocols`, `protocols` and `schemas` (scripts: `examples/scripts`, `scripts`) under the current directory, and under the executable's directory in a frozen binary. No machine-specific path is searched.
-- **Collisions**: results are sorted by file name. If two directories hold a file of the same name the earlier directory wins and the other is recorded in `CatalogManager.collisions` (with whether the content is identical), logged as a warning and listed under `collisions` in `catalog_summary()`, together with different files that declare the same protocol `name`.
+- **Search order** (highest precedence first): directories passed directly to `CatalogManager(protocol_dirs=..., script_dirs=...)`. If omitted, OmniUART searches the `OMNIUART_PROTOCOL_PATH` and `OMNIUART_SCRIPT_PATH` environment variables. Finally, standard default folders (`examples/protocols`, `protocols`, `schemas`) are scanned. No machine-specific path is searched.
+- **Collisions**: results are sorted by file name. If two directories hold a file of the same name, the earlier directory wins. The shadow file is recorded in `CatalogManager.collisions`, logged as a warning, and listed under `collisions` in `catalog_summary()`. Duplicate protocol declarations are flagged similarly.
 - **Kit & Sequence Adapters**:
   - `kit_adapter.py`: Converts standard `uart-interface-schema-kit` AsyncAPI protocol definitions into internal `ProtocolSpec` data models.
   - `sequence_adapter.py`: Converts sequence files into `ScriptSpec` models.
@@ -126,11 +126,19 @@ flowchart TD
 - **`TelemetryBridge` (`omniuart.core.telemetry`)**: Dispatches parsed UART telemetry events to external HTTP Webhook endpoints and MQTT topics (`omniuart/telemetry/<cmd_name>`).
 - **`ProtocolFuzzer` (`omniuart.core.fuzzer`)**: Builds vectors with `FrameCodec` (out-of-bounds parameter, corrupted integrity field, truncated frame, random byte mutation) and classifies each outcome as accepted, correctly rejected, unexpectedly accepted, malformed response, timeout, hang or transport error. A liveness probe after each invalid vector detects firmware that locks up.
 
-### 3.6 Presentation & Web UI (`omniuart.cli` & `omniuart.ui.app`)
+### 3.6 Presentation & Workspaces (`omniuart.cli`, `omniuart.desktop`, `omniuart.ui.app`)
 - **Interactive Web UI**: Zero-dependency FastAPI + WebSockets local web interface. Auto-generates command parameter forms, auto-runs dashboard diagnostics, streams 60 FPS real-time serial traffic, and provides dark/light themes and compact mode.
-- **GUI Launch Mode**: Double-clicking `omni-uart-windows-amd64.exe` (or running zero CLI arguments) automatically starts the Web UI server and opens the browser to `http://localhost:8000`.
+- **Native Desktop GUI**: Built-in Tkinter desktop workbench requiring zero external dependencies. Supports classic Win32 desktop and modern themes, live register controls, paired `[Get]` / `[Set]` buttons, and a live 16x2 segmented green matrix LCD display widget.
+- **Background Concurrency**: `omniuart.desktop` interacts with serial transports via `omniuart.core.background.BackgroundDevice`, running an isolated `asyncio` event loop in a dedicated worker thread. It serializes exchanges, dispatches safe polling, and drains completed responses to the Tk GUI thread via safe queues.
+- **GUI Launch Mode**: Double-clicking `omni-uart-windows-amd64.exe` (or launching with no arguments) automatically opens the graphical workbench.
 
-The native desktop GUI (`omniuart.desktop`) never touches a transport itself. `omniuart.core.background.BackgroundDevice` runs one asyncio loop in a worker thread and exposes connect, disconnect, send, raw send and script execution as futures built on `DeviceSession` and `ScriptRunner`. It serialises operations, so a poll cannot interleave with a script. Results return to the Tk thread through a queue drained by `after`. `is_safe_poll_command` defines which commands the plotter may poll.
+### 3.7 Device UI & Dynamic Dashboard Generator (`omniuart.dashboard_generator`)
+- **Semantic Tag Compilation**: Parses protocol annotations (`tab:<name>`, `fieldset:<name>`, `action:get`, `action:set`, `widget:lcd_matrix`) into structured `DeviceUISpec` models.
+- **Standalone Win32 Dashboards**: Compiles complete single-page interactive HTML control panels (e.g. for G460 smart device configuration) with responsive tabs, paired register buttons, and live matrix displays.
+
+### 3.8 AsyncAPI 2.6.0 Exporter (`omniuart.core.asyncapi_exporter`)
+- **Event Mesh Interoperability**: Translates internal `ProtocolSpec` definitions into AsyncAPI 2.6.0 documents.
+- **Bidirectional Channels & Strict Schemas**: Publishes request and subscribe response channels for every command and telemetry stream, enforcing strict JSON Schema draft-07 integer, float, string, and enum validation.
 
 ---
 
@@ -179,5 +187,5 @@ To prevent blocking the `asyncio` event loop during hardware serial reads or wri
 | **Portability** | PyInstaller single-file executable packaging; pure-Python core without native compilation dependencies. | Runs on clean Windows and Linux environments without Python installed. |
 | **Robustness** | Streaming sync hunt with sliding FIFO; garbage byte discarding; strict CRC validation. | Recovers framing sync within 1 frame when preceded by random noise bytes. |
 | **Extensibility** | Declarative JSON/YAML specifications; dynamic catalogue auto-discovery; AsyncAPI 2.6.0 exporter. | Adding a new protocol definition requires zero code changes to the underlying Python codebase. |
-| **Testability** | Built-in Virtual MCU Transport with mock responses, VirtualSerialPair, and fault injection. | Full test suite (64 tests) executable in headless CI environments without physical hardware. |
+| **Testability** | Built-in Virtual MCU Transport with mock responses, VirtualSerialPair, and fault injection. | Full test suite (1,050+ tests) executable in headless CI environments without physical hardware. |
 | **Low Latency** | Async I/O with `asyncio.to_thread`, lookup-table CRC calculation, and 60 FPS WebSockets. | Sub-millisecond packet processing overhead in user space. |

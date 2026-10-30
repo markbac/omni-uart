@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from omniuart.core.catalog import CatalogManager
 from omniuart.core.session import SerialSession, SessionState, ExchangeStatus, CommandBlockedError
 from omniuart.core.transport import AsyncTransport

@@ -1,4 +1,3 @@
-import pytest
 from omniuart.core.catalog import CatalogManager
 from omniuart.importers_exporters import export_csv_protocol, import_csv_protocol
 

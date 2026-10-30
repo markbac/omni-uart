@@ -36,6 +36,10 @@ def render(schema: Dict[str, Any]) -> str:
 
 
 def default_schema_dir() -> Path:
+    from omniuart.utils.resources import get_resource_path
+    schema_dir = get_resource_path("schemas")
+    if schema_dir.is_dir():
+        return schema_dir
     return Path(__file__).resolve().parents[2] / "schemas"
 
 
