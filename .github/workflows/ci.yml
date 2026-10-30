@@ -114,7 +114,7 @@ jobs:
           from omniuart.core.catalog import CatalogManager
           from omniuart.core.asyncapi_exporter import export_asyncapi_dict
           catalog = CatalogManager()
-          sample_protocols = ['binary_sensor_node.yaml', 'simple_iot_telemetry.yaml', 'custom_crc_device.yaml']
+          sample_protocols = ['binary_sensor_node.yaml', 'ascii_device.yaml', 'custom_crc_device.yaml']
           for p_name in sample_protocols:
               spec = catalog.get_protocol(p_name, first=True)
               assert spec is not None, f'Protocol {p_name} not found'
