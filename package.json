@@ -1,6 +1,0 @@
-{
-  "devDependencies": {
-    "@asyncapi/cli": "^6.2.0",
-    "@asyncapi/html-template": "^3.5.6"
-  }
-}

@@ -154,7 +154,7 @@ flowchart TD
 | **File Format Parsers** | `pyyaml`, `json` | Ingestion and serialization of protocol definitions and test automation scripts. |
 | **Command Line Interface** | `typer`, `rich` | Rich terminal formatting, colorized packet tables, progress bars, and CLI commands. |
 | **Web UI Server** | `fastapi`, `uvicorn`, `starlette` | Embedded lightweight ASGI web server hosting WebSockets streaming & dynamic dashboard. |
-| **Documentation & AsyncAPI** | `@asyncapi/cli`, `mkdocs` | Official npm AsyncAPI HTML spec generator and MkDocs Material documentation hub. |
+| **Documentation & AsyncAPI** | `mkdocs`, optional `@asyncapi/cli` | MkDocs Material documentation hub. AsyncAPI HTML pages use the built-in renderer; with `use_external_tools` the official AsyncAPI CLI is run on demand through `npx`. |
 | **Executable Packaging** | `pyinstaller` | Single-file standalone executable compilation for Windows (`.exe`) and Linux. |
 
 ### 4.2 Serial Communications Handling Architecture
