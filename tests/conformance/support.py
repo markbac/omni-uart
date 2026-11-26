@@ -40,7 +40,8 @@ def sample_value(f: FieldSpec, which: str = "default") -> Any:
 
 
 def sample_params(cmd: CommandSpec, which: str = "default") -> Dict[str, Any]:
-    return {p.name: sample_value(p, which) for p in cmd.parameters}
+    """A value for every parameter the caller supplies; ``fixed`` constants are left to the codec."""
+    return {p.name: sample_value(p, which) for p in cmd.parameters if p.fixed is None}
 
 
 @contextmanager

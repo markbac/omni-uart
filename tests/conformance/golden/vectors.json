@@ -488,6 +488,36 @@
    "request": "30 2C 30 2C 62 27 5C 78 30 31 27 0D 0A"
   }
  },
+ "large_item_device.yaml": {
+  "ping": {
+   "decoded": {},
+   "params": {},
+   "request": "A5 5A 00 00 01 B0 00",
+   "response": "A5 5A 04 00 81 00 00 00 00 62 DE"
+  },
+  "read_certificate": {
+   "decoded": {
+    "item_id": 1,
+    "request": "01"
+   },
+   "params": {
+    "request": "01"
+   },
+   "request": "A5 5A 02 00 31 01 01 CC 5F",
+   "response": "A5 5A 00 00 B1 B1 B4"
+  },
+  "write_certificate": {
+   "decoded": {
+    "item_id": 1,
+    "packet": "01"
+   },
+   "params": {
+    "packet": "01"
+   },
+   "request": "A5 5A 02 00 30 01 01 9D 9F",
+   "response": "A5 5A 03 00 B0 00 00 00 26 E8"
+  }
+ },
  "lin-uart-interface.json": {
   "WheelSpeedFrame": {
    "decoded": {

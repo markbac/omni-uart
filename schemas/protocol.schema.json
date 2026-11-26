@@ -707,6 +707,240 @@
       "title": "LengthSpec",
       "type": "object"
     },
+    "MultipartReadSpec": {
+      "additionalProperties": false,
+      "description": "Device-to-host: a read command answered with one packet body per reply in ``packet_field``.\n\nThe host sends the read command once per packet. When ``packet_param`` is set, that request\nparameter carries a request body built from ``request_first`` / ``request_next`` (for example\nthe packet number being asked for).",
+      "properties": {
+        "first": {
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "First",
+          "type": "array"
+        },
+        "next": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next"
+        },
+        "commands": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Commands",
+          "type": "array"
+        },
+        "packet_field": {
+          "default": "packet",
+          "title": "Packet Field",
+          "type": "string"
+        },
+        "packet_param": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Packet Param"
+        },
+        "request_first": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request First"
+        },
+        "request_next": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Next"
+        }
+      },
+      "required": [
+        "first",
+        "commands"
+      ],
+      "title": "MultipartReadSpec",
+      "type": "object"
+    },
+    "MultipartSpec": {
+      "additionalProperties": false,
+      "description": "Items larger than one frame, split across several frames of the same command (#347).\n\nThe packet layouts are ordinary field lists. A field's meaning comes from ``roles`` (role ->\nfield name); a field named like a role takes that role without being listed. Fields with no role\nare sent with their ``fixed`` or ``default`` value (an obsolete field sent as zero) and ignored\nwhen received.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "value_param": {
+          "default": "data",
+          "title": "Value Param",
+          "type": "string"
+        },
+        "max_data_per_packet": {
+          "exclusiveMinimum": 0,
+          "title": "Max Data Per Packet",
+          "type": "integer"
+        },
+        "first_packet_number": {
+          "default": 0,
+          "title": "First Packet Number",
+          "type": "integer"
+        },
+        "retries": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Retries",
+          "type": "integer"
+        },
+        "roles": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Roles",
+          "type": "object"
+        },
+        "message_crc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntegritySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "packet_crc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntegritySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "write": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MultipartWriteSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "read": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MultipartReadSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "max_data_per_packet"
+      ],
+      "title": "MultipartSpec",
+      "type": "object"
+    },
+    "MultipartWriteSpec": {
+      "additionalProperties": false,
+      "description": "Host-to-device: a write command whose ``packet_param`` carries one packet body per frame.\n\nEvery packet is a separate request; its successful response acknowledges it. A NAK (a declared\nerror reply) or a failed response stops the write with an error.",
+      "properties": {
+        "first": {
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "First",
+          "type": "array"
+        },
+        "next": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next"
+        },
+        "commands": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Commands",
+          "type": "array"
+        },
+        "packet_param": {
+          "default": "packet",
+          "title": "Packet Param",
+          "type": "string"
+        }
+      },
+      "required": [
+        "first",
+        "commands"
+      ],
+      "title": "MultipartWriteSpec",
+      "type": "object"
+    },
     "ProtocolMeta": {
       "additionalProperties": false,
       "description": "Metadata block for a protocol definition.",
@@ -960,6 +1194,13 @@
         "type": "string"
       },
       "title": "Correlate",
+      "type": "array"
+    },
+    "multipart": {
+      "items": {
+        "$ref": "#/$defs/MultipartSpec"
+      },
+      "title": "Multipart",
       "type": "array"
     }
   },

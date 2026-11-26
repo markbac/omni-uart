@@ -20,7 +20,7 @@ from omniuart.core.engineer_view import EngineerProtocolView, ProtocolExchangeDe
 from omniuart.core.models import ProtocolSpec
 from omniuart.core.session import Exchange
 from omniuart.core.transfer import TransferProgress, TransferState
-from omniuart.core.transfer_session import SessionTransfer, TransferOutcome
+from omniuart.core.transfer_session import SessionTransfer, TransferOutcome  # noqa: F401 - re-exported types
 
 MAX_EXCHANGES = 200
 _JOB_IDS = itertools.count(1)
@@ -33,10 +33,11 @@ class TransferJob:
     job_id: str
     widget_ref: str
     file_name: str
-    transfer: SessionTransfer
-    task: Optional["asyncio.Task[TransferOutcome]"] = None
-    outcome: Optional[TransferOutcome] = None
+    transfer: Any  # SessionTransfer, or MultipartTransfer for a multipart item (#347)
+    task: Optional["asyncio.Task[Any]"] = None
+    outcome: Optional[Any] = None  # TransferOutcome or MultipartOutcome
     started_at: float = field(default_factory=time.time)
+    kind: str = "transfer"  # "transfer", or "multipart_write" / "multipart_read"
 
     def to_dict(self) -> Dict[str, Any]:
         progress: TransferProgress = self.outcome.progress if self.outcome else self.transfer.progress
@@ -50,7 +51,20 @@ class TransferJob:
             "state": (self.outcome.state if done and self.outcome else progress.state).value,
             "error": self.outcome.error if self.outcome else None,
             "progress": progress.to_dict(),
+            "kind": self.kind,
+            **self._multipart_extra(),
         }
+
+    def _multipart_extra(self) -> Dict[str, Any]:
+        if not self.kind.startswith("multipart"):
+            return {}
+        extra: Dict[str, Any] = {"command": self.widget_ref, "packets": getattr(self.outcome, "packets", 0)}
+        if self.kind == "multipart_read" and self.outcome is not None and getattr(self.outcome, "ok", False):
+            import base64
+
+            extra["data_base64"] = base64.b64encode(self.outcome.data).decode("ascii")
+            extra["data_length"] = len(self.outcome.data)
+        return extra
 
 
 class DeviceConsole:
@@ -94,8 +108,8 @@ class DeviceConsole:
             "transfers": [job.to_dict() for job in self.transfers.values()],
         }
 
-    def add_transfer(self, widget_ref: str, file_name: str, transfer: SessionTransfer) -> TransferJob:
-        job = TransferJob(job_id=f"t{next(_JOB_IDS)}", widget_ref=widget_ref, file_name=file_name, transfer=transfer)
+    def add_transfer(self, widget_ref: str, file_name: str, transfer: Any, kind: str = "transfer") -> TransferJob:
+        job = TransferJob(job_id=f"t{next(_JOB_IDS)}", widget_ref=widget_ref, file_name=file_name, transfer=transfer, kind=kind)
         self.transfers[job.job_id] = job
         return job
 

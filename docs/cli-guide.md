@@ -39,6 +39,19 @@ omniuart send binary_sensor_node get_readings --port COM3 --baudrate 115200 --pa
 omniuart send binary_sensor_node get_readings --virtual --record capture.jsonl
 ```
 
+A command that uses a multipart definition (see the protocol schema specification, section 6.2) carries an item larger than one frame. Give the whole value as hex, or as `@file` to read it from a file, and save a read item with `--output`:
+
+```bash
+# Write a certificate packet by packet; every packet must be acknowledged
+omniuart send large_item_device write_certificate --virtual --param data=@device-cert.der
+
+# Read it back packet by packet and save the whole value
+omniuart send large_item_device read_certificate --virtual --output device-cert.der
+
+# Show the first packet and the number of packets without sending anything
+omniuart send large_item_device write_certificate --dry-run --param data=@device-cert.der
+```
+
 ---
 
 ## 3. Automated Test Script Execution (`run`)

@@ -18,7 +18,7 @@ from omniuart.core.runner import StepStatus
 from omniuart.core.session import ExchangeStatus
 from omniuart.ui.connection import VIRTUAL_PORT, ConnectionManager, NotConnectedError
 from omniuart.ui.device_console import ConsoleRegistry
-from omniuart.ui.models import CommandRequest, SerialConnectRequest, TransferRequest
+from omniuart.ui.models import CommandRequest, MultipartRequest, SerialConnectRequest, TransferRequest
 from omniuart.ui.views import get_index_html
 from omniuart.services import AutomationService, CatalogService, CommandExecutionService, ErrorKind, ServiceError
 
@@ -567,6 +567,69 @@ async def start_transfer(identifier: str, req: TransferRequest) -> Dict[str, Any
             from omniuart.core.transfer_session import TransferOutcome
 
             job.outcome = TransferOutcome(transfer.manager.state, False, transfer.manager.progress, str(exc))
+        await _publish(temp.events)
+        return job.outcome
+
+    job.task = asyncio.create_task(run())
+    return job.to_dict()
+
+
+@router.post("/api/device/{identifier}/multipart")
+async def start_multipart(identifier: str, req: MultipartRequest) -> Dict[str, Any]:
+    """Write (Set) or read (Get) an item larger than one frame; poll ``GET .../transfer/{job_id}`` for progress.
+
+    A finished read returns the value in ``data_base64``. 404 unknown command, 422 not a multipart
+    command or bad value, 403 read-only link for a write, 428 not confirmed, 409 not connected or busy.
+    """
+    import asyncio
+    import base64
+    import binascii
+
+    from omniuart.core.multipart import MultipartOutcome, MultipartTransfer
+
+    spec, cmd = _resolve(identifier, req.command)
+    found = spec.multipart_for(cmd)
+    if found is None:
+        raise HTTPException(status_code=422, detail=f"'{cmd.name}' does not use a multipart definition")
+    mp, direction = found
+    params = dict(req.params)
+    data: Optional[bytes] = None
+    if direction == "write":
+        if not req.data_base64:
+            raise HTTPException(status_code=422, detail="a multipart write needs data_base64")
+        try:
+            data = base64.b64decode(req.data_base64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="data_base64 is not valid base64") from exc
+        if not data:
+            raise HTTPException(status_code=422, detail="the value to write is empty")
+        if connection.read_only and not cmd.is_read_only:
+            raise HTTPException(status_code=403, detail=f"read-only connection: '{cmd.name}' changes the device")
+        if cmd.needs_confirmation and not req.confirm:
+            raise HTTPException(status_code=428, detail=f"'{cmd.name}' is {cmd.safety.value}: resend with \"confirm\": true")
+    if not connection.connected:
+        raise HTTPException(status_code=409, detail="No serial connection. Connect a port first (POST /api/serial/connect).")
+    console = consoles.get(spec)
+    if console.active_transfer() is not None:
+        raise HTTPException(status_code=409, detail="a transfer is already running for this device")
+
+    transfer = MultipartTransfer(spec, cmd)
+    job = console.add_transfer(cmd.name, f"{mp.name} ({direction})", transfer, kind=f"multipart_{direction}")
+
+    async def run() -> Any:
+        temp = SessionRecorder()
+        try:
+            async with connection.use(spec, temp) as session:
+                if direction == "write":
+                    outcome = await transfer.write(session, params, value=data)
+                else:
+                    outcome = await transfer.read(session, params)
+            for exchange in outcome.exchanges:
+                console.record(exchange)
+            job.outcome = outcome
+        except Exception as exc:  # noqa: BLE001 - the link failed or the parameters are invalid; report it on the job
+            transfer.manager.abort(f"multipart {direction} failed: {exc}")
+            job.outcome = MultipartOutcome(direction, transfer.manager.state, transfer.manager.progress, error=str(exc), status="transport_error")
         await _publish(temp.events)
         return job.outcome
 

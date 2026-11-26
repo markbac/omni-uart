@@ -1,0 +1,107 @@
+schema_version: "1.0.0"
+metadata:
+  name: "LargeItemDevice"
+  version: "1.0.0"
+  description: "Neutral example of multipart messages: a certificate item larger than one frame is written and read as a sequence of packets"
+  author: "OmniUART"
+
+serial_config:
+  baudrate: 115200
+  timeout_ms: 1000
+
+framing:
+  type: "binary"
+  header: [0xA5, 0x5A]
+  length:
+    type: "uint16"
+    endian: "little"
+    includes: "payload_only"
+  command_id:
+    type: "uint8"
+  integrity:
+    algorithm: "crc16_modbus"
+
+error_replies:
+  - id: 0x7F
+    name: "NAK"
+    description: "the device refused the packet (out of order, bad CRC or wrong length)"
+
+commands:
+  - name: "ping"
+    id: 0x01
+    safety: "read_only"
+    tags: ["dashboard"]
+    response:
+      id: 0x81
+      fields:
+        - { name: "uptime_s", type: "uint32", unit: "s" }
+
+  - name: "write_certificate"
+    id: 0x30
+    description: "Write the device certificate (multipart: one packet per frame, each acknowledged)"
+    safety: "idempotent"
+    tags: ["items"]
+    parameters:
+      - { name: "item_id", type: "uint8", fixed: 0x01 }
+      - { name: "packet", type: "bytes" }
+    response:
+      id: 0xB0
+      fields:
+        - { name: "packet_number", type: "uint16" }
+        - { name: "status", type: "uint8" }
+
+  - name: "read_certificate"
+    id: 0x31
+    description: "Read the device certificate (multipart: the host asks for each packet in turn)"
+    safety: "read_only"
+    tags: ["items"]
+    parameters:
+      - { name: "item_id", type: "uint8", fixed: 0x01 }
+      - { name: "request", type: "bytes" }
+    response:
+      id: 0xB1
+      fields:
+        - { name: "packet", type: "bytes" }
+
+multipart:
+  - name: "certificate"
+    description: "Items up to 64 KiB, 32 data bytes per packet"
+    value_param: "data"
+    max_data_per_packet: 32
+    first_packet_number: 0
+    message_crc: { algorithm: "crc16_ccitt_false" }
+    packet_crc: { algorithm: "crc16_ccitt_false" }
+    write:
+      commands: ["write_certificate"]
+      packet_param: "packet"
+      first:
+        - { name: "packet_number", type: "uint16" }
+        - { name: "message_id", type: "uint16" }
+        - { name: "total_length", type: "uint32" }
+        - { name: "message_crc", type: "uint16" }
+        - { name: "reserved", type: "uint8", fixed: 0 }  # obsolete: always sent as zero, ignored
+        - { name: "data", type: "bytes" }
+      next:
+        - { name: "packet_number", type: "uint16" }
+        - { name: "message_id", type: "uint16" }
+        - { name: "data", type: "bytes" }
+    read:
+      commands: ["read_certificate"]
+      packet_param: "request"
+      packet_field: "packet"
+      request_first:
+        - { name: "packet_number", type: "uint16" }
+      first:
+        - { name: "packet_number", type: "uint16" }
+        - { name: "packet_count", type: "uint16" }
+        - { name: "message_id", type: "uint16" }
+        - { name: "total_length", type: "uint32" }
+        - { name: "data_length", type: "uint8" }
+        - { name: "data", type: "bytes", length_ref: "data_length" }
+        - { name: "packet_crc", type: "uint16" }
+      next:
+        - { name: "packet_number", type: "uint16" }
+        - { name: "message_id", type: "uint16" }
+        - { name: "data_length", type: "uint8" }
+        - { name: "data", type: "bytes", length_ref: "data_length" }
+        - { name: "running_crc", type: "uint16" }

@@ -53,7 +53,7 @@ def test_boundary_values_encode_and_out_of_range_is_refused(name, spec, cmd) -> 
     codec = FrameCodec(spec)
     for p in cmd.parameters:
         numeric = p.type.value.startswith(("uint", "int", "float")) and p.options is None
-        if not numeric:
+        if not numeric or p.fixed is not None:  # a fixed constant is never supplied by the caller
             continue
         for which in ("min", "max"):
             params = {**sample_params(cmd), p.name: sample_value(p, which)}

@@ -403,6 +403,70 @@ telemetry:
 ### 6.1 Kit protocol import
 When a `uart-interface-schema-kit` protocol is loaded, its `commands` become commands and its `responses` become telemetry (device-initiated) messages. The kit does not say which request a response answers, so no response is attached to a command. A protocol with no `commands` (NMEA 0183, a COBS sensor stream, the M-Bus long frame) simply has an empty command list; the adapter never invents one. The message id is the constant of the field marked `role: discriminator`, or else the first constant field. It is converted to an integer when it is an integer or a hex or decimal string, and otherwise kept as text (an AT command line, an NMEA sentence id). A message without a discriminator constant uses its position as id (commands, with a warning) or its name (responses). Other constant fields remain ordinary fields whose default is the constant. On delimited framing the discriminator is not a parameter, because it is the message text.
 
+### 6.2 Multipart messages (items larger than one frame)
+
+Some request/response protocols carry an item that does not fit in one frame, such as a certificate, a long string, a log block or a firmware image block. They split it across consecutive frames of the same command. The top-level `multipart` list describes such items declaratively, so they can be defined, sent, received, simulated and dissected like any other command.
+
+Each entry has:
+
+- `name`, `description`: identify the scheme.
+- `value_param`: the name of the whole value in `send`/`run` parameters and the web API. **Default: `data`**.
+- `max_data_per_packet`: the most data bytes in one packet. It can be smaller than the frame limit, for compatibility with older devices.
+- `first_packet_number`: the number of the first packet. **Default: `0`**.
+- `retries`: how often a packet that was not acknowledged (a timeout or an invalid reply) is sent again. A NAK is never retried. **Default: `0`**.
+- `message_crc`: the CRC parameters of the whole-message CRC and of the running CRC (the same keys as `framing.integrity`, without `covers`).
+- `packet_crc`: the CRC parameters of the per-packet CRC.
+- `roles`: maps a role to the field that carries it, when the field has another name (see the following table).
+- `write`: host to device. `commands` lists the write commands, and `packet_param` names the `bytes` parameter that carries one packet body (default `packet`). `first` is the layout of the first packet and `next` the layout of every following packet (default: the same as `first`). Each packet is a separate request, and its successful response acknowledges it.
+- `read`: device to host. `commands` lists the read commands, and `packet_field` names the `bytes` response field that carries one packet body (default `packet`). `first` and `next` are the reply layouts. The host sends the read command once per packet. When `packet_param` is set, that request parameter carries a body built from `request_first` / `request_next`, for example the number of the packet being asked for. The first reply must carry the total length.
+
+The layouts are ordinary field lists (section 3.5), so lengths, `length_ref` and endianness work as in any payload. A field takes a role when it is named after the role or is mapped to it in `roles`:
+
+| Role | Sent by the sender | Checked by the receiver |
+|---|---|---|
+| `packet_number` | `first_packet_number` + packet index | must be the next number: a gap or a repeat is an error |
+| `packet_count` | the number of packets | the same in every packet; the message ends after this many |
+| `message_id` | an id chosen by the host (or given as a parameter) | the same in every packet |
+| `total_length` | the length of the whole value | the same in every packet; the data must add up to it |
+| `data_length` | the length of this packet's data | must equal the data section |
+| `message_crc` | CRC of the whole value (`message_crc` parameters) | checked when the message is complete |
+| `packet_crc` | CRC of this packet's data (`packet_crc` parameters) | checked for each packet |
+| `running_crc` | CRC of all data so far (`message_crc` parameters) | checked for each packet |
+| `data` | this packet's data section (`bytes`) | appended to the value |
+
+A field with no role (an obsolete field, for example) is sent with its `fixed` or `default` value, or zero, and ignored when received.
+
+```yaml
+multipart:
+  - name: "certificate"
+    max_data_per_packet: 32
+    message_crc: { algorithm: "crc16_ccitt_false" }
+    packet_crc: { algorithm: "crc16_ccitt_false" }
+    write:
+      commands: ["write_certificate"]
+      first:
+        - { name: "packet_number", type: "uint16" }
+        - { name: "message_id", type: "uint16" }
+        - { name: "total_length", type: "uint32" }
+        - { name: "message_crc", type: "uint16" }
+        - { name: "reserved", type: "uint8", fixed: 0 }  # obsolete, sent as zero
+        - { name: "data", type: "bytes" }
+      next:
+        - { name: "packet_number", type: "uint16" }
+        - { name: "message_id", type: "uint16" }
+        - { name: "data", type: "bytes" }
+```
+[[CAPTION:Figure]] A multipart write whose first packet carries a header (from `examples/protocols/large_item_device.yaml`, which also defines the matching read).
+
+A data item that shares a command id with other items is normally its own command with a `fixed` item id parameter (section 3.5), so `commands` also selects items. The simulated device identifies an item by the command's other parameters, so a read with the same item id returns what the write stored.
+
+Behaviour:
+
+- `send` and `run` given the whole value under `value_param` split it and send it packet by packet. A read command without an explicit request packet is read packet by packet. The result is one exchange whose fields are `packets`, `total_length` and, for a read, the value (hex) under `value_param`.
+- Any gap, out-of-order packet, packet count, message id or length mismatch, bad CRC or NAK ends the transfer at once with a message that names the packet. It is reported as `invalid_response` or `device_error`, not as a timeout.
+- Progress, cancel and history use the generic transfer manager, the same as file transfers.
+- The dissector shows the packet field's header fields (`packet.packet_number`, `packet.message_id`, and so on) and says whether the first or following layout applies.
+
 ## 7. AsyncAPI 2.6.0 Specification Generation & Tooling
 
 OmniUART natively converts all protocol definitions into formal **AsyncAPI 2.6.0 Specification** documents. The `omniuart.core.asyncapi_exporter` module maps serial hardware characteristics and protocol command schemas directly into event-driven AsyncAPI primitives:

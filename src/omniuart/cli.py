@@ -56,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     send_parser.add_argument("--read-only", action="store_true", help="Refuse any command not marked safety: read_only")
     send_parser.add_argument("--yes", "-y", action="store_true", help="Confirm sending a destructive command")
     send_parser.add_argument("--record", help="Write every transmitted and received frame to this .jsonl file")
+    send_parser.add_argument("--output", "-o", help="Multipart read: write the whole item value to this file")
 
     # 4. run (Run Automation Script)
     run_parser = subparsers.add_parser("run", help="Execute an automated sequence test script")
@@ -283,7 +284,13 @@ def _send_command(spec: ProtocolSpec, command: str, params: Dict[str, Any], args
         else:
             print(f"Error: {exc}", file=sys.stderr)
         return _EXIT_CODES[exc.kind]
-    print(f"  Request   : {sent.request.hex(' ').upper()} ({len(sent.request)} bytes)")
+    found = spec.multipart_for(cmd)
+    if found is not None and spec.multipart and _is_multipart_send(spec, cmd, params):
+        what = f"{sent.packets} packet(s)" if sent.packets else "packet count from the first reply"
+        print(f"  Multipart : {found[0].name} ({found[1]}, {what})")
+        print(f"  Request   : {sent.request.hex(' ').upper()} ({len(sent.request)} bytes, first packet)")
+    else:
+        print(f"  Request   : {sent.request.hex(' ').upper()} ({len(sent.request)} bytes)")
 
     exchange = sent.exchange
     if exchange is None:
@@ -292,7 +299,9 @@ def _send_command(spec: ProtocolSpec, command: str, params: Dict[str, Any], args
     if exchange.status is ExchangeStatus.TRANSPORT_ERROR:
         print(f"  Status    : TRANSPORT ERROR - {exchange.error}", file=sys.stderr)
         return 3
-    if exchange.response_bytes:
+    if exchange.multipart is not None:
+        print(f"  Response  : {len(exchange.response_bytes)} bytes in {len(exchange.frames)} frame(s), {exchange.latency_ms:.1f} ms")
+    elif exchange.response_bytes:
         print(f"  Response  : {exchange.response_bytes.hex(' ').upper()} ({len(exchange.response_bytes)} bytes, {exchange.latency_ms:.1f} ms)")
     if not exchange.ok:
         print(f"  Status    : FAILED - {exchange.error}", file=sys.stderr)
@@ -300,10 +309,41 @@ def _send_command(spec: ProtocolSpec, command: str, params: Dict[str, Any], args
     if exchange.response is None:
         print("  Status    : SENT (command defines no response)")
         return 0
+    data = exchange.multipart.get("data") if exchange.multipart else None
+    if getattr(args, "output", None):
+        if data is None:
+            print("Error: --output needs a multipart read command; nothing was written.", file=sys.stderr)
+            return 2
+        Path(args.output).write_bytes(data)
+        print(f"  Saved     : {len(data)} bytes to {args.output}")
     for name, value in exchange.fields.items():
-        print(f"    {name} = {value}")
+        text = str(value)
+        print(f"    {name} = {text if len(text) <= 96 else text[:93] + '...'}")
     print("  Status    : OK")
     return 0
+
+
+def _is_multipart_send(spec: ProtocolSpec, cmd: Any, params: Dict[str, Any]) -> bool:
+    from omniuart.core.multipart import multipart_request
+
+    return multipart_request(spec, cmd, params) is not None
+
+
+def _load_multipart_value(spec: ProtocolSpec, command: str, params: Dict[str, Any]) -> Optional[int]:
+    """Replace a multipart value written ``@file`` with the file's bytes; returns an exit code on error."""
+    cmd = spec.get_command(command) or spec.get_command_by_id(command)
+    found = spec.multipart_for(cmd) if cmd is not None else None
+    if found is None:
+        return None
+    value = params.get(found[0].value_param)
+    if isinstance(value, str) and value.startswith("@"):
+        path = Path(value[1:])
+        try:
+            params[found[0].value_param] = path.read_bytes()
+        except OSError as exc:
+            print(f"Error: cannot read '{path}': {exc}", file=sys.stderr)
+            return 2
+    return None
 
 
 def _run_script(args: argparse.Namespace) -> int:
@@ -400,6 +440,9 @@ def _run(args: argparse.Namespace, catalog: CatalogManager) -> int:
                 return 2
             key, value = item.split("=", 1)
             params_dict[key.strip()] = value.strip()
+        loaded = _load_multipart_value(spec, args.command, params_dict)
+        if loaded is not None:
+            return loaded
         return _send_command(spec, args.command, params_dict, args)
 
     elif args.subcommand == "run":
