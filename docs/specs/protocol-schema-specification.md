@@ -405,7 +405,7 @@ When a `uart-interface-schema-kit` protocol is loaded, its `commands` become com
 
 ### 6.2 Multipart messages (items larger than one frame)
 
-Some request/response protocols carry an item that does not fit in one frame (a certificate, a long string, a log block, a firmware image block) by splitting it across several frames of the same command. The top-level `multipart` list describes such items declaratively, so they can be defined, sent, received, simulated and dissected like any other command.
+Some request/response protocols carry an item that does not fit in one frame, such as a certificate, a long string, a log block or a firmware image block. They split it across consecutive frames of the same command. The top-level `multipart` list describes such items declaratively, so they can be defined, sent, received, simulated and dissected like any other command.
 
 Each entry has:
 
