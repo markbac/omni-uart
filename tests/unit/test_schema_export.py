@@ -9,7 +9,7 @@ import pytest
 import yaml
 from jsonschema import Draft202012Validator
 
-from omniuart.schema_export import build_protocol_schema, build_script_schema, default_schema_dir, render
+from omniuart.schema_export import build_asyncapi_extension_schema, build_protocol_schema, build_script_schema, default_schema_dir, render
 
 ROOT = Path(__file__).resolve().parents[2]
 NATIVE_PROTOCOLS = ["ascii_device.yaml", "binary_sensor_node.yaml", "custom_crc_device.yaml", "smart_actuator.json"]
@@ -20,7 +20,7 @@ def load(path: Path):
     return yaml.safe_load(text) if path.suffix in (".yaml", ".yml") else json.loads(text)
 
 
-@pytest.mark.parametrize("name,builder", [("protocol.schema.json", build_protocol_schema), ("script.schema.json", build_script_schema)])
+@pytest.mark.parametrize("name,builder", [("protocol.schema.json", build_protocol_schema), ("script.schema.json", build_script_schema), ("x-omniuart.schema.json", build_asyncapi_extension_schema)])
 def test_committed_schema_matches_models(name, builder) -> None:
     committed = (default_schema_dir() / name).read_text(encoding="utf-8")
     assert committed == render(builder()), "run: python -m omniuart.schema_export"

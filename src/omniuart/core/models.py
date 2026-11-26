@@ -713,6 +713,9 @@ def load_protocol_text(text: str) -> ProtocolSpec:
     if isinstance(data, dict) and ("physicalLayer" in data or "commandResponseModel" in data or "integrityCheck" in data):
         from omniuart.core.kit_adapter import parse_kit_protocol
         return parse_kit_protocol(data, source_name=None)
+    if isinstance(data, dict) and "asyncapi" in data:
+        from omniuart.core.asyncapi_importer import load_asyncapi_protocol
+        return load_asyncapi_protocol(data, source_name=None)
     return ProtocolSpec.model_validate(data)
 
 
@@ -723,6 +726,10 @@ def load_protocol(source: Union[str, Path]) -> ProtocolSpec:
     if isinstance(data, dict) and ("physicalLayer" in data or "commandResponseModel" in data or "integrityCheck" in data):
         from omniuart.core.kit_adapter import parse_kit_protocol
         return parse_kit_protocol(data, source_name=source_name)
+    if isinstance(data, dict) and "asyncapi" in data:
+        # An AsyncAPI document with x-omniuart extensions is a protocol source too (#346).
+        from omniuart.core.asyncapi_importer import load_asyncapi_protocol
+        return load_asyncapi_protocol(data, source_name=source_name)
 
     return ProtocolSpec.model_validate(data)
 

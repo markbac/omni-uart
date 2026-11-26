@@ -183,8 +183,9 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--output", "-o", help="Output file path")
 
     # 19. import (Import Protocol)
-    import_parser = subparsers.add_parser("import", help="Import protocol from CSV tabular format")
-    import_parser.add_argument("file", help="Path to input CSV file")
+    import_parser = subparsers.add_parser("import", help="Import a protocol from CSV or from an AsyncAPI document with x-omniuart extensions")
+    import_parser.add_argument("source", help="'asyncapi' or 'csv' followed by the file, or just the file (CSV)")
+    import_parser.add_argument("file", nargs="?", help="Path to the input file when a format is given")
     import_parser.add_argument("--output", "-o", help="Output file path (.yaml or .json)")
 
     return parser
@@ -344,6 +345,59 @@ def _load_multipart_value(spec: ProtocolSpec, command: str, params: Dict[str, An
             print(f"Error: cannot read '{path}': {exc}", file=sys.stderr)
             return 2
     return None
+
+
+def _native_document(spec: ProtocolSpec) -> Dict[str, Any]:
+    """``spec`` as a native protocol document; enum option values keep their type (JSON mode makes keys text)."""
+    data = spec.model_dump(mode="json", exclude_defaults=True)
+    raw = spec.model_dump(exclude_defaults=True)
+
+    def repair(out: Any, src: Any) -> None:
+        if isinstance(out, dict) and isinstance(src, dict):
+            for key, value in out.items():
+                if key == "options" and isinstance(src.get(key), dict):
+                    out[key] = dict(src[key])
+                else:
+                    repair(value, src.get(key))
+        elif isinstance(out, list) and isinstance(src, list):
+            for a, b in zip(out, src, strict=False):
+                repair(a, b)
+
+    repair(data, raw)
+    data.setdefault("framing", {})["type"] = spec.framing.type.value
+    return data
+
+
+def _import_asyncapi(path: Path, text: str, output: Optional[str]) -> int:
+    """Import an AsyncAPI document; every error and anything not mapped exactly is listed (#346)."""
+    import yaml
+
+    from omniuart.core.asyncapi_importer import AsyncAPIImportError, import_asyncapi
+
+    try:
+        doc = yaml.safe_load(text) if path.suffix.lower() in (".yaml", ".yml") else json.loads(text)
+    except (yaml.YAMLError, json.JSONDecodeError) as exc:
+        print(f"Error: cannot parse '{path}': {exc}", file=sys.stderr)
+        return 2
+    try:
+        spec, report = import_asyncapi(doc, source_name=path.name)
+    except AsyncAPIImportError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        for warning in exc.report.warnings:
+            print(f"  warning: {warning}", file=sys.stderr)
+        return 2
+    print(f"Imported protocol '{spec.metadata.name}' ({len(spec.commands)} commands, {len(spec.telemetry)} telemetry messages)")
+    for warning in report.warnings:
+        print(f"  warning: {warning}")
+    data = _native_document(spec)
+    if output:
+        out = Path(output)
+        rendered = yaml.safe_dump(data, sort_keys=False, allow_unicode=True) if out.suffix.lower() in (".yaml", ".yml") else json.dumps(data, indent=2)
+        out.write_text(rendered, encoding="utf-8")
+        print(f"Saved imported protocol to {output}")
+    else:
+        print(yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
+    return 0
 
 
 def _run_script(args: argparse.Namespace) -> int:
@@ -713,11 +767,20 @@ def _run(args: argparse.Namespace, catalog: CatalogManager) -> int:
 
     elif args.subcommand == "import":
         from omniuart.importers_exporters import import_csv_protocol
-        in_file = Path(args.file)
+        if args.file is None:
+            fmt, path = "csv", args.source
+        elif args.source in ("csv", "asyncapi"):
+            fmt, path = args.source, args.file
+        else:
+            print(f"Error: unknown import format '{args.source}' (use asyncapi or csv).", file=sys.stderr)
+            return 2
+        in_file = Path(path)
         if not in_file.exists():
-            print(f"Error: File '{args.file}' not found.", file=sys.stderr)
+            print(f"Error: File '{path}' not found.", file=sys.stderr)
             return 1
         text = in_file.read_text(encoding="utf-8")
+        if fmt == "asyncapi":
+            return _import_asyncapi(in_file, text, args.output)
         spec, losses = import_csv_protocol(text)
         print(f"Imported protocol '{spec.metadata.name}' ({len(spec.commands)} commands)")
         if losses:

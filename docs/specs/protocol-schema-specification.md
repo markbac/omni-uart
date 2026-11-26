@@ -477,6 +477,7 @@ OmniUART natively converts all protocol definitions into formal **AsyncAPI 2.6.0
   - Outbound commands map to AsyncAPI channels `omniuart/cmd/{command_name}` with `publish` operations (Client -> MCU).
   - Inbound responses map to AsyncAPI channels `omniuart/resp/{command_name}` with `subscribe` operations (MCU -> Client).
 - **Message Schemas**: Parameter and response field types map to standard JSON Schema primitive types (`integer`, `number`, `string`, `boolean`) retaining range constraints (`minimum`, `maximum`) and unit metadata.
+- **Extensions**: `x-omniuart` on the document, each message and each payload property carries the framing, serial settings, message ids, command safety and every field attribute, so an exported document can be imported again (`omniuart import asyncapi <file>`) and is found by the catalogue as a protocol source. See the [AsyncAPI serial mapping](asyncapi-serial-mapping.md), section 5.
 
 ### 7.2 AsyncAPI HTML Compilation via Official Tooling
 Documentation builds leverage official `@asyncapi/cli` and `@asyncapi/html-template` npm packages to synthesize interactive HTML documentation pages alongside raw YAML specifications:

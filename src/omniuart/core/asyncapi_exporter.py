@@ -1,16 +1,87 @@
 """AsyncAPI Specification Exporter & Generator for OmniUART Protocols.
 
-Converts OmniUART ProtocolSpec instances into valid AsyncAPI 2.6.0 specification documents.
+Converts OmniUART ProtocolSpec instances into valid AsyncAPI 2.6.0 specification documents. The
+document carries ``x-omniuart`` extensions (on the document, each message and each payload property)
+with everything the wire format needs, so an exported document is a usable protocol source for
+:mod:`omniuart.core.asyncapi_importer` (#346).
 """
 
 from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict
+from typing import Any, Dict, List
 import yaml
 
-from omniuart.core.models import FieldSpec, ProtocolSpec
+from omniuart.core.models import CommandSpec, FieldSpec, ProtocolSpec, TelemetrySpec
+
+EXTENSION = "x-omniuart"
+EXTENSION_VERSION = "1.0"
+_TOP_NATIVE = {"metadata", "commands", "telemetry", "serial_config", "framing", "schema_version"}
+
+
+def field_extension(field: FieldSpec) -> Dict[str, Any]:
+    """Every wire attribute of a field except its name and nested fields (those are JSON Schema properties)."""
+    ext = field.model_dump(mode="json", exclude={"name", "nested_fields"}, exclude_defaults=True)
+    ext["type"] = field.type.value  # always explicit, even when it is a default
+    if field.options is not None:
+        # A list keeps integer option values integers in JSON, where object keys are always strings.
+        ext["options"] = [{"value": k, "label": v} for k, v in field.options.items()]
+    return ext
+
+
+def document_extension(spec: ProtocolSpec) -> Dict[str, Any]:
+    """The protocol-level settings AsyncAPI has no place for: serial link, framing, error replies and the rest."""
+    ext: Dict[str, Any] = {"version": EXTENSION_VERSION, "schema_version": spec.schema_version}
+    meta: Dict[str, Any] = {}
+    if spec.metadata.description is not None:
+        meta["description"] = spec.metadata.description
+    if spec.metadata.author is not None:
+        meta["author"] = spec.metadata.author
+    if meta:
+        ext["metadata"] = meta
+    ext["serial"] = spec.serial_config.model_dump(mode="json", exclude_defaults=True)
+    ext["serial"]["baudrate"] = spec.serial_config.baudrate
+    ext["framing"] = spec.framing.model_dump(mode="json", exclude_none=True)
+    for name in type(spec).model_fields:
+        if name in _TOP_NATIVE:
+            continue
+        value = getattr(spec, name)
+        if value:
+            ext[name] = spec.model_dump(mode="json", include={name}, exclude_defaults=True).get(name, value)
+    return ext
+
+
+def command_extension(cmd: CommandSpec) -> Dict[str, Any]:
+    ext: Dict[str, Any] = {"kind": "command", "name": cmd.name, "id": cmd.id, "safety": cmd.safety.value}
+    for key in ("safety_reason", "tags", "correlate"):
+        value = getattr(cmd, key)
+        if value:
+            ext[key] = value
+    return ext
+
+
+def response_extension(cmd: CommandSpec) -> Dict[str, Any]:
+    assert cmd.response is not None
+    ext: Dict[str, Any] = {"kind": "response", "command": cmd.name, "timeout_ms": cmd.response.timeout_ms}
+    if cmd.response.id is not None:
+        ext["id"] = cmd.response.id
+    if cmd.response.success_pattern is not None:
+        ext["success_pattern"] = cmd.response.success_pattern
+    if cmd.response.error_patterns:
+        ext["error_patterns"] = list(cmd.response.error_patterns)
+    return ext
+
+
+def telemetry_extension(tel: TelemetrySpec) -> Dict[str, Any]:
+    ext: Dict[str, Any] = {"kind": "telemetry", "name": tel.name, "id": tel.id}
+    if tel.tags:
+        ext["tags"] = list(tel.tags)
+    return ext
+
+
+def _properties(fields: List[FieldSpec]) -> Dict[str, Any]:
+    return {f.name: _map_field_schema(f) for f in fields}
 
 
 def _sanitise_name(name: str) -> str:
@@ -51,7 +122,15 @@ def _map_field_schema(field: FieldSpec) -> Dict[str, Any]:
         schema["x-scale"] = field.scale
     if field.options and "enum" not in schema:
         schema["enum"] = list(field.options.keys())
-
+    if field.nested_fields:
+        nested = {"type": "object", "properties": _properties(field.nested_fields)}
+        if field.is_array:
+            schema = {"type": "array", "items": nested}
+        else:
+            schema = nested
+        if field.unit:
+            schema["x-unit"] = field.unit
+    schema[EXTENSION] = field_extension(field)
     return schema
 
 
@@ -91,6 +170,7 @@ def export_asyncapi_dict(spec: ProtocolSpec) -> Dict[str, Any]:
                 },
             }
         },
+        EXTENSION: document_extension(spec),
         "channels": {},
         "components": {
             "messages": {},
@@ -106,7 +186,7 @@ def export_asyncapi_dict(spec: ProtocolSpec) -> Dict[str, Any]:
 
         # Publish operation (Client -> MCU)
         cmd_schema_properties: Dict[str, Any] = {
-            "command_id": {"type": "integer", "const": cmd.id, "description": f"Opcode ID for {cmd.name}"}
+            "command_id": {"type": "integer" if isinstance(cmd.id, int) else "string", "const": cmd.id, "description": f"Opcode ID for {cmd.name}", EXTENSION: {"role": "command_id"}}
         }
 
         if cmd.parameters:
@@ -126,7 +206,9 @@ def export_asyncapi_dict(spec: ProtocolSpec) -> Dict[str, Any]:
                 "message": {
                     "name": f"{safe_cmd_name}_Message",
                     "title": f"{cmd.name} Command",
+                    **({"description": cmd.description} if cmd.description else {}),
                     "payload": {"$ref": f"#/components/schemas/{safe_cmd_name}_Request"},
+                    EXTENSION: command_extension(cmd),
                 },
             }
         }
@@ -152,6 +234,7 @@ def export_asyncapi_dict(spec: ProtocolSpec) -> Dict[str, Any]:
                         "name": f"{safe_cmd_name}_Response_Message",
                         "title": f"{cmd.name} Response",
                         "payload": {"$ref": f"#/components/schemas/{safe_cmd_name}_Response"},
+                        EXTENSION: response_extension(cmd),
                     },
                 }
             }
@@ -180,7 +263,9 @@ def export_asyncapi_dict(spec: ProtocolSpec) -> Dict[str, Any]:
                     "message": {
                         "name": f"{safe_tel_name}_Telemetry_Message",
                         "title": f"{tel.name} Telemetry",
+                        **({"description": tel.description} if tel.description else {}),
                         "payload": {"$ref": f"#/components/schemas/{safe_tel_name}_Telemetry"},
+                        EXTENSION: telemetry_extension(tel),
                     },
                 }
             }
