@@ -59,6 +59,7 @@ class Exchange:
     error: Optional[str] = None
     frames: List[DecodedFrame] = field(default_factory=list)
     unsolicited: List[DecodedFrame] = field(default_factory=list)  # telemetry and responses that were not this command's answer
+    multipart: Optional[Dict[str, Any]] = None  # set when the exchange was a multipart write or read (#347)
 
     @property
     def ok(self) -> bool:
@@ -177,13 +178,29 @@ class SerialSession:
         retries: int = 0,
         matcher: Optional[ResponseMatcher] = None,
         force_retry: bool = False,
+        multipart: bool = True,
+        on_progress: Optional[Callable[[Any], None]] = None,
     ) -> Exchange:
         """Transmit ``command`` and wait for its response, optionally retrying on failure.
 
         Invalid parameters raise :class:`CodecError`, and a non-``read_only`` command in a read-only session raises :class:`CommandBlockedError`, before anything is written. Failures on the
         link or in the response are reported through the returned :class:`Exchange` instead.
+
+        A command that uses a multipart definition is sent as a sequence of packets (a write given
+        the whole value, or a read) and summarised as one exchange; ``multipart=False`` sends one
+        frame exactly as given.
         """
         cmd = self.resolve(command)
+        if multipart and self.spec.multipart:
+            from omniuart.core.multipart import multipart_request
+
+            found = multipart_request(self.spec, cmd, params)
+            if found is not None:
+                if self.read_only and not cmd.is_read_only:
+                    raise CommandBlockedError(
+                        f"read-only session: '{cmd.name}' is {cmd.safety.value}, only read_only commands may be sent"
+                    )
+                return await self.transfer_multipart(cmd, params, on_progress=on_progress)
         is_safe_to_retry = force_retry or cmd.is_read_only or (cmd.safety == CommandSafety.IDEMPOTENT)
         effective_retries = retries if is_safe_to_retry else 0
         attempts = max(1, effective_retries + 1)
@@ -194,6 +211,28 @@ class SerialSession:
             if exchange.ok:
                 break
         return last_exchange  # type: ignore[return-value]
+
+    async def transfer_multipart(
+        self,
+        command: Union[str, CommandSpec],
+        params: Optional[Mapping[str, Any]] = None,
+        on_progress: Optional[Callable[[Any], None]] = None,
+        transfer: Optional[Any] = None,
+    ) -> Exchange:
+        """Write or read a multipart item and summarise it as one :class:`Exchange` (#347).
+
+        ``transfer`` may be a prepared :class:`~omniuart.core.multipart.MultipartTransfer` (to cancel
+        it or watch its progress from elsewhere).
+        """
+        from omniuart.core.multipart import MultipartTransfer, outcome_exchange
+
+        cmd = self.resolve(command)
+        job = transfer or MultipartTransfer(self.spec, cmd)
+        if job.direction == "write":
+            outcome = await job.write(self, params, on_progress=on_progress)
+        else:
+            outcome = await job.read(self, params, on_progress=on_progress)
+        return outcome_exchange(cmd, job.mp, outcome)
 
     async def _send_once(
         self,

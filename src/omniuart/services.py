@@ -136,6 +136,9 @@ class SendResult:
     command: CommandSpec
     request: bytes
     exchange: Optional[Exchange] = None
+    # Multipart items (#347): ``request`` is the first packet's frame; ``packets`` is the number of
+    # request packets of a write (0 for a read, whose length is known only from the first reply).
+    packets: int = 1
 
 
 class CommandExecutionService:
@@ -165,12 +168,17 @@ class CommandExecutionService:
         """
         cmd = self.catalog.get_command(spec, command)
         try:
-            request = FrameCodec(spec).encode_command(cmd, params)
+            if spec.multipart:
+                from omniuart.core.multipart import first_request
+
+                request, packets = first_request(spec, cmd, params)
+            else:
+                request, packets = FrameCodec(spec).encode_command(cmd, params), 1
         except CodecError as exc:
             raise ServiceError(str(exc), ErrorKind.INVALID) from exc
         check_command_allowed(cmd, read_only, confirmed or dry_run, confirm_levels)
         if dry_run:
-            return SendResult(cmd, request)
+            return SendResult(cmd, request, packets=packets)
 
         transport = _transport(spec, port, baudrate, virtual)
         recorder = SessionRecorder(protocol_name=spec.metadata.name) if record_file else None
@@ -185,7 +193,7 @@ class CommandExecutionService:
             raise ServiceError(f"cannot use transport: {exc}", ErrorKind.TRANSPORT) from exc
         if recorder and record_file:
             recorder.export_jsonl(record_file)
-        return SendResult(cmd, request, exchange)
+        return SendResult(cmd, request, exchange, packets)
 
     async def send_on(
         self,

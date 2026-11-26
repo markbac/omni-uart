@@ -172,6 +172,48 @@ def _transfer_card(widget: WidgetSpec, problem: Optional[str], css_prefix: str =
 """
 
 
+def _multipart_cards(spec: ProtocolSpec, commands: Dict[str, Any], css_prefix: str = "") -> List[str]:
+    """One card per command that carries an item larger than one frame: Set (write) or Get (read) with progress (#347)."""
+    cards: List[str] = []
+    for mp in spec.multipart:
+        for direction, part in (("write", mp.write), ("read", mp.read)):
+            if part is None:
+                continue
+            carrier = part.packet_param
+            for name in part.commands:
+                cmd = spec.get_command(name)
+                if cmd is None:
+                    continue
+                inputs = "".join(
+                    f'<label class="muted">{_esc(p.name)} <input type="text" class="widget-input" data-mp-param="{_esc(p.name)}" data-type="{_esc(p.type.value)}" value="{_esc(p.default)}"></label>'
+                    for p in cmd.parameters
+                    if p.name != carrier and p.fixed is None and p.expression is None
+                )
+                action = "Set" if direction == "write" else "Get"
+                file_input = '<input type="file" class="file-input" />' if direction == "write" else ""
+                save = "" if direction == "write" else '<button class="btn btn-secondary" data-action="mp-save" disabled>Save to file</button>'
+                confirm = str(bool(commands.get(cmd.name, {}).get("confirm"))).lower()
+                cards.append(
+                    f"""      <div class="transfer-card multipart-card {css_prefix}" data-mp-command="{_esc(cmd.name)}" data-direction="{direction}" data-confirm="{confirm}">
+        <div class="transfer-header"><strong>{_esc(cmd.description or cmd.name)}</strong><span class="transfer-badge">MULTIPART {action.upper()}</span></div>
+        <div class="transfer-meta-text"><span>{_esc(mp.name)}: up to {mp.max_data_per_packet} data bytes per packet</span>
+          <span class="transfer-state" style="font-weight:600;">IDLE</span></div>
+        {inputs}{file_input}
+        <div class="progress-bar-bg"><div class="progress-bar-fill"></div></div>
+        <div class="transfer-meta-text"><span class="transfer-progress">0% | packet 0/0</span><span class="transfer-eta">ETA: --</span></div>
+        <div class="transfer-message"></div>
+        <pre class="raw mp-preview" hidden></pre>
+        <div class="transfer-actions">
+          <button class="btn btn-transfer" data-action="mp-start">{action}</button>
+          <button class="btn btn-cancel" data-action="mp-cancel" disabled>Cancel</button>
+          {save}
+        </div>
+      </div>
+"""
+                )
+    return cards
+
+
 def _safety_badge(cmd_cfg: Dict[str, Any]) -> str:
     if cmd_cfg["safety"] == "read_only":
         return ""
@@ -243,6 +285,11 @@ def generate_device_dashboard_html(
             body.append(f'    <div class="group-card">\n      <h3>{_esc(group.title)}</h3>\n')
             body.extend(_widget_html(spec, w, commands, transfer_problem) for w in group.widgets)
             body.append("    </div>\n")
+    multipart = _multipart_cards(spec, commands)
+    if multipart:
+        body.append('    <h2 class="panel-title">Large items</h2>\n    <div class="group-card">\n      <h3>Items larger than one frame</h3>\n')
+        body.extend(multipart)
+        body.append("    </div>\n")
 
     integrity = spec.framing.integrity.algorithm if spec.framing.integrity else "none"
     return f"""<!DOCTYPE html>
@@ -414,6 +461,11 @@ def _generate_win32_dashboard_html(
                     )
             fieldsets.append(f'<fieldset class="win32-fieldset"><legend>{_esc(group.title)}</legend>{"".join(rows)}</fieldset>')
         tab_panes.append(f'<div class="win32-tab-pane{active}" data-pane="{idx}">{"".join(fieldsets)}</div>')
+    multipart = _multipart_cards(spec, commands, "win32-transfer-box")
+    if multipart:
+        idx = len(tab_buttons)
+        tab_buttons.append(f'<button type="button" class="win32-tab-button" data-tab="{idx}">Large items</button>')
+        tab_panes.append(f'<div class="win32-tab-pane" data-pane="{idx}">{"".join(multipart)}</div>')
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -703,6 +755,73 @@ _RUNTIME_SCRIPT = r"""
     }, 400);
   }
 
+
+  // ------------------------------------------------------------ multipart items (#347)
+  function setMultipart(card, job) {
+    const p = job.progress || {};
+    card.querySelector('.progress-bar-fill').style.width = (p.percent_complete || 0) + '%';
+    card.querySelector('.transfer-progress').textContent = (p.percent_complete || 0).toFixed(1) + '% | packet ' + (p.current_chunk || 0) + '/' + (p.total_chunks || '?') + ' | ' + (p.bytes_transferred || 0) + '/' + (p.total_bytes || '?') + ' bytes';
+    card.querySelector('.transfer-eta').textContent = job.done ? 'ETA: --' : 'ETA: ' + Math.ceil(p.estimated_remaining_seconds || 0) + ' s';
+    card.querySelector('.transfer-state').textContent = String(job.state || '').toUpperCase();
+    const msg = card.querySelector('.transfer-message');
+    const done = job.done && job.state === 'completed';
+    msg.textContent = job.error || (done ? (card.dataset.direction === 'write' ? 'Every packet was acknowledged.' : 'Received ' + (job.data_length || 0) + ' bytes intact.') : '');
+    msg.className = 'transfer-message ' + (job.error ? 'bad' : (done ? 'ok' : ''));
+    card.querySelector('[data-action="mp-start"]').disabled = !job.done;
+    card.querySelector('[data-action="mp-cancel"]').disabled = !!job.done;
+    if (job.data_base64 !== undefined) {
+      card.dataset.value = job.data_base64;
+      const bytes = atob(job.data_base64);
+      const hex = Array.from(bytes.slice(0, 64)).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+      const pre = card.querySelector('.mp-preview');
+      pre.hidden = false;
+      pre.textContent = hex + (bytes.length > 64 ? ' ...' : '');
+    }
+    const save = card.querySelector('[data-action="mp-save"]');
+    if (save) save.disabled = !card.dataset.value;
+  }
+
+  async function startMultipart(card) {
+    const params = {};
+    card.querySelectorAll('[data-mp-param]').forEach(el => {
+      const v = paramValue(el);
+      if (v !== undefined) params[el.dataset.mpParam] = v;
+    });
+    const body = {command: card.dataset.mpCommand, params, confirm: false};
+    if (card.dataset.direction === 'write') {
+      const input = card.querySelector('.file-input');
+      const file = input.files && input.files[0];
+      if (!file) { toast('Select the file holding the value first.', true); return; }
+      body.data_base64 = await readBase64(file);
+      if (card.dataset.confirm === 'true') {
+        if (!window.confirm(card.dataset.mpCommand + ' changes the device. Write ' + file.size + ' bytes?')) return;
+        body.confirm = true;
+      }
+    }
+    delete card.dataset.value;
+    const r = await call('POST', '/api/device/' + api + '/multipart', body);
+    if (!r.ok) { toast(r.data.detail || ('Refused: HTTP ' + r.status), true); return; }
+    card.dataset.job = r.data.job_id;
+    setMultipart(card, r.data);
+    const timer = setInterval(async () => {
+      const s = await call('GET', '/api/device/' + api + '/transfer/' + encodeURIComponent(card.dataset.job));
+      if (s.ok) setMultipart(card, s.data);
+      if (!s.ok || s.data.done) { clearInterval(timer); poll(); }
+    }, 300);
+  }
+
+  function saveMultipart(card) {
+    const bytes = atob(card.dataset.value || '');
+    const buf = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([buf], {type: 'application/octet-stream'}));
+    a.download = card.dataset.mpCommand + '.bin';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+  }
+
   // ------------------------------------------------------------ events
   document.addEventListener('input', e => {
     if (e.target.matches('input[type=range]')) {
@@ -732,6 +851,13 @@ _RUNTIME_SCRIPT = r"""
     } else if (t.dataset.action === 'cancel-transfer') {
       const card = t.closest('.transfer-card');
       if (card.dataset.job) call('POST', '/api/device/' + api + '/transfer/' + encodeURIComponent(card.dataset.job) + '/cancel');
+    } else if (t.dataset.action === 'mp-start') {
+      startMultipart(t.closest('.multipart-card'));
+    } else if (t.dataset.action === 'mp-cancel') {
+      const card = t.closest('.multipart-card');
+      if (card.dataset.job) call('POST', '/api/device/' + api + '/transfer/' + encodeURIComponent(card.dataset.job) + '/cancel');
+    } else if (t.dataset.action === 'mp-save') {
+      saveMultipart(t.closest('.multipart-card'));
     } else if (t.id === 'btn-clear-log') {
       document.getElementById('win32-log-output').value = '';
     } else if (t.id === 'btn-stop-log') {

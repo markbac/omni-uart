@@ -70,6 +70,7 @@ class BaseDeviceSimulator:
         self._state: Dict[str, Any] = {"power": True, "rx_count": 0, "rx_errors": 0, "tx_count": 0}
         self._state.update(self.behavior.initial_state)
         self.codec = FrameCodec(spec)
+        self._multipart: Optional[Any] = None  # MultipartDevice, created on the first multipart packet
 
     async def start(self) -> None:
         """Start the virtual device simulator background processing loop."""
@@ -174,6 +175,12 @@ class BaseDeviceSimulator:
             return b""
         if cmd.response is None:
             return b""
+        if self.spec.multipart_for(cmd) is not None:
+            from omniuart.core.multipart import MultipartDevice, device_reply
+
+            if self._multipart is None:
+                self._multipart = MultipartDevice(self.spec)
+            return device_reply(self._multipart, self.codec, cmd, frame.fields)
         values = self.handle_command(cmd, frame.fields)
         if values is None:
             return b""

@@ -23,7 +23,8 @@ class ConnectionManager:
 
     A real port keeps one transport open across requests. The ``virtual`` port is an explicit,
     labelled simulation: each request gets a fresh simulated device for the protocol in use, and
-    every API response says ``"simulated": true``.
+    every API response says ``"simulated": true``. Only the items written to it as multipart
+    messages are kept for the life of the connection, so a Set can be read back with a Get (#347).
     """
 
     def __init__(self) -> None:
@@ -35,6 +36,7 @@ class ConnectionManager:
         self.dtr = True
         self.read_only = False
         self.lock = asyncio.Lock()
+        self._multipart_devices: Dict[str, Any] = {}
 
     @property
     def connected(self) -> bool:
@@ -82,11 +84,20 @@ class ConnectionManager:
         self.virtual = False
         self.port = None
         self.read_only = False
+        self._multipart_devices.clear()
 
     def session(self, spec: ProtocolSpec, recorder: Optional[SessionRecorder] = None) -> DeviceSession:
         """A session for ``spec`` on the current link."""
         if self.virtual:
-            return DeviceSession(spec, VirtualTransport(spec, latency_ms=1.0, jitter_ms=0.0), recorder=recorder, read_only=self.read_only)
+            transport = VirtualTransport(spec, latency_ms=1.0, jitter_ms=0.0)
+            if spec.multipart:
+                from omniuart.core.multipart import MultipartDevice
+
+                device = self._multipart_devices.get(spec.metadata.name)
+                if device is None or device.spec is not spec:
+                    device = self._multipart_devices[spec.metadata.name] = MultipartDevice(spec)
+                transport._multipart_device = device
+            return DeviceSession(spec, transport, recorder=recorder, read_only=self.read_only)
         if self.transport is None or not self.transport.is_open:
             raise NotConnectedError("No serial connection. Connect a port first (POST /api/serial/connect).")
         return DeviceSession(spec, self.transport, recorder=recorder, read_only=self.read_only)

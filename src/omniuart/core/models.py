@@ -338,6 +338,135 @@ class SerialConfig(BaseModel):
         return v
 
 
+MULTIPART_ROLES = (
+    "packet_number",  # sequence number of the packet, starting at ``first_packet_number``
+    "packet_count",  # number of packets in the whole message
+    "message_id",  # identifies the message; the same in every packet of one message
+    "total_length",  # length in bytes of the whole (reassembled) data
+    "data_length",  # length in bytes of this packet's data section
+    "message_crc",  # CRC of the whole data, with ``message_crc`` parameters
+    "packet_crc",  # CRC of this packet's data section, with ``packet_crc`` parameters
+    "running_crc",  # CRC of all data up to and including this packet, with ``message_crc`` parameters
+    "data",  # this packet's data section
+)
+
+
+class MultipartPacketLayouts(BaseModel):
+    """The packet body of the first packet and of every following packet of a multipart message."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    first: List[FieldSpec]
+    next: Optional[List[FieldSpec]] = None  # defaults to ``first``
+
+    def layout(self, index: int) -> List[FieldSpec]:
+        """The fields of packet ``index`` (0 = first packet)."""
+        return self.first if index == 0 or self.next is None else self.next
+
+
+class MultipartWriteSpec(MultipartPacketLayouts):
+    """Host-to-device: a write command whose ``packet_param`` carries one packet body per frame.
+
+    Every packet is a separate request; its successful response acknowledges it. A NAK (a declared
+    error reply) or a failed response stops the write with an error.
+    """
+
+    commands: List[str]
+    packet_param: str = "packet"
+
+
+class MultipartReadSpec(MultipartPacketLayouts):
+    """Device-to-host: a read command answered with one packet body per reply in ``packet_field``.
+
+    The host sends the read command once per packet. When ``packet_param`` is set, that request
+    parameter carries a request body built from ``request_first`` / ``request_next`` (for example
+    the packet number being asked for).
+    """
+
+    commands: List[str]
+    packet_field: str = "packet"
+    packet_param: Optional[str] = None
+    request_first: Optional[List[FieldSpec]] = None
+    request_next: Optional[List[FieldSpec]] = None
+
+    def request_layout(self, index: int) -> Optional[List[FieldSpec]]:
+        if index == 0 or self.request_next is None:
+            return self.request_first
+        return self.request_next
+
+
+class MultipartSpec(BaseModel):
+    """Items larger than one frame, split across several frames of the same command (#347).
+
+    The packet layouts are ordinary field lists. A field's meaning comes from ``roles`` (role ->
+    field name); a field named like a role takes that role without being listed. Fields with no role
+    are sent with their ``fixed`` or ``default`` value (an obsolete field sent as zero) and ignored
+    when received.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: Optional[str] = None
+    # The logical name of the whole value in ``send``/``run`` parameters and the API.
+    value_param: str = "data"
+    max_data_per_packet: int = Field(gt=0)
+    first_packet_number: int = 0
+    retries: int = Field(default=0, ge=0)
+    roles: Dict[str, str] = Field(default_factory=dict)
+    message_crc: Optional[IntegritySpec] = None
+    packet_crc: Optional[IntegritySpec] = None
+    write: Optional[MultipartWriteSpec] = None
+    read: Optional[MultipartReadSpec] = None
+
+    @field_validator("roles")
+    @classmethod
+    def validate_roles(cls, v: Dict[str, str]) -> Dict[str, str]:
+        unknown = sorted(set(v) - set(MULTIPART_ROLES))
+        if unknown:
+            raise ValueError(f"unknown multipart role(s) {', '.join(unknown)}; roles are {', '.join(MULTIPART_ROLES)}")
+        return v
+
+    def field_for(self, role: str) -> str:
+        """The field name that carries ``role``."""
+        return self.roles.get(role, role)
+
+    def role_of(self, field_name: str) -> Optional[str]:
+        """The role a field carries, or ``None`` for a plain (reserved or constant) field."""
+        for role in MULTIPART_ROLES:
+            if self.field_for(role) == field_name:
+                return role
+        return None
+
+    @model_validator(mode="after")
+    def _check_layouts(self) -> "MultipartSpec":
+        if self.write is None and self.read is None:
+            raise ValueError(f"multipart '{self.name}' defines neither write nor read")
+        crc_roles = {"message_crc": self.message_crc, "running_crc": self.message_crc, "packet_crc": self.packet_crc}
+        layouts: List[tuple[str, List[FieldSpec]]] = []
+        for direction, part in (("write", self.write), ("read", self.read)):
+            if part is None:
+                continue
+            layouts.append((f"{direction}.first", part.first))
+            if part.next is not None:
+                layouts.append((f"{direction}.next", part.next))
+        for where, fields in layouts:
+            by_name = {f.name: f for f in fields}
+            data_field = by_name.get(self.field_for("data"))
+            if data_field is None:
+                raise ValueError(f"multipart '{self.name}' {where} has no '{self.field_for('data')}' (data) field")
+            if data_field.type is not FieldType.BYTES:
+                raise ValueError(f"multipart '{self.name}' {where}: the data field must be of type bytes")
+            if where == "read.first" and self.field_for("total_length") not in by_name:
+                raise ValueError(f"multipart '{self.name}' read.first must carry the total length (a '{self.field_for('total_length')}' field)")
+            for f in fields:
+                role = self.role_of(f.name)
+                if role in crc_roles and crc_roles[role] is None:
+                    param = "message_crc" if role in ("message_crc", "running_crc") else "packet_crc"
+                    raise ValueError(f"multipart '{self.name}' {where} has a {role} field but no '{param}' CRC parameters")
+        return self
+
+
 class ProtocolMeta(BaseModel):
     """Metadata block for a protocol definition."""
 
@@ -364,6 +493,54 @@ class ProtocolSpec(BaseModel):
     error_replies: List[ErrorReplySpec] = Field(default_factory=list)
     # Default ``correlate`` for every command that has all of these as both a parameter and a response field.
     correlate: List[str] = Field(default_factory=list)
+    # Items larger than one frame, carried as a sequence of packets of the same command (#347).
+    multipart: List[MultipartSpec] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _check_multipart(self) -> "ProtocolSpec":
+        seen: Dict[str, str] = {}
+        for mp in self.multipart:
+            for direction, part in (("write", mp.write), ("read", mp.read)):
+                if part is None:
+                    continue
+                for name in part.commands:
+                    cmd = self.get_command(name)
+                    if cmd is None:
+                        raise ValueError(f"multipart '{mp.name}' {direction} command '{name}' is not defined")
+                    if name in seen:
+                        raise ValueError(f"command '{name}' is used by multipart '{seen[name]}' and '{mp.name}'")
+                    seen[name] = mp.name
+                    if cmd.response is None:
+                        raise ValueError(f"multipart '{mp.name}' {direction} command '{name}' defines no response")
+                    params = {p.name: p for p in cmd.parameters}
+                    replies = {f.name: f for f in cmd.response.fields}
+                    carrier = {
+                        "write": params.get(getattr(part, "packet_param", "")),
+                        "read": replies.get(getattr(part, "packet_field", "")),
+                    }[direction]
+                    if carrier is not None and carrier.type is not FieldType.BYTES:
+                        raise ValueError(f"multipart {direction} command '{name}': the packet field '{carrier.name}' must be of type bytes")
+                    if direction == "write":
+                        assert isinstance(part, MultipartWriteSpec)
+                        if part.packet_param not in params:
+                            raise ValueError(f"multipart write command '{name}' has no '{part.packet_param}' parameter for the packet")
+                    else:
+                        assert isinstance(part, MultipartReadSpec)
+                        if part.packet_field not in replies:
+                            raise ValueError(f"multipart read command '{name}' has no '{part.packet_field}' response field for the packet")
+                        if part.packet_param is not None and part.packet_param not in params:
+                            raise ValueError(f"multipart read command '{name}' has no '{part.packet_param}' parameter for the request")
+        return self
+
+    def multipart_for(self, cmd: Union[str, CommandSpec]) -> Optional[tuple[MultipartSpec, str]]:
+        """The multipart definition a command uses and its direction (``write`` or ``read``), if any."""
+        name = cmd.name if isinstance(cmd, CommandSpec) else cmd
+        for mp in self.multipart:
+            if mp.write is not None and name in mp.write.commands:
+                return mp, "write"
+            if mp.read is not None and name in mp.read.commands:
+                return mp, "read"
+        return None
 
     def correlation_fields(self, cmd: CommandSpec) -> List[str]:
         """The fields that must match between ``cmd``'s request and a response for it to be accepted."""

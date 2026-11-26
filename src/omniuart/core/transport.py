@@ -201,6 +201,7 @@ class VirtualTransport(AsyncTransport):
         self._rx = _ReadBuffer()
         self._is_open = False
         self._rule_responses: Dict[int, bytes] = {}
+        self._multipart_device: Optional[Any] = None
         self.pin_states: Dict[str, bool] = {"dtr": False, "rts": False}
 
     async def open(self) -> None:
@@ -328,9 +329,22 @@ class VirtualTransport(AsyncTransport):
             cmd = self.protocol.get_command(frame.name or "")
             if cmd is not None and validate_fields(cmd.parameters, frame.fields):
                 continue
+            if cmd is not None and self.protocol.multipart_for(cmd) is not None:
+                out.extend(self._multipart_reply(codec, cmd, frame.fields))
+                continue
             if cmd is not None and cmd.response is not None:
                 out.extend(codec.encode_response(cmd))
         return bytes(out)
+
+
+    def _multipart_reply(self, codec: FrameCodec, cmd: Any, fields: Dict[str, Any]) -> bytes:
+        """Answer one packet of a multipart write or read like a device would (#347)."""
+        from omniuart.core.multipart import MultipartDevice, device_reply
+
+        assert self.protocol is not None
+        if self._multipart_device is None:
+            self._multipart_device = MultipartDevice(self.protocol)
+        return device_reply(self._multipart_device, codec, cmd, fields)
 
 
 class HardwareSerialTransport(AsyncTransport):

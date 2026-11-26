@@ -7,10 +7,11 @@ integrity checksums, and human-readable diagnostic text output.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from omniuart.core.codec import CodecError, FrameCodec, decode_fields_with_layout
-from omniuart.core.models import ProtocolSpec
+from omniuart.core.models import MultipartPacketLayouts, MultipartSpec, ProtocolSpec
+from omniuart.core.multipart import packet_layout_slices
 
 
 @dataclass
@@ -46,6 +47,7 @@ class DissectedFrame:
     error: Optional[str] = None
     field_slices: List[FieldSlice] = field(default_factory=list)
     crc_info: Optional[Dict[str, Any]] = None
+    multipart: Optional[Dict[str, Any]] = None  # the multipart definition and packet layout ("first"/"next") of the packet field
 
     def format_diagnostic_text(self) -> str:
         """Format human-readable diagnostic tree and field breakdown."""
@@ -55,6 +57,9 @@ class DissectedFrame:
         lines.append(f" Direction : {self.direction.upper()}")
         lines.append(f" Command   : {self.command_name or 'Unknown'} (ID: {self.command_id if self.command_id is not None else 'N/A'})")
         lines.append(f" Status    : {'VALID' if self.valid else 'INVALID (' + (self.error or '') + ')'}")
+        if self.multipart:
+            mp = self.multipart
+            lines.append(f" Multipart : {mp['name']} ({mp['direction']}, {mp['layout']} packet layout in '{mp['field']}')")
         lines.append("-" * 72)
         lines.append(f"{'OFFSET':<8} {'LEN':<4} {'FIELD NAME':<18} {'TYPE':<10} {'RAW BYTES':<14} DECODED VALUE")
         lines.append("-" * 72)
@@ -77,6 +82,48 @@ class DissectedFrame:
 
         lines.append("=" * 72)
         return "\n".join(lines)
+
+
+def _multipart_carrier(spec: ProtocolSpec, command: Optional[str], kind: str) -> Optional[Tuple[MultipartSpec, str, str, MultipartPacketLayouts]]:
+    """(definition, direction, carrier field, layouts) when ``command``'s frame carries a multipart packet."""
+    found = spec.multipart_for(command) if command else None
+    if found is None:
+        return None
+    mp, direction = found
+    if direction == "write" and kind == "command" and mp.write is not None:
+        return mp, direction, mp.write.packet_param, mp.write
+    if direction == "read" and mp.read is not None:
+        if kind == "response":
+            return mp, direction, mp.read.packet_field, mp.read
+        if kind == "command" and mp.read.packet_param is not None and mp.read.request_first:
+            requests = MultipartPacketLayouts.model_construct(first=mp.read.request_first, next=mp.read.request_next)
+            return mp, "read request", mp.read.packet_param, requests
+    return None
+
+
+def _add_multipart_slices(
+    spec: ProtocolSpec, dissected: DissectedFrame, frame: Any, direction: str, specs: List[Any], layout: List[Any], payload_start: int
+) -> None:
+    """Break the packet field of a multipart command into its header fields and data section (#347)."""
+    carrier = _multipart_carrier(spec, frame.name, frame.kind)
+    if carrier is None:
+        return
+    mp, mp_direction, field_name, layouts = carrier
+    span = next(((start, end) for f, start, end in layout if f.name == field_name), None)
+    if span is None:
+        return
+    body = frame.payload[span[0] : span[1]]
+    try:
+        label, slices = packet_layout_slices(mp, layouts, body)
+    except CodecError as exc:
+        dissected.multipart = {"name": mp.name, "direction": mp_direction, "field": field_name, "layout": "unknown", "error": str(exc)}
+        return
+    dissected.multipart = {"name": mp.name, "direction": mp_direction, "field": field_name, "layout": label}
+    base = payload_start + span[0]
+    for f, start, end, value in slices:
+        role = mp.role_of(f.name)
+        type_name = f"{f.type.value}" + (f"/{role}" if role and role != f.name else "")
+        dissected.field_slices.append(FieldSlice(f"{field_name}.{f.name}", base + start, base + end, body[start:end], value, type_name))
 
 
 def dissect_frame(spec: ProtocolSpec, frame_bytes: bytes, direction: str = "request") -> DissectedFrame:
@@ -133,6 +180,7 @@ def dissect_frame(spec: ProtocolSpec, frame_bytes: bytes, direction: str = "requ
         dissected.field_slices.append(
             FieldSlice(field_spec.name, payload_start + start, payload_start + end, slice_bytes, decoded, str(field_spec.type.value))
         )
+    _add_multipart_slices(spec, dissected, frame, direction, specs, layout, payload_start)
     dissected.field_slices.sort(key=lambda sl: sl.start_offset)
 
     # Integrity values come from the codec's own check, so coverage and width rules match decoding (#329)

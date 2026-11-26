@@ -29,3 +29,11 @@ class TransferRequest(BaseModel):
     file_name: str = Field(min_length=1)
     data_base64: str = Field(description="The file's bytes, base64 encoded")
     confirm: bool = Field(default=False, description="Must be true for a transfer that changes the device")
+
+
+class MultipartRequest(BaseModel):
+    """Payload for writing or reading a multipart item (larger than one frame) from the dashboard (#347)."""
+    command: str = Field(min_length=1, description="A command that uses a multipart definition")
+    params: Dict[str, Any] = Field(default_factory=dict, description="The command's other parameters (for example a data item id)")
+    data_base64: Optional[str] = Field(default=None, description="The whole value to write, base64 encoded (writes only)")
+    confirm: bool = Field(default=False, description="Must be true to write an item that changes the device")
