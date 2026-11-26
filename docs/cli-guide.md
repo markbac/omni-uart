@@ -121,6 +121,16 @@ omniuart generate asyncapi binary_sensor_node
 omniuart generate schema
 ```
 
+The exported AsyncAPI document carries `x-omniuart` extensions, so it can be used as a protocol source. Import one into the native format with `import`, which lists every value it could not map:
+
+```bash
+# Import an AsyncAPI document with x-omniuart extensions
+omniuart import asyncapi thermostat.asyncapi.yaml -o thermostat.yaml
+
+# Import a CSV table (the format can be omitted for CSV)
+omniuart import csv commands.csv -o commands.yaml
+```
+
 ---
 
 ## 8. Interactive Workbench (`ui`)

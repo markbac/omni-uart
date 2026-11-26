@@ -1,0 +1,1555 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OmniUART AsyncAPI Extensions (x-omniuart)",
+  "description": "Extensions that make an AsyncAPI document a complete OmniUART protocol source",
+  "$ref": "#/$defs/document",
+  "$defs": {
+    "CommandIdSpec": {
+      "additionalProperties": false,
+      "description": "Opcode/Command ID field descriptor.",
+      "properties": {
+        "type": {
+          "default": "uint8",
+          "title": "Type",
+          "type": "string"
+        },
+        "endian": {
+          "default": "little",
+          "title": "Endian",
+          "type": "string"
+        }
+      },
+      "title": "CommandIdSpec",
+      "type": "object"
+    },
+    "CommandSafety": {
+      "description": "What a command can do to the device. Anything not declared is treated as ``mutating``.\n\n- ``read_only``: queries state, changes nothing. The only level that may run automatically\n  (dashboard auto-run, auto-poll).\n- ``idempotent``: changes state, but sending it again has the same effect (set a value).\n- ``mutating``: changes state and is not safe to repeat.\n- ``destructive``: erases data, resets or reprograms the device.",
+      "enum": [
+        "read_only",
+        "idempotent",
+        "mutating",
+        "destructive"
+      ],
+      "title": "CommandSafety",
+      "type": "string"
+    },
+    "CommandSpec": {
+      "additionalProperties": false,
+      "description": "Definition of an outbound command and its parameter signature.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Id"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "safety": {
+          "$ref": "#/$defs/CommandSafety",
+          "default": "mutating"
+        },
+        "safety_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Safety Reason"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "Parameters",
+          "type": "array"
+        },
+        "response": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResponseSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "correlate": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Correlate",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "id"
+      ],
+      "title": "CommandSpec",
+      "type": "object"
+    },
+    "ErrorReplySpec": {
+      "additionalProperties": false,
+      "description": "A reply id the device sends instead of a response when it refuses or fails a command (a NAK).",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Id"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "title": "ErrorReplySpec",
+      "type": "object"
+    },
+    "FieldSpec": {
+      "additionalProperties": false,
+      "description": "Specification for an individual payload or response field.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/FieldType"
+        },
+        "endian": {
+          "default": "little",
+          "title": "Endian",
+          "type": "string"
+        },
+        "default": {
+          "default": null,
+          "title": "Default"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min"
+        },
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "options": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Options"
+        },
+        "length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length"
+        },
+        "bit_width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bit Width"
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offset"
+        },
+        "length_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Ref"
+        },
+        "count_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count Ref"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "discriminator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discriminator"
+        },
+        "discriminator_value": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discriminator Value"
+        },
+        "is_array": {
+          "default": false,
+          "title": "Is Array",
+          "type": "boolean"
+        },
+        "item_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FieldType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "nested_fields": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nested Fields"
+        },
+        "encoding": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Encoding"
+        },
+        "offset_val": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offset Val"
+        },
+        "expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expression"
+        },
+        "fixed": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fixed"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "title": "FieldSpec",
+      "type": "object"
+    },
+    "FieldType": {
+      "description": "Supported primitive field data types.",
+      "enum": [
+        "uint8",
+        "uint16",
+        "uint32",
+        "uint64",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "bool",
+        "enum",
+        "string",
+        "bytes"
+      ],
+      "title": "FieldType",
+      "type": "string"
+    },
+    "FramingConfig": {
+      "additionalProperties": false,
+      "description": "Envelope framing parameters for binary or delimited stream protocols.",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/FramingType"
+        },
+        "header": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Header"
+        },
+        "length": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LengthSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "command_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CommandIdSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "integrity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntegritySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "footer": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Footer"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefix"
+        },
+        "delimiter": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delimiter"
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suffix"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "FramingConfig",
+      "type": "object"
+    },
+    "FramingType": {
+      "description": "Protocol framing architecture.",
+      "enum": [
+        "binary",
+        "delimited"
+      ],
+      "title": "FramingType",
+      "type": "string"
+    },
+    "IntegritySpec": {
+      "additionalProperties": false,
+      "description": "Checksum or CRC calculation specification.",
+      "properties": {
+        "algorithm": {
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width"
+        },
+        "poly": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Poly"
+        },
+        "init": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Init"
+        },
+        "refin": {
+          "default": false,
+          "title": "Refin",
+          "type": "boolean"
+        },
+        "refout": {
+          "default": false,
+          "title": "Refout",
+          "type": "boolean"
+        },
+        "xorout": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0,
+          "title": "Xorout"
+        },
+        "endian": {
+          "default": "little",
+          "title": "Endian",
+          "type": "string"
+        },
+        "check": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Check"
+        },
+        "covers": {
+          "default": "after_header",
+          "title": "Covers",
+          "type": "string"
+        },
+        "transform": {
+          "default": "none",
+          "title": "Transform",
+          "type": "string"
+        },
+        "carry_wrap": {
+          "default": false,
+          "title": "Carry Wrap",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "algorithm"
+      ],
+      "title": "IntegritySpec",
+      "type": "object"
+    },
+    "LengthSpec": {
+      "additionalProperties": false,
+      "description": "Dynamic frame length field configuration.",
+      "properties": {
+        "type": {
+          "default": "uint16",
+          "title": "Type",
+          "type": "string"
+        },
+        "endian": {
+          "default": "little",
+          "title": "Endian",
+          "type": "string"
+        },
+        "includes": {
+          "default": "payload_only",
+          "title": "Includes",
+          "type": "string"
+        }
+      },
+      "title": "LengthSpec",
+      "type": "object"
+    },
+    "MultipartReadSpec": {
+      "additionalProperties": false,
+      "description": "Device-to-host: a read command answered with one packet body per reply in ``packet_field``.\n\nThe host sends the read command once per packet. When ``packet_param`` is set, that request\nparameter carries a request body built from ``request_first`` / ``request_next`` (for example\nthe packet number being asked for).",
+      "properties": {
+        "first": {
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "First",
+          "type": "array"
+        },
+        "next": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next"
+        },
+        "commands": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Commands",
+          "type": "array"
+        },
+        "packet_field": {
+          "default": "packet",
+          "title": "Packet Field",
+          "type": "string"
+        },
+        "packet_param": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Packet Param"
+        },
+        "request_first": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request First"
+        },
+        "request_next": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Request Next"
+        }
+      },
+      "required": [
+        "first",
+        "commands"
+      ],
+      "title": "MultipartReadSpec",
+      "type": "object"
+    },
+    "MultipartSpec": {
+      "additionalProperties": false,
+      "description": "Items larger than one frame, split across several frames of the same command (#347).\n\nThe packet layouts are ordinary field lists. A field's meaning comes from ``roles`` (role ->\nfield name); a field named like a role takes that role without being listed. Fields with no role\nare sent with their ``fixed`` or ``default`` value (an obsolete field sent as zero) and ignored\nwhen received.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "value_param": {
+          "default": "data",
+          "title": "Value Param",
+          "type": "string"
+        },
+        "max_data_per_packet": {
+          "exclusiveMinimum": 0,
+          "title": "Max Data Per Packet",
+          "type": "integer"
+        },
+        "first_packet_number": {
+          "default": 0,
+          "title": "First Packet Number",
+          "type": "integer"
+        },
+        "retries": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Retries",
+          "type": "integer"
+        },
+        "roles": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Roles",
+          "type": "object"
+        },
+        "message_crc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntegritySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "packet_crc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntegritySpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "write": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MultipartWriteSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "read": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MultipartReadSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "max_data_per_packet"
+      ],
+      "title": "MultipartSpec",
+      "type": "object"
+    },
+    "MultipartWriteSpec": {
+      "additionalProperties": false,
+      "description": "Host-to-device: a write command whose ``packet_param`` carries one packet body per frame.\n\nEvery packet is a separate request; its successful response acknowledges it. A NAK (a declared\nerror reply) or a failed response stops the write with an error.",
+      "properties": {
+        "first": {
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "First",
+          "type": "array"
+        },
+        "next": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/FieldSpec"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Next"
+        },
+        "commands": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Commands",
+          "type": "array"
+        },
+        "packet_param": {
+          "default": "packet",
+          "title": "Packet Param",
+          "type": "string"
+        }
+      },
+      "required": [
+        "first",
+        "commands"
+      ],
+      "title": "MultipartWriteSpec",
+      "type": "object"
+    },
+    "ProtocolMeta": {
+      "additionalProperties": false,
+      "description": "Metadata block for a protocol definition.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "ProtocolMeta",
+      "type": "object"
+    },
+    "ResponseSpec": {
+      "additionalProperties": false,
+      "description": "Expected response structure corresponding to an outbound command.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "timeout_ms": {
+          "default": 1000,
+          "title": "Timeout Ms",
+          "type": "integer"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "success_pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Success Pattern"
+        },
+        "error_patterns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Error Patterns",
+          "type": "array"
+        }
+      },
+      "title": "ResponseSpec",
+      "type": "object"
+    },
+    "SerialConfig": {
+      "additionalProperties": false,
+      "description": "Default physical hardware serial communication settings.",
+      "properties": {
+        "baudrate": {
+          "title": "Baudrate",
+          "type": "integer"
+        },
+        "bytesize": {
+          "default": 8,
+          "title": "Bytesize",
+          "type": "integer"
+        },
+        "parity": {
+          "default": "none",
+          "title": "Parity",
+          "type": "string"
+        },
+        "stopbits": {
+          "default": 1,
+          "title": "Stopbits",
+          "type": "number"
+        },
+        "flow_control": {
+          "default": "none",
+          "title": "Flow Control",
+          "type": "string"
+        },
+        "timeout_ms": {
+          "default": 1000,
+          "title": "Timeout Ms",
+          "type": "integer"
+        },
+        "rs485_rts_mode": {
+          "default": false,
+          "title": "Rs485 Rts Mode",
+          "type": "boolean"
+        },
+        "rs485_turnaround_ms": {
+          "default": 0.0,
+          "title": "Rs485 Turnaround Ms",
+          "type": "number"
+        },
+        "pulse_pins": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Pulse Pins",
+          "type": "array"
+        }
+      },
+      "required": [
+        "baudrate"
+      ],
+      "title": "SerialConfig",
+      "type": "object"
+    },
+    "TelemetrySpec": {
+      "additionalProperties": false,
+      "description": "Definition of an unsolicited broadcast or periodic sensor frame.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Id"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/FieldSpec"
+          },
+          "title": "Fields",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "id"
+      ],
+      "title": "TelemetrySpec",
+      "type": "object"
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "framing"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Extension vocabulary version (1.0)"
+        },
+        "schema_version": {
+          "default": "1.0.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "author": {
+              "type": "string"
+            }
+          },
+          "description": "Metadata AsyncAPI info does not hold exactly (info.title and info.version give name and version)"
+        },
+        "serial": {
+          "$ref": "#/$defs/SerialConfig"
+        },
+        "framing": {
+          "$ref": "#/$defs/FramingConfig"
+        },
+        "error_replies": {
+          "items": {
+            "$ref": "#/$defs/ErrorReplySpec"
+          },
+          "title": "Error Replies",
+          "type": "array"
+        },
+        "correlate": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Correlate",
+          "type": "array"
+        },
+        "multipart": {
+          "items": {
+            "$ref": "#/$defs/MultipartSpec"
+          },
+          "title": "Multipart",
+          "type": "array"
+        }
+      }
+    },
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "command",
+            "response",
+            "telemetry"
+          ]
+        },
+        "name": {
+          "type": "string",
+          "description": "Command or telemetry name (default: the message name)"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "Message id on the wire; for a response, the response id"
+        },
+        "description": {
+          "type": "string"
+        },
+        "safety": {
+          "$ref": "#/$defs/CommandSafety",
+          "default": "mutating"
+        },
+        "safety_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Safety Reason"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "correlate": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Correlate",
+          "type": "array"
+        },
+        "command": {
+          "type": "string",
+          "description": "Response only: the command this message answers"
+        },
+        "timeout_ms": {
+          "default": 1000,
+          "title": "Timeout Ms",
+          "type": "integer"
+        },
+        "success_pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Success Pattern"
+        },
+        "error_patterns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Error Patterns",
+          "type": "array"
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/FieldType"
+        },
+        "endian": {
+          "default": "little",
+          "title": "Endian",
+          "type": "string"
+        },
+        "default": {
+          "default": null,
+          "title": "Default"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min"
+        },
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scale"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "value",
+              "label"
+            ],
+            "properties": {
+              "value": {
+                "type": [
+                  "integer",
+                  "string"
+                ]
+              },
+              "label": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "Enumeration values and labels (a list, so integer values stay integers in JSON)"
+        },
+        "length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length"
+        },
+        "bit_width": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bit Width"
+        },
+        "offset": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offset"
+        },
+        "length_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Ref"
+        },
+        "count_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Count Ref"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition"
+        },
+        "discriminator": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discriminator"
+        },
+        "discriminator_value": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discriminator Value"
+        },
+        "is_array": {
+          "default": false,
+          "title": "Is Array",
+          "type": "boolean"
+        },
+        "item_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FieldType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "encoding": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Encoding"
+        },
+        "offset_val": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Offset Val"
+        },
+        "expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expression"
+        },
+        "fixed": {
+          "anyOf": [
+            {},
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fixed"
+        },
+        "role": {
+          "const": "command_id",
+          "description": "Marks the informative command id property, which the importer skips"
+        }
+      }
+    }
+  }
+}
