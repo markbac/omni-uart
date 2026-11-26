@@ -2,7 +2,7 @@
 
 ## Overview
 
-OmniUART provides built-in export capability to convert native protocol definitions into **AsyncAPI 2.6.0** specification documents (`omniuart generate asyncapi <protocol>`), and imports an AsyncAPI 2.x or 3.x document with `x-omniuart` extensions as a protocol source (section 5).
+OmniUART exports native protocol definitions as **AsyncAPI 2.6.0** specification documents (`omniuart generate asyncapi <protocol>`). It also imports an AsyncAPI 2.x or 3.x document with `x-omniuart` extensions as a protocol source (section 5).
 
 This document describes how OmniUART maps binary/ASCII serial UART protocol structures into AsyncAPI channels, server bindings, and payload schemas, distinguishing standard AsyncAPI constructs from OmniUART extensions.
 
@@ -75,7 +75,7 @@ OmniUART field specs map to JSON Schema / AsyncAPI property definitions:
 
 ## 5. `x-omniuart` Extensions: AsyncAPI as a Protocol Source (#346)
 
-AsyncAPI describes messages and channels, not the wire format, and has no official binding for UART links. The `x-omniuart` extensions carry everything the native protocol format expresses, so a team that already describes its device interfaces in AsyncAPI can use that document as the protocol source instead of keeping a second file. `omniuart generate asyncapi` writes the extensions, so an exported document is itself a usable source.
+AsyncAPI describes messages and channels, not the wire format, and has no official binding for UART links. The `x-omniuart` extensions carry everything the native protocol format expresses. A team that already describes its device interfaces in AsyncAPI can use that document as the protocol source instead of keeping a second file. `omniuart generate asyncapi` writes the extensions, so an exported document is itself a usable source.
 
 The vocabulary is defined by [`schemas/x-omniuart.schema.json`](../../schemas/x-omniuart.schema.json), which is generated from the protocol models (`python -m omniuart.schema_export`). It has three parts.
 
@@ -117,4 +117,4 @@ omniuart import asyncapi device.asyncapi.yaml -o device.yaml
 
 A `.yaml` or `.json` file with an `asyncapi` key in a protocol directory is also found by the catalogue and loaded like a native protocol, so every command accepts it directly.
 
-Nothing is dropped silently. Anything that cannot be mapped (a missing `framing` or message id, an integer property without a wire type, an unknown extension key, a response for an unknown command, an unsupported AsyncAPI version or external `$ref`) is an error. The import then fails and lists every error at once. An approximation (a type guessed from JSON Schema, serial settings taken from the server binding, a message kind taken from its operation) is a warning in the import report. Exporting any bundled protocol and importing it again gives an equal protocol; the test suite checks this for every bundled protocol.
+Nothing is dropped silently. Anything that cannot be mapped is an error. Examples are a missing `framing` or message id, an integer property without a wire type, an unknown extension key and a response for an unknown command. The import then fails and lists every error at once. An approximation (a type guessed from JSON Schema, serial settings taken from the server binding, a message kind taken from its operation) is a warning in the import report. Exporting any bundled protocol and importing it again gives an equal protocol; the test suite checks this for every bundled protocol.
